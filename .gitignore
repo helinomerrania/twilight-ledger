@@ -1,0 +1,21 @@
+# The books themselves never go in the repository. It is public.
+data/
+*.db
+*.db-wal
+*.db-shm
+*.sqlite
+backups/
+twilight-books*.json
+*.bak
+SambaPOS*.zip
+
+# Anything that could carry a password or a connection string
+.env
+pos.ini
+secrets.*
+
+__pycache__/
+*.pyc
+.pytest_cache/
+.coverage
+htmlcov/
