@@ -12,7 +12,7 @@ what registers their actions.
 import json
 
 from . import (accruals, actions, backup, buckets, cash, checks as _checks, db, expected,
-               kinds, money, stock, post, queries, setup, update)
+               kinds, money, ratios, stock, post, queries, setup, update)
 from .dates import month_of, today
 from .pos import actions as pos
 from .registry import ACTIONS, ApiError, run            # noqa: F401  (re-exported)
@@ -247,7 +247,8 @@ def stock_view(con, month, count_date=None):
     lines = receipt_lines(con)
     for e in receipts:
         e["lines"] = lines.get((e["receipt"] or {}).get("id"), [])
-    return {**buckets.view(con), "expected": expected.view(con, chosen), "cogs": c, "count_dates": dates, "count_date": chosen,
+    return {**buckets.view(con), "expected": expected.view(con, chosen),
+            "ratios": ratios.view(con), "cogs": c, "count_dates": dates, "count_date": chosen,
             "count": count_sheet(con, chosen),
             "counts": [dict(r) for r in db.all_(
                 con, "SELECT count_date, closing, source, note FROM stock_count "

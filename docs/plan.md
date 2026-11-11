@@ -32,7 +32,7 @@ step.
 | ✅ | 3.4 Filling a bucket (mixes) (2026.11.11.16) | — |
 | ✅ | 3.5 Recipes: what each menu item uses (2026.11.11.17) | — |
 | ✅ | 3.6 Expected stock and the gap at each count (2026.11.11.19) | — |
-| ○ | 3.7 Ratio items: foil, coal, filters, cups | 3.6 |
+| ✅ | 3.7 Ratio items: foil, coal, filters, cups (2026.11.11.20) | — |
 | ○ | 3.8 Shortage warnings | 3.6 |
 | ○ | 3.9 Cost and profit per hookah and per item | 3.4, 3.5 |
 | ✅ | 4.1 Read the menu from SambaPOS (2026.11.11.12) | — |
@@ -685,7 +685,7 @@ or before a count is in it. An item not on the count shows only what should
 be there. Sales with no recipe, and SambaPOS inventory items not linked, are
 named, since they took nothing.
 
-### 3.7 Ratio items: foil, coal, filters, cups ○
+### 3.7 Ratio items: foil, coal, filters, cups ✅
 
 Foil comes in rolls, 6 to a carton, and the staff cut and pierce it; coal
 comes in 12 kg cartons. Both are counted roughly, with fractions. Between two
@@ -693,6 +693,16 @@ counts the app divides the hookahs SambaPOS sold by what was used and learns
 **hookahs per roll** (per box of coal, and so on). From then on it knows
 roughly what each night uses. A ratio that suddenly drops means more is
 going somewhere than the sales explain.
+
+As built (2026.11.11.20), on Stock → **Used with each hookah**: say which
+items go with each hookah. Between two counts in a row that both counted
+one, what was used (the count before, plus receipts, less the count after)
+against the hookahs SambaPOS sold in between gives hookahs to each one; the
+last three pairs pooled are its ratio, shown with roughly what a night uses
+and the pairs it came from. What should be on the shelf (3.6) then takes off
+the hookahs sold divided by the ratio learnt before that count. A pair under
+80% of the ratio before it is pointed out. A hookah is an order whose recipe
+takes tobacco or a mix, so the tobacco has to be linked (3.5) first.
 
 ### 3.8 Shortage warnings ○
 

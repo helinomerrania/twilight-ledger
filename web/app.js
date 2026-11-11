@@ -37,6 +37,7 @@ const VIEWS = {
                + C.todayEntries() + C.nightSold(),
 
   stock: () => C.stockFigures() + C.fillCard() + C.countPicker() + C.countSheet() + C.expectedCard()
+             + C.ratiosCard()
              + C.receiptForm() + C.receiptList() + C.countHistory(),
 
   month: () => C.periodPicker() + C.monthFigures() + C.soFarCard() + C.resultCard()

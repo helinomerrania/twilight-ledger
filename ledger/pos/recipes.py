@@ -88,18 +88,11 @@ def _portions(con):
     return portions, ids
 
 
-def usage(con, since, until):
-    """What the kept nights from `since` to `until` took off the shelves:
-    {item id: exact quantity}, and what could not be placed: menu items with
-    no recipe, and inventory items not linked to stock here, by how many."""
+def _orders(con, since, until):
+    """Each order of the kept nights from `since` to `until` that took stock,
+    with its quantity and its recipe's lines (None when it has no recipe)."""
     recipes = _recipes(con)
     portions, ids = _portions(con)
-    inv = {i["Id"]: i for i in catalog.rows(con, "inventory_item")}
-    link = links(con)
-    items = _items(con)
-    head = head_grams(con)
-    used = defaultdict(Fraction)
-    no_recipe, not_linked = defaultdict(Fraction), defaultdict(Fraction)
     for o in db.all_(con, """
             SELECT o.item, o.portion, o.menu_id, o.qty_milli, o.counted, o.used
               FROM pos_order o JOIN pos_ticket t ON t.id = o.ticket_id
@@ -107,28 +100,73 @@ def usage(con, since, until):
              WHERE p.night BETWEEN ? AND ?""", (since, until)):
         if not (o["used"] if o["used"] is not None else o["counted"]):
             continue
-        qty = Fraction(o["qty_milli"], 1000)
         menu_id = o["menu_id"] or ids.get(o["item"])
         lines = recipes.get(portions.get((menu_id, o["portion"] or "Normal")))
         if lines is None and o["portion"] is None:
             # an order that names no portion: the item's only one
             mine = [pid for (mid, _), pid in portions.items() if mid == menu_id]
             lines = recipes.get(mine[0]) if len(mine) == 1 else None
+        yield o, Fraction(o["qty_milli"], 1000), lines or None
+
+
+def _placed(con):
+    """For each SambaPOS inventory item: the stock item here and how many of
+    SambaPOS's units make one of it, or (None, None)."""
+    inv = {i["Id"]: i for i in catalog.rows(con, "inventory_item")}
+    link = links(con)
+    items = _items(con)
+
+    def place(inv_id):
+        ln = link.get(inv_id) or {}
+        item = items.get(ln.get("item_id"))
+        i = inv.get(inv_id) or {}
+        per = ln.get("per") or (per_default(i, item) if item else None)
+        return (item, per, i) if item and per else (None, None, i)
+    return place
+
+
+def usage(con, since, until):
+    """What the kept nights from `since` to `until` took off the shelves:
+    {item id: exact quantity}, and what could not be placed: menu items with
+    no recipe, and inventory items not linked to stock here, by how many."""
+    place = _placed(con)
+    head = head_grams(con)
+    used = defaultdict(Fraction)
+    no_recipe, not_linked = defaultdict(Fraction), defaultdict(Fraction)
+    for o, qty, lines in _orders(con, since, until):
         if not lines:
             no_recipe[o["item"]] += qty
             continue
         for inv_id, q in lines:
-            ln = link.get(inv_id) or {}
-            item = items.get(ln.get("item_id"))
-            i = inv.get(inv_id) or {}
-            per = ln.get("per") or (per_default(i, item) if item else None)
-            if not item or not per:
+            item, per, i = place(inv_id)
+            if not item:
                 not_linked[i.get("Name") or f"item {inv_id}"] += qty
                 continue
             if head and item["letter"] in WEIGHED and _unit(i) == "g":
                 q = Fraction(head)
             used[item["id"]] += qty * q / per
     return dict(used), dict(no_recipe), dict(not_linked)
+
+
+def tobacco_linked(con):
+    """Whether any of SambaPOS's inventory items is a tobacco or a mix here."""
+    return bool(db.scalar(con, """
+        SELECT COUNT(*) FROM pos_stock_link l JOIN stock_item si ON si.id = l.item_id
+          JOIN stock_category sc ON sc.id = si.category_id WHERE sc.letter IN ('A', 'B')"""))
+
+
+def hookahs(con, since, until):
+    """How many hookahs the kept nights from `since` to `until` sold: orders
+    whose recipe takes tobacco or a mix. None when no tobacco is linked yet,
+    so nothing could be known."""
+    if not tobacco_linked(con):
+        return None
+    place = _placed(con)
+    n = Fraction(0)
+    for _, qty, lines in _orders(con, since, until):
+        if lines and any((place(inv_id)[0] or {}).get("letter") in WEIGHED for inv_id, _ in lines):
+            n += qty
+    return n
 
 
 def view(con):

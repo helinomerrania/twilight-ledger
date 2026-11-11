@@ -22,7 +22,7 @@ a weighed gap of a few grams either way, which is the scales.
 from datetime import date, timedelta
 from fractions import Fraction
 
-from . import db
+from . import db, ratios
 from .dates import today
 from .money import half_up
 from .pos import recipes
@@ -75,6 +75,9 @@ def movements(con, after, upto):
         add(r["item_id"], "filled_out", Fraction(r["g"], 1000))
     used, no_recipe, not_linked = recipes.usage(con, _day_after(after), upto)
     for item, q in used.items():
+        add(item, "sold", q)
+    # foil, coal and the like: the hookahs sold, by the ratio learnt before
+    for item, q in ratios.used(con, after, upto).items():
         add(item, "sold", q)
     return out, no_recipe, not_linked
 

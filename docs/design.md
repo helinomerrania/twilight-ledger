@@ -293,7 +293,9 @@ What should be on the shelf (`ledger/expected.py`) is worked out when asked,
 never stored: the count before, plus receipt lines, plus and minus bucket
 fills, minus what the recipes say was sold. Nothing in it moves money, so a
 wrong recipe or a missing receipt line shows up as a gap, never as a wrong
-balance.
+balance. Foil, coal and the like have no recipe; `ledger/ratios.py` learns
+hookahs to each one between counts, and should-be uses the ratio learnt
+before a count, never the one the count itself would give.
 
 ## Updating from GitHub
 

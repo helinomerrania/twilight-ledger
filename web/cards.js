@@ -915,6 +915,39 @@ export function expectedCard() {
     </div>`);
 }
 
+/* Foil, coal and the like: hookahs to each one, learnt between counts. */
+export function ratiosCard() {
+  const r = S.data.stock.ratios;
+  const taken = new Set(r.items.map(x => x.item));
+  const candidates = S.data.setup.items.filter(i => i.active && !['A', 'B'].includes(i.letter)
+                                                 && !taken.has(i.id));
+  if (!r.items.length && !candidates.length) return '';
+  const fmt = x => (x === null || x === undefined ? '—'
+    : (+x.toFixed(x < 10 ? 1 : 0)).toLocaleString('en-US'));
+  const rows = r.items.map(x => `<tr>
+      <td>${esc(x.name)}${x.dropped ? '<br><span class="neg">more is going than the sales explain</span>' : ''}</td>
+      <td class="num">${x.ratio ? fmt(x.ratio) : '<span class="quiet">not yet</span>'}</td>
+      <td class="num">${x.a_night ? fmt(x.a_night) : ''}</td>
+      <td class="quiet">${x.pairs.map(p => `${esc(p.to.slice(5))}: ${p.ratio ? fmt(p.ratio) : '—'}`).join(' · ')}</td>
+      <td class="actions"><button class="mini" data-do="per_hookah"
+          data-args="${args({ id: x.item, on: 0 })}">Stop</button></td>
+    </tr>`).join('');
+  return card(`<h2>Used with each hookah</h2>
+    <p class="sub">Foil, coal, filters: nobody writes down each one opened, so between two
+      counts the app divides the hookahs SambaPOS sold by what was used, and learns hookahs to
+      each one — a roll, a carton, whatever the count sheet counts it in. It needs two counts in
+      a row that both counted it; then what should be on the shelf takes off what each night
+      roughly used.${r.a_night ? ` Lately about ${fmt(r.a_night)} hookahs a night.` : ''}</p>
+    ${r.hookahs_known ? '' : `<p class="note warnc">Link SambaPOS’s tobacco first (Setup → What
+      SambaPOS’s recipes take), so the hookahs can be counted.</p>`}
+    ${rows ? table(`<th>Item</th><th class="num">Hookahs to each</th><th class="num">Used a night</th>
+      <th>Count by count</th><th></th>`, rows) : ''}
+    ${candidates.length ? `<div class="row addrow">
+      <select data-f="id" style="max-width:260px">${options(candidates.map(i => ({ value: i.id, label: i.name })))}</select>
+      <button class="btn" data-add="per_hookah" data-args="${args({ on: 1 })}">Goes with each hookah</button>
+    </div>` : ''}`);
+}
+
 export function receiptForm() {
   const sup = S.data.people.supplier.filter(s => s.active);
   return card(`<h2>New receipt</h2>
