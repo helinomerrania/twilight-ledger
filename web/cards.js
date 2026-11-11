@@ -1375,6 +1375,32 @@ export function nightDrawer() {
     ${foot}${only}`);
 }
 
+/** The menu as SambaPOS has it: names and prices are set there, where the
+    customer is charged, and only read here. */
+export function sambaposMenu() {
+  const m = S.data.pos && S.data.pos.menu;
+  if (!m || !m.items) return '';
+  const odd = m.odd.length
+    ? `<p class="note warnc">${m.odd.length} price${m.odd.length === 1 ? ' is' : 's are'} not a
+        multiple of ${money(S.data.note)}, so ${m.odd.length === 1 ? 'it needs' : 'they need'} change
+        nobody has:</p><ul class="note">${m.odd.map(o => `<li><bdi>${esc(o.item)}</bdi>${o.portion
+          && o.portion !== 'Normal' ? ` · <bdi>${esc(o.portion)}</bdi>` : ''}: ${money(o.price)}</li>`).join('')}</ul>`
+    : `<p class="note">Every price is a multiple of ${money(S.data.note)}, so change is always possible.</p>`;
+  const groups = m.groups.map(g => `<details class="fold"><summary><bdi>${esc(g.name || 'No group')}</bdi>
+      <span class="quiet">${g.items.length} item${g.items.length === 1 ? '' : 's'}</span></summary>
+      ${table(`<th>Item</th><th>Portion</th><th class="num">Price</th><th class="num">Sold, last ${m.nights} nights</th>`,
+        g.items.map(i => i.portions.map((p, n) => `<tr>
+          <td>${n ? '' : `<bdi>${esc(i.name)}</bdi>`}</td>
+          <td class="quiet"><bdi>${esc(p.name || '')}</bdi>${p.tag ? ` · <bdi>${esc(p.tag)}</bdi>` : ''}</td>
+          <td class="num ${p.price && p.price % S.data.note ? 'warnc' : ''}">${p.price === null ? '—' : money(p.price)}</td>
+          <td class="num">${n ? '' : (i.sold ? Number(i.sold).toLocaleString('en') : '<span class="quiet">0</span>')}</td>
+        </tr>`).join('')).join(''))}</details>`).join('');
+  return card(`<h2>The menu, as SambaPOS has it</h2>
+    <p class="sub">${m.items} items in ${m.groups.length} groups. Names and prices are set in
+      SambaPOS, where the customer is charged; the app reads them each time SambaPOS is read,
+      ready for the TV and the QR menu later.</p>${odd}${groups}`);
+}
+
 /** Every SambaPOS account money moves through, and what it is in the books. */
 export function sambaposAccounts() {
   const p = S.data.pos;

@@ -35,7 +35,7 @@ step.
 | ○ | 3.7 Ratio items: foil, coal, filters, cups | 3.6 |
 | ○ | 3.8 Shortage warnings | 3.6 |
 | ○ | 3.9 Cost and profit per hookah and per item | 3.4, 3.5 |
-| ○ | 4.1 Read the menu from SambaPOS | 1.4 |
+| ✅ | 4.1 Read the menu from SambaPOS (2026.11.11.12) | — |
 | ○ | 4.2 Pictures and descriptions in the app | 4.1 |
 | ○ | 4.3 Publish one menu for Twilight TV and the QR menu | 4.2 |
 | ○ | 4.4 Sold out, from stock | 3.8, 4.3 |
@@ -620,10 +620,16 @@ The same names, prices and pictures everywhere, set in one place. The price
 a customer pays is the one SambaPOS charges, so SambaPOS stays where names
 and prices are set; the app reads them and adds what SambaPOS lacks.
 
-### 4.1 Read the menu from SambaPOS ○
+### 4.1 Read the menu from SambaPOS ✅
 
 Menu items, groups, portions and prices (1.4), kept current each time
 SambaPOS is read. The nightly reset does not touch the menu.
+
+Done in 2026.11.11.12: Setup → SambaPOS → "The menu, as SambaPOS has it"
+(`catalog.menu`): each group folded, every item with its portions and prices
+and how many sold over the last 30 nights kept, and the prices that are not
+a multiple of the smallest note. Learned: every whole price on the menu is a
+multiple of 250; the only others are below 250, prices per gram or per piece.
 
 ### 4.2 Pictures and descriptions in the app ○
 
@@ -660,10 +666,11 @@ Ideas raised and worth keeping, not yet planned in detail:
 
 ## Questions to settle when the step comes up
 
-- 1.1 — which account types and document types are used today; whether
-  purchases and stock are entered in SambaPOS at all.
-- 2.1 — which payment types exist besides cash (FIB, card).
-- 2.4 — whether a float is already left in the drawer, and how much.
+- 1.1 — answered: see 1.1, 1.2 and 1.4. Purchases are not entered in
+  SambaPOS; inventory items and recipes are set up but not used.
+- 2.1 — answered: cash is the only payment type in use.
+- 2.4 — whether a float is already left in the drawer, and how much (Setup →
+  Counting the cash is ready for it).
 - 3.1 — whether every tobacco brand comes in 50 g packs.
 - 3.4 — whether anything besides tobacco goes into the mixes, and the usual
   batch for each mix.

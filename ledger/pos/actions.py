@@ -25,6 +25,7 @@ def view(con, on, month):
             "windows_user": sources.windows_user(),
             "status": archive.status(con),
             "catalog": catalog.counts(con),
+            "menu": catalog.menu(con),
             "auto": auto.view(con),
             "night": archive.night(con, on),
             "adding": adding.plan(con, on) if on else None,

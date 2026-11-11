@@ -89,6 +89,31 @@ class KeptEarly(unittest.TestCase):
         self.keep(with_more(night_of_ten(ended=True), at="2026-11-12 03:00:00", menu=False))
         self.assertEqual(catalog.counts(self.con)["recipe"], 1)
 
+    def test_the_menu_as_samba_pos_has_it(self):
+        self.keep(with_more(night_of_ten(ended=True)))
+        m = catalog.menu(self.con)
+        self.assertEqual(m["items"], 2)
+        groups = {g["name"]: g["items"] for g in m["groups"]}
+        self.assertEqual(sorted(groups), ["Drinks", "Hookah"])
+        apple = groups["Hookah"][0]
+        self.assertEqual((apple["name"], apple["portions"], apple["sold"]),
+                         ("Apple", [{"name": "Normal", "price": 5000, "tag": None}], 2))
+        self.assertEqual(groups["Drinks"][0]["sold"], 2)        # one of them given free
+        self.assertEqual(m["odd"], [])
+
+    def test_a_price_that_needs_odd_change_is_pointed_out(self):
+        snap = with_more(night_of_ten(ended=True))
+        snap["tables"]["MenuItemPrices"][1]["Price"] = sources.coerce("dec", "4100")
+        self.keep(snap)
+        self.assertEqual(catalog.menu(self.con)["odd"],
+                         [{"item": "Tea", "portion": "Normal", "price": 4100}])
+
+    def test_a_price_per_gram_is_not_odd_change(self):
+        snap = with_more(night_of_ten(ended=True))
+        snap["tables"]["MenuItemPrices"][1]["Price"] = sources.coerce("dec", "50")
+        self.keep(snap)
+        self.assertEqual(catalog.menu(self.con)["odd"], [])
+
     def test_samba_pos_s_users_are_never_read(self):
         """They hold passwords and PINs."""
         self.assertNotIn("Users", sources.TABLES)
