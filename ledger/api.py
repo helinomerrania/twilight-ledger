@@ -158,6 +158,13 @@ def _flavour(item, brand):
     return item["name"][len(head):] if item["name"].startswith(head) else item["name"]
 
 
+def _levels(conv, item, brand):
+    """The boxes an item is counted or received in, as [{key, label}]."""
+    return [{"key": k, "label": lab} for k, lab in stock.levels(
+        item["letter"], conv, stock.packs_of(item, brand),
+        item["pack_size"] or (brand["pack_size"] if brand else None))]
+
+
 def _setup_items(con):
     """Every stock item for Setup, a flavour after its brand, each with its
     packs said the way the boxes say them and its barcodes."""
@@ -173,17 +180,37 @@ def _setup_items(con):
     for r in rows:
         brand = by_id.get(r["parent_id"])
         r["flavour"] = _flavour(r, brand)
+        r["levels"] = _levels(conv, r, brand)
         if r["letter"] == "B":
             own = stock.packs_of(r)
             r["comes_as"] = stock.packs_label(conv, own) if own else ""
             r["comes_as_else"] = stock.packs_label(conv, stock.packs_of(brand) if brand else None)
-            r["levels"] = [lab for _, lab in stock.pack_levels(conv, stock.packs_of(r, brand))]
         r["barcodes"] = codes.get(r["id"], [])
         r["minimum"] = r["minimum_milli"] / 1000 if r["minimum_milli"] is not None else None
     order = {r["id"]: n for n, r in enumerate(rows)}
     rows.sort(key=lambda r: (order.get(r["parent_id"], order[r["id"]]),
                              r["parent_id"] is not None, r["name"]))
     return rows
+
+
+def receipt_lines(con):
+    """Every receipt's lines, by receipt row: the item, the boxes as typed with
+    the sizes they stand for, what they came to, and the amount."""
+    conv = db.setting(con, "conversions", {}) or {}
+    items = {r["id"]: dict(r) for r in db.all_(con, """
+        SELECT si.*, sc.letter FROM stock_item si
+          JOIN stock_category sc ON sc.id = si.category_id""")}
+    out = {}
+    for l in db.all_(con, "SELECT * FROM receipt_line ORDER BY receipt_id, id"):
+        item = items[l["item_id"]]
+        brand = items.get(item["parent_id"])
+        out.setdefault(l["receipt_id"], []).append({
+            "item": item["id"], "name": item["name"], "letter": item["letter"],
+            "levels": _levels(conv, item, brand),
+            "packages_milli": l["packages_milli"], "blocks_milli": l["blocks_milli"],
+            "loose_milli": l["loose_milli"], "qty_milli": l["qty_milli"],
+            "amount": l["amount"]})
+    return out
 
 
 def pick_lists(con):
@@ -214,6 +241,9 @@ def stock_view(con, month, count_date=None):
     receipts = queries.entries(con, kind="receipt_credit") + \
         queries.entries(con, kind="receipt_cash")
     receipts.sort(key=lambda e: (e["happened_on"], e["id"]), reverse=True)
+    lines = receipt_lines(con)
+    for e in receipts:
+        e["lines"] = lines.get((e["receipt"] or {}).get("id"), [])
     return {"cogs": c, "count_dates": dates, "count_date": chosen,
             "count": count_sheet(con, chosen),
             "counts": [dict(r) for r in db.all_(
@@ -268,8 +298,7 @@ def count_sheet(con, count_date):
             if line["counted_at"] == 0:
                 line["counted_at"] = brand["price"]
         if r["letter"] == "B":
-            line["levels"] = [{"key": k, "label": lab} for k, lab in stock.pack_levels(
-                conv, stock.packs_of(items[r["id"]], brand))]
+            line["levels"] = _levels(conv, {**items[r["id"]], "letter": "B"}, brand)
         g["items"].append(line)
         g["value"] += r["value"] or 0
     for g in groups.values():

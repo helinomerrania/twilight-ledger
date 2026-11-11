@@ -82,7 +82,7 @@ function fieldKey(el) {
   if (el.dataset.pot !== undefined) return 'pot:' + el.dataset.pot;
   if (el.id) return '#' + el.id;
   const item = el.closest('[data-item]');
-  if (item && el.dataset.k) return `item:${item.dataset.item}:${el.dataset.k}`;
+  if (item && el.dataset.k) return `item:${item.dataset.receipt || ''}:${item.dataset.item}:${el.dataset.k}`;
   const edit = el.closest('[data-edit]');
   if (edit && el.dataset.e) return `edit:${edit.dataset.edit}:${el.dataset.e}`;
   const line = el.closest('[data-line]');
@@ -576,7 +576,47 @@ const H = {
       amount, on: val('rDate'), who: val('rSup'), number: val('rNo'),
       what: val('rWhat') || 'Several items', terms: val('rTerms'), pot: val('rPot'),
     }), { skip: ['#rAmt', '#rNo', '#rWhat'] });
-    if (out) say('Receipt added.');
+    if (!out) return;
+    S.draft.rlines = out.receipt || null;            // what came in, while the receipt is in hand
+    render();
+    document.getElementById('rlItem')?.focus();
+    say('Receipt added. List what came in now, or later.');
+  },
+
+  receiptLines(el) {
+    const id = Number(el.dataset.id);
+    S.draft.rlines = S.draft.rlines === id ? null : id;
+    render();
+    if (S.draft.rlines) document.getElementById('rlItem')?.focus();
+  },
+
+  /* An item for the open receipt, by name or by barcode: a scanner types the
+     code and presses Enter, which lands here. */
+  addRLine() {
+    const box = document.getElementById('rlItem');
+    const rid = S.draft.rlines;
+    const v = box ? box.value.trim() : '';
+    if (!v || !rid) return;
+    const items = S.data.setup.items.filter(i => i.letter !== 'A');
+    const it = items.find(i => (i.barcodes || []).includes(v))
+            || items.find(i => i.name.toLowerCase() === v.toLowerCase());
+    if (!it) {
+      return say(`Nothing is called ${v}, and no item has that barcode. Add it in Setup → Stock items first.`, true);
+    }
+    const p = (S.draft.rpending = S.draft.rpending || {});
+    p[rid] = p[rid] || [];
+    if (!p[rid].includes(it.id)) p[rid].push(it.id);
+    box.value = '';
+    render({ skip: ['#rlItem'] });
+    const row = document.querySelector(`tr[data-receipt="${rid}"][data-item="${it.id}"]`);
+    if (row) row.querySelector('input[data-k]').focus();
+  },
+
+  dropRLine(el) {
+    const rid = S.draft.rlines;
+    const p = (S.draft.rpending || {})[rid];
+    if (p) S.draft.rpending[rid] = p.filter(i => i !== Number(el.dataset.id));
+    render();
   },
 
   /* ------------------------------------------------------------------ month */
@@ -900,6 +940,7 @@ document.addEventListener('focusout', e => {
 });
 
 async function saveLine(row) {
+  if (row.dataset.receipt) return saveReceiptLine(row);
   const body = { on: S.data.stock.count_date, item: Number(row.dataset.item) };
   const keys = [];
   row.querySelectorAll('[data-k]').forEach(el => {
@@ -909,6 +950,22 @@ async function saveLine(row) {
   const before = S.data.stock.count.closing;
   const out = await act(() => send('count_line', body), { skip: keys });
   if (out && out.closing !== before) say(`Counted value now ${money(out.closing)}.`);
+}
+
+async function saveReceiptLine(row) {
+  const rid = Number(row.dataset.receipt);
+  const item = Number(row.dataset.item);
+  const body = { receipt: rid, item };
+  const keys = [];
+  row.querySelectorAll('[data-k]').forEach(el => {
+    body[el.dataset.k] = el.value.trim();
+    keys.push(fieldKey(el));
+  });
+  const out = await act(() => send('receipt_line', body), { skip: keys });
+  if (!out) return;
+  const p = (S.draft.rpending || {})[rid];
+  if (p) S.draft.rpending[rid] = p.filter(i => i !== item);   // saved, so no longer waiting
+  say(out.removed ? 'Line taken off.' : 'Saved.');
 }
 
 document.addEventListener('keydown', e => {
@@ -921,7 +978,8 @@ document.addEventListener('keydown', e => {
   }
   if (e.key !== 'Enter' || e.isComposing || !el.matches('input, select')) return;
 
-  const submit = { nSales: 'sales', nAmt: 'nAdd', eAmt: 'addEntry', rAmt: 'receipt', q: 'search' };
+  const submit = { nSales: 'sales', nAmt: 'nAdd', eAmt: 'addEntry', rAmt: 'receipt', q: 'search',
+                   rlItem: 'addRLine' };
   if (submit[el.id]) {
     e.preventDefault();
     H[submit[el.id]](el);

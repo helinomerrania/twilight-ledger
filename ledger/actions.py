@@ -121,7 +121,9 @@ def _transfer(con, body):
 
 @action("receipt", summary=_entry_line)
 def _receipt(con, body):
-    return {"id": _post_receipt(con, body)}
+    eid = _post_receipt(con, body)
+    return {"id": eid, "receipt": db.scalar(con, "SELECT id FROM receipt WHERE entry_id = ?",
+                                            (eid,))}
 
 
 def _post_receipt(con, body):
@@ -139,6 +141,54 @@ def _post_receipt(con, body):
                 (on, post.account_by_name(con, "supplier", supplier),
                  number, what, value, terms, eid))
     return eid
+
+
+def _receipt_line_said(con, body, out):
+    name = db.scalar(con, "SELECT name FROM stock_item WHERE id = ?", (out["item"],),
+                     default="an item")
+    return (f"Took {name} off a receipt" if out.get("removed")
+            else f"Receipt line: {name}")
+
+
+@action("receipt_line", guard_pots=False, summary=_receipt_line_said)
+def _receipt_line(con, body):
+    """What one line of a supplier receipt brought in: the boxes, as on the
+    count sheet, and what the invoice charges for them if it says. Only the
+    receipt's total moves money. Empty boxes take the line off."""
+    r = db.one(con, "SELECT r.*, e.period FROM receipt r JOIN entry e ON e.id = r.entry_id "
+                    "WHERE r.id = ?", (int(body["receipt"]),))
+    if not r:
+        raise ApiError("that receipt is not in the books")
+    if r["voided_at"]:
+        raise ApiError("that receipt was deleted")
+    if queries.is_closed(con, r["period"]):
+        raise ApiError("that receipt belongs to a closed month")
+    item, brand = _stock_item(con, body["item"])
+    packages, blocks, loose = _boxes(body)
+    raw = body.get("amount")
+    value = to_int(raw, "amount") if raw not in (None, "") else None
+    if value is not None and value < 0:
+        raise ApiError("an amount cannot be negative")
+    if stock.is_empty(packages, blocks, loose, None):
+        if value:
+            raise ApiError("say how many came, not only what they cost")
+        con.execute("DELETE FROM receipt_line WHERE receipt_id = ? AND item_id = ?",
+                    (r["id"], item["id"]))
+        return {"receipt": r["id"], "item": item["id"], "removed": True}
+    if item["letter"] == "A":
+        raise ApiError("a mix is made here, not bought: take in the tobacco that goes into it")
+    qty_milli = stock.qty_milli_of(_quantity(con, item, brand, packages, blocks, loose))
+    if qty_milli <= 0:
+        raise ApiError("say how many came")
+    con.execute(
+        "INSERT INTO receipt_line(receipt_id, item_id, packages_milli, blocks_milli, "
+        "loose_milli, qty_milli, amount) VALUES (?,?,?,?,?,?,?) "
+        "ON CONFLICT(receipt_id, item_id) DO UPDATE SET "
+        "packages_milli = excluded.packages_milli, blocks_milli = excluded.blocks_milli, "
+        "loose_milli = excluded.loose_milli, qty_milli = excluded.qty_milli, "
+        "amount = excluded.amount",
+        (r["id"], item["id"], packages, blocks, loose, qty_milli, value))
+    return {"receipt": r["id"], "item": item["id"], "qty_milli": qty_milli, "amount": value}
 
 
 # ---------------------------------------------------------------- correcting
@@ -268,6 +318,10 @@ def _edit_entry(con, body):
             "what": body.get("what") if "what" in body else r.get("what"),
             "number": body.get("number") if "number" in body else r.get("number"),
             "pot": f["pot"]})
+        # what came in did not change because the receipt was corrected
+        if r.get("id"):
+            con.execute("UPDATE receipt_line SET receipt_id = (SELECT id FROM receipt "
+                        "WHERE entry_id = ?) WHERE receipt_id = ?", (new_id, r["id"]))
     else:
         new_id = _repost(con, kind, f)
     con.execute("UPDATE entry SET replaced_by = ? WHERE id = ?", (new_id, e["id"]))
@@ -374,6 +428,41 @@ def _open_count(con, body):
     return {"count_date": on}
 
 
+def _stock_item(con, item_id):
+    """An item with its category letter, and its brand when it is a flavour."""
+    item = db.one(con, "SELECT si.*, sc.letter FROM stock_item si "
+                       "JOIN stock_category sc ON sc.id = si.category_id "
+                       "WHERE si.id = ?", (int(item_id),))
+    if not item:
+        raise ApiError("no such stock item")
+    brand = db.one(con, "SELECT * FROM stock_item WHERE id = ?",
+                   (item["parent_id"],)) if item["parent_id"] else None
+    return item, brand
+
+
+def _boxes(body):
+    """What was typed into the packages, blocks and loose boxes, x 1000."""
+    try:
+        boxes = [stock.to_milli(body.get(k)) for k in ("packages", "blocks", "loose")]
+    except (ValueError, ZeroDivisionError):
+        raise ApiError("a count is a number") from None
+    if min(boxes) < 0:
+        raise ApiError("a count cannot be less than nothing")
+    return boxes
+
+
+def _quantity(con, item, brand, packages, blocks, loose, gross=None, tare_grams=0):
+    """What the boxes come to in the item's own quantity. A flavour comes in
+    its brand's packs unless it has its own."""
+    conv = stock.item_conversions(db.setting(con, "conversions", {}),
+                                  stock.packs_of(dict(item), dict(brand) if brand else None))
+    return stock.quantity(item["letter"], packages_milli=packages,
+                          blocks_milli=blocks, loose_milli=loose,
+                          gross_grams=gross, tare_grams=tare_grams,
+                          pack_size=item["pack_size"] or (brand["pack_size"] if brand else None),
+                          conv=conv)
+
+
 def locked(con, count_date):
     """A count a closed month was built on cannot be edited."""
     if not count_date:
@@ -399,21 +488,11 @@ def _count_line(con, body):
         con.execute("INSERT INTO stock_count(count_date, closing, source) "
                     "VALUES (?,0,'counted')", (on,))
         head = db.one(con, "SELECT * FROM stock_count WHERE count_date = ?", (on,))
-    item = db.one(con, "SELECT si.*, sc.letter FROM stock_item si "
-                       "JOIN stock_category sc ON sc.id = si.category_id "
-                       "WHERE si.id = ?", (int(body["item"]),))
-    if not item:
-        raise ApiError("no such stock item")
-
-    try:
-        packages = stock.to_milli(body.get("packages"))
-        blocks = stock.to_milli(body.get("blocks"))
-        loose = stock.to_milli(body.get("loose"))
-    except (ValueError, ZeroDivisionError):
-        raise ApiError("a count is a number")
+    item, brand = _stock_item(con, body["item"])
+    packages, blocks, loose = _boxes(body)
     gross = body.get("gross_grams")
     gross = to_int(gross, "gross_grams") if gross not in (None, "") else None
-    if min(packages, blocks, loose, gross or 0) < 0:
+    if (gross or 0) < 0:
         raise ApiError("a count cannot be less than nothing")
     tare_id = body.get("tare_id") or None
     tare_grams = db.scalar(con, "SELECT grams FROM tare WHERE id = ?",
@@ -421,15 +500,7 @@ def _count_line(con, body):
 
     # a flavour comes in its brand's packs, at its brand's price, unless it
     # has its own
-    brand = db.one(con, "SELECT * FROM stock_item WHERE id = ?",
-                   (item["parent_id"],)) if item["parent_id"] else None
-    conv = stock.item_conversions(db.setting(con, "conversions", {}),
-                                  stock.packs_of(dict(item), dict(brand) if brand else None))
-    qty = stock.quantity(item["letter"], packages_milli=packages,
-                         blocks_milli=blocks, loose_milli=loose,
-                         gross_grams=gross, tare_grams=tare_grams,
-                         pack_size=item["pack_size"] or (brand["pack_size"] if brand else None),
-                         conv=conv)
+    qty = _quantity(con, item, brand, packages, blocks, loose, gross, tare_grams)
     qty_milli = stock.qty_milli_of(qty)
     # A line keeps the price it was counted at. Re-pricing an item in Setup
     # then changes what the next count is worth, never what an old one was.

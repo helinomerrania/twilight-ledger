@@ -272,6 +272,12 @@ them later never moves a count already taken. A flavour is an item with a
 its own, which keeps the old per-brand counts valid beside new per-flavour
 ones. Barcodes are a table of their own, one item per code.
 
+A supplier receipt's lines (`receipt_line`) say what came onto the shelves;
+only the receipt's total moves money, so a line can never put the books out
+of balance. Each line keeps the boxes as typed and what they came to when
+saved, belongs to the receipt row, and moves to the new row when the receipt
+is corrected.
+
 ## Updating from GitHub
 
 The app updates itself from this repository. The download is checked before it

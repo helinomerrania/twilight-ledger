@@ -311,7 +311,7 @@ function whoList(kind) {
   return null;
 }
 
-function entryRow(e, { date = true } = {}) {
+function entryRow(e, { date = true, lines = false } = {}) {
   const edit = S.draft.editing === e.id;
   if (edit) return editRow(e, { date });
   const where = e.kind === 'transfer' ? `${esc(e.pot)} → ${esc(e.pot_to)}` : esc(e.pot || '');
@@ -324,6 +324,9 @@ function entryRow(e, { date = true } = {}) {
     <td class="quiet">${where}</td>
     <td class="num ${e.cash > 0 ? 'pos' : ''}">${money(e.amount)}</td>
     <td class="actions">
+      ${lines && e.receipt ? `<button class="mini" data-act="receiptLines" data-id="${e.receipt.id}"
+          aria-expanded="${S.draft.rlines === e.receipt.id}">${e.lines.length
+          ? `${e.lines.length} line${e.lines.length === 1 ? '' : 's'}` : 'What came in'}</button>` : ''}
       ${e.editable ? `<button class="mini" data-act="edit" data-id="${e.id}">Edit</button>` : ''}
       ${e.deletable ? `<button class="mini danger" data-act="void" data-id="${e.id}">Delete</button>` : ''}
     </td></tr>`;
@@ -764,7 +767,8 @@ export function countSheet() {
 export function receiptForm() {
   const sup = S.data.people.supplier.filter(s => s.active);
   return card(`<h2>New receipt</h2>
-    <p class="sub">One line per supplier receipt — the total is all that is needed.</p>
+    <p class="sub">The total is what moves money. Then list what came in, so the
+      stock can follow it — that part can wait.</p>
     <div class="grid-form">
       ${field('Date', `<input type="date" id="rDate" value="${esc(S.data.today)}" max="${esc(S.data.today)}">`)}
       ${field('Supplier', `<select id="rSup">${options(sup.map(s => s.name))}</select>`)}
@@ -782,10 +786,81 @@ export function receiptList() {
   const rows = S.data.stock.receipts;
   const now = rows.filter(r => r.period === S.data.month);
   const older = rows.filter(r => r.period !== S.data.month);
+  const open = S.draft.rlines;
+  const isOpen = e => e.receipt && e.receipt.id === open;
+  const list = rs => table(`<th>Date</th><th>What</th><th>Details</th><th>Pot</th>
+      <th class="num">Amount</th><th></th>`,
+    rs.map(e => entryRow(e, { lines: true }) + (isOpen(e) ? linesRow(e) : '')).join(''));
+  const names = S.data.setup.items.filter(i => i.active && i.letter !== 'A');
   return card(`<h2>Receipts in ${esc(monthName(S.data.month))}</h2>
-    ${now.length ? entryTable(now) : empty('No receipts this month.')}
-    ${older.length ? `<details class="fold"><summary>Every other receipt (${older.length})</summary>
-      ${entryTable(older)}</details>` : ''}`);
+    ${now.length ? list(now) : empty('No receipts this month.')}
+    ${older.length ? `<details class="fold"${older.some(isOpen) ? ' open' : ''}>
+      <summary>Every other receipt (${older.length})</summary>${list(older)}</details>` : ''}
+    <datalist id="stockNames">${names.map(i => `<option value="${esc(i.name)}">`).join('')}</datalist>`);
+}
+
+/* What came in on one receipt: a line per item, in the boxes it comes in,
+   saved as you leave it, like the count sheet. */
+function linesRow(e) {
+  const rid = e.receipt.id;
+  const closed = new Set((S.data.summary || []).filter(r => r.status === 'closed').map(r => r.month));
+  const ro = closed.has(e.period) ? ' disabled' : '';
+  const saved = e.lines;
+  const pending = ((S.draft.rpending || {})[rid] || [])
+    .filter(id => !saved.some(l => l.item === id))
+    .map(id => S.data.setup.items.find(i => i.id === id)).filter(Boolean)
+    .map(i => ({ item: i.id, name: i.name, letter: i.letter, levels: i.levels, pending: true }));
+  const unit = l => (l.letter === 'B' ? ['kg', 'kg'] : l.letter === 'E' ? ['cartons', 'carton']
+    : l.levels.length > 1 ? ['packages', 'package'] : ['pieces', 'piece']);
+  const sizes = l => {
+    const keys = l.levels.map(x => x.key);
+    const extra = ['packages', 'blocks', 'loose'].filter(k => !keys.includes(k) && l[`${k}_milli`]);
+    return `<div class="sizes">${[...l.levels, ...extra.map(k => ({ key: k, label: '' }))].map(x => {
+      const v = l[`${x.key}_milli`];
+      return `<label class="sizebox"><input type="number" step="0.1" min="0" data-k="${x.key}"
+          value="${v ? v / 1000 : ''}" placeholder="0" inputmode="decimal"${ro}>
+        <span class="size">${esc(x.label)}</span></label>`;
+    }).join('')}</div>`;
+  };
+  const row = l => {
+    const q = (l.qty_milli || 0) / 1000;
+    const [many, one] = unit(l);
+    return `<tr data-item="${l.item}" data-receipt="${rid}">
+      <td>${esc(l.name)}</td>
+      <td>${sizes(l)}</td>
+      <td class="num quiet">${q ? `${+q.toFixed(3)} ${many}` : ''}
+        ${q && l.amount ? `<br>${money(Math.round(l.amount / q))} / ${one}` : ''}</td>
+      <td class="num"><input type="number" min="0" data-k="amount" value="${l.amount ?? ''}"
+          placeholder="—" inputmode="numeric"${ro}></td>
+      <td class="actions">${ro ? '' : l.pending
+        ? `<button class="mini" data-act="dropRLine" data-id="${l.item}" title="Leave it out">✕</button>`
+        : `<button class="mini" data-do="receipt_line" data-args="${args({ receipt: rid, item: l.item })}"
+             title="Take this line off">✕</button>`}</td>
+    </tr>`;
+  };
+  const priced = saved.filter(l => l.amount != null);
+  const sum = priced.reduce((a, l) => a + l.amount, 0);
+  const note = !saved.length
+    ? 'Nothing listed yet. Only the total moves money; the lines are what came onto the shelves.'
+    : priced.length < saved.length
+      ? `${saved.length - priced.length} of ${saved.length} lines have no amount${priced.length
+          ? `; the others come to ${money(sum)} of the receipt’s ${money(e.amount)}` : ''}.`
+      : sum === e.amount
+        ? `The lines come to ${money(sum)}, the receipt’s total.`
+        : `The lines come to ${money(sum)}, ${money(Math.abs(e.amount - sum))}
+           ${sum < e.amount ? 'less' : 'more'} than the receipt’s ${money(e.amount)}.`;
+  return `<tr class="drill"><td colspan="6">
+    <div class="cardhead"><strong>What came in</strong>
+      <span class="quiet">${esc(e.detail || '')} · ${esc(e.happened_on)}</span>
+      <div class="right"><button class="mini" data-act="receiptLines" data-id="${rid}">Close</button></div></div>
+    ${saved.length || pending.length ? table(`<th>Item</th><th>How many</th><th class="num">Comes to</th>
+        <th class="num">Amount</th><th></th>`, [...saved, ...pending].map(row).join('')) : ''}
+    ${ro ? '' : `<div class="row" style="margin-top:10px">
+      <input id="rlItem" list="stockNames" placeholder="Item or barcode" autocomplete="off"
+        spellcheck="false" style="max-width:300px">
+      <button class="btn" data-act="addRLine">Add</button></div>`}
+    <p class="note">${note}</p>
+  </td></tr>`;
 }
 
 export function countHistory() {

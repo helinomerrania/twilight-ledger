@@ -27,7 +27,7 @@ step.
 | ✅ | 2.4 Opening float (2026.11.11.11) | — |
 | ✅ | 2.5 Differences over time, and who closed (2026.11.11.11) | — |
 | ✅ | 3.1 Stock items: brand and flavour, barcodes, pack weights, minimums (2026.11.11.13) | — |
-| ○ | 3.2 Receipts with lines | 3.1 |
+| ✅ | 3.2 Receipts with lines (2026.11.11.14) | — |
 | ○ | 3.3 Barcode scanner everywhere | 3.1 |
 | ○ | 3.4 Filling a bucket (mixes) | 3.1 |
 | ○ | 3.5 Recipes: what each menu item uses | 1.4, 3.1 |
@@ -558,13 +558,25 @@ As built (2026.11.11.13), in Setup → Stock items:
   says it (weighed, sealed, ice cream, packages); tracking by ratio waits
   for 3.7.
 
-### 3.2 Receipts with lines ○
+### 3.2 Receipts with lines ✅
 
 A supplier receipt lists what came in: item, how many, price. Its total
 still has to match the supplier's invoice, and only the total moves money,
 as now. Lines can be added by scanning. If 1.1 shows purchases are entered in
 SambaPOS, they can come in from the nightly save instead of being typed
 twice.
+
+As built (2026.11.11.14), on Stock → Receipts: a new receipt opens **What
+came in** with the cursor in its item box. Type or pick an item, or scan its
+barcode (a scanner types the code and presses Enter), and it gets a line in
+the boxes it comes in — the same sizes as the count sheet — and an amount,
+which can be left out. Each line saves as you leave it, and ✕ takes it off.
+The lines say whether they come to the receipt's total. Only the total moves
+money. A corrected receipt keeps its lines, a deleted one takes them with it
+(and brings them back if it is put back), and a closed month's lines are
+kept as they were. Purchases are not entered in SambaPOS (1.1), so nothing
+comes in from the nightly save. A mix is made here, not bought, so weighed
+items are not received.
 
 ### 3.3 Barcode scanner everywhere ○
 

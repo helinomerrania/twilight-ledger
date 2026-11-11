@@ -124,6 +124,21 @@ def pack_levels(conv, packs):
     return out
 
 
+def levels(letter, conv=None, packs=None, pack_size=None):
+    """The boxes an item is counted or received in, largest first, as
+    (key, label). Weighed mixes are made here, not counted in boxes."""
+    if letter == "A":
+        return []
+    if letter == "B":
+        return pack_levels(conv, packs)
+    if letter == "E":
+        return [("packages", "cartons"), ("loose", "buckets")]
+    per = int(pack_size or 1)
+    if per > 1:
+        return [("packages", f"packages of {per}"), ("loose", "pieces")]
+    return [("packages", "pieces")]
+
+
 def quantity(letter, *, packages_milli=0, blocks_milli=0, loose_milli=0,
              gross_grams=None, tare_grams=0, pack_size=None, conv=None):
     """How much of an item a line comes to, as an exact Fraction.

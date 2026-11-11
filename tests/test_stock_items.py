@@ -215,7 +215,8 @@ class Items(unittest.TestCase):
         kilo = self.add("Kilo Leaf", price=20000)
         self.update(kilo, packs="6×1 kg")
         mint = self.flavour("Mint", kilo)
-        self.assertEqual(self.setup_item(kilo)["levels"], ["6×1 kg", "1 kg"])
+        self.assertEqual([l["label"] for l in self.setup_item(kilo)["levels"]],
+                         ["6×1 kg", "1 kg"])
         self.assertEqual((self.setup_item(kilo)["comes_as"],
                           self.setup_item(kilo)["comes_as_else"]), ("6×1 kg", "12×10×50 g"))
         self.assertEqual((self.setup_item(mint)["comes_as"],

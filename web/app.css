@@ -424,6 +424,9 @@ tr.typeh > td { background: var(--paper); padding: 8px 12px; font-size: 13px; }
 select.link { max-width: 300px; margin-top: 4px; }
 tr.brandh > td { background: var(--paper); padding: 8px 10px; font-size: 13px; }
 tr.flavour > td:first-child { padding-left: 26px; }
+.sizes { display: flex; flex-wrap: wrap; gap: 8px; }
+label.sizebox { display: block; margin: 0; }
+label.sizebox input { width: 86px; text-align: right; }
 td .size { display: block; margin-top: 2px; font-size: 11px; color: var(--faint);
            text-align: right; white-space: nowrap; }
 .codes { display: flex; flex-wrap: wrap; gap: 4px; align-items: center; min-width: 130px; }
