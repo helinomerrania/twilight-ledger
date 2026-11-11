@@ -9,7 +9,7 @@ from pathlib import Path
 
 from .. import db
 from ..registry import ApiError, action, clean_date
-from . import adding, archive, auto, catalog, links, sources
+from . import adding, archive, auto, catalog, links, recipes, sources
 
 DEFAULTS = {"folder": "", "server": "localhost", "database": "twilight"}
 
@@ -33,7 +33,8 @@ def view(con, on, month):
             "accounts": links.listing(con),
             "targets": links.targets(con),
             "gone": links.gone_but_here(con),
-            "left_used": links.left_but_used(con)}
+            "left_used": links.left_but_used(con),
+            "recipes": recipes.view(con)}
 
 
 def keep(con, snap, why):

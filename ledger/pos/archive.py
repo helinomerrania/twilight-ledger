@@ -154,7 +154,7 @@ def keep(con, snap):
             if have > new or (have == new and old["takings"] == takings):
                 # nothing fuller, but fill in what an older version of the
                 # app did not keep
-                _fill_in(con, old["id"], line, tks, payments)
+                _fill_in(con, old["id"], line, tks, payments, orders)
                 out.append({**line, "status": "older" if have > new else "same"})
                 continue
             con.execute("DELETE FROM pos_period WHERE id = ?", (old["id"],))
@@ -191,12 +191,13 @@ def keep(con, snap):
                 item = menu.get(o.get("MenuItemId")) or {}
                 con.execute(
                     "INSERT INTO pos_order(ticket_id, pos_id, item, portion, item_group, "
-                    "qty_milli, price, counted, ordered_at) VALUES (?,?,?,?,?,?,?,?,?)",
+                    "qty_milli, price, counted, ordered_at, menu_id, used) "
+                    "VALUES (?,?,?,?,?,?,?,?,?,?,?)",
                     (tid, o["Id"], o.get("MenuItemName") or item.get("Name") or "?",
                      o.get("PortionName") or None, item.get("GroupCode") or None,
                      milli(o.get("Quantity")), whole(o.get("Price")),
                      0 if o.get("CalculatePrice") is False else 1,
-                     stamp(o.get("CreatedDateTime"))))
+                     stamp(o.get("CreatedDateTime")), o.get("MenuItemId"), _used(o)))
             for p in payments[tk["Id"]]:
                 con.execute("INSERT INTO pos_payment(ticket_id, pos_id, kind, amount, paid_at, "
                             "type_id) VALUES (?,?,?,?,?,?)",
@@ -210,10 +211,25 @@ def keep(con, snap):
     return out
 
 
-def _fill_in(con, period_id, line, tickets, payments):
+def _used(order):
+    """Whether an order took stock: SambaPOS says so on each one (a void does
+    not, a gift does). None when the copy does not say."""
+    d = order.get("DecreaseInventory")
+    return None if d is None else (1 if d else 0)
+
+
+def _fill_in(con, period_id, line, tickets, payments, orders=None):
     """Add to a period already kept what an older version of the app did not
-    keep — who opened and closed it, each payment's type — without touching
-    anything it did keep."""
+    keep — who opened and closed it, each payment's type, which menu item each
+    order was and whether it took stock — without touching anything it did
+    keep."""
+    for tk in tickets:
+        for o in (orders or {}).get(tk["Id"], []):
+            con.execute("""
+                UPDATE pos_order SET menu_id = COALESCE(menu_id, ?), used = COALESCE(used, ?)
+                 WHERE pos_id = ? AND ticket_id IN
+                       (SELECT id FROM pos_ticket WHERE period_id = ? AND pos_id = ?)""",
+                        (o.get("MenuItemId"), _used(o), o["Id"], period_id, tk["Id"]))
     con.execute("UPDATE pos_period SET opened_by = COALESCE(opened_by, ?), "
                 "closed_by = COALESCE(closed_by, ?) WHERE id = ?",
                 (line["opened_by"], line["closed_by"], period_id))

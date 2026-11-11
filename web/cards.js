@@ -1591,6 +1591,65 @@ export function nightDrawer() {
 
 /** The menu as SambaPOS has it: names and prices are set there, where the
     customer is charged, and only read here. */
+/* SambaPOS's recipes say what each menu item takes from its own inventory
+   items; this says which stock item each of those is here, once. */
+export function sambaposStock() {
+  const r = S.data.pos && S.data.pos.recipes;
+  if (!r || !r.inventory.length) return '';
+  const all = S.data.setup.items;
+  const byId = Object.fromEntries(all.map(i => [i.id, i]));
+  const pick = chosen => `<option value="">— not here</option>`
+    + S.data.setup.categories.map(c => {
+      const list = all.filter(i => i.letter === c.letter && (i.active || i.id === chosen));
+      return list.length ? `<optgroup label="${esc(c.name)}">${options(
+        list.map(i => ({ value: i.id, label: i.name })), chosen)}</optgroup>` : '';
+    }).join('');
+  const ours = it => (['A', 'B'].includes(it.letter) ? 'kilo' : it.letter === 'E' ? 'carton'
+    : (it.pack_size || 1) > 1 ? `package of ${it.pack_size}` : 'piece');
+  const rows = r.inventory.map(x => {
+    const it = byId[x.item_id];
+    return `<tr>
+      <td><bdi>${esc(x.name)}</bdi><br><span class="quiet"><bdi>${esc(x.unit)}</bdi>${x.group
+        ? ` · <bdi>${esc(x.group)}</bdi>` : ''}${x.recipes ? ` · in ${x.recipes} recipe${x.recipes === 1 ? '' : 's'}` : ''}</span></td>
+      <td><select data-save="pos_stock_link" data-args="${args({ pos_id: x.pos_id })}" data-field="item_id"
+          style="min-width:200px">${pick(x.item_id)}</select></td>
+      <td class="num">${it ? save('pos_stock_link', { pos_id: x.pos_id }, 'per', x.per ?? '',
+        `type="number" min="1" inputmode="numeric" placeholder="${x.per_default ?? 'how many?'}"
+         style="max-width:100px"`) : ''}</td>
+      <td class="quiet">${it ? `<bdi>${esc(x.unit)}</bdi> make one ${esc(ours(it))}${!x.per && !x.per_default
+        ? ' <span class="warnc">— say how many</span>' : ''}` : ''}</td>
+    </tr>`;
+  }).join('');
+  const amount = t => {
+    const it = byId[t.item];
+    if (['A', 'B'].includes(t.letter)) return t.qty < 1 ? `${Math.round(t.qty * 1000)} g` : `${+t.qty.toFixed(2)} kg`;
+    if (it && (it.pack_size || 1) > 1) {
+      const n = +(t.qty * it.pack_size).toFixed(1);
+      return `${n} piece${n === 1 ? '' : 's'}`;
+    }
+    return `${+t.qty.toFixed(2)} ${t.letter === 'E' ? 'cartons' : 'packages'}`;
+  };
+  const linked = r.inventory.filter(x => x.item_id).length;
+  return card(`<h2>What SambaPOS’s recipes take</h2>
+    <p class="sub">SambaPOS’s recipes say what each menu item takes from its own inventory
+      items. Say which stock item each one is here, once, and every night kept takes what was
+      sold off the shelves: a gift takes stock, a void does not. ${linked} of ${r.inventory.length}
+      are linked.</p>
+    <div class="grid-form" style="max-width:420px">
+      ${field('Grams in a head, the same for every flavour', save('head_grams', {}, 'grams',
+        r.head_grams ?? '', 'type="number" min="1" inputmode="numeric" placeholder="as each SambaPOS recipe says"'))}
+    </div>
+    ${r.took.length ? `<p class="note">The night of ${esc(r.last_night)} took ${r.took.map(t =>
+      `${esc(amount(t))} of <bdi>${esc(t.name)}</bdi>`).join(', ')}.</p>` : ''}
+    <details class="fold"${linked ? '' : ' open'}><summary>SambaPOS’s inventory items
+      (${linked} of ${r.inventory.length} linked)</summary>
+      ${table(`<th>In SambaPOS</th><th>Here</th><th class="num">How many</th><th></th>`, rows)}</details>
+    ${r.no_recipe.length ? `<details class="fold"><summary>Menu items with no recipe in SambaPOS
+        (${r.no_recipe.length})</summary><p class="note">They take nothing off the shelves until
+        SambaPOS has a recipe for them.</p><ul class="note">${r.no_recipe.map(n =>
+        `<li><bdi>${esc(n)}</bdi></li>`).join('')}</ul></details>` : ''}`);
+}
+
 export function sambaposMenu() {
   const m = S.data.pos && S.data.pos.menu;
   if (!m || !m.items) return '';

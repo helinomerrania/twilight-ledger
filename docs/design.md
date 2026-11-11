@@ -284,6 +284,11 @@ The mix's price is a moving average, weighted by what was already in the
 bucket when it was weighed, and each fill keeps the price before and after,
 so taking a fill back can put the price back.
 
+What sales take is read from SambaPOS's own recipes (`ledger/pos/recipes.py`),
+not kept twice: the only thing set here is which stock item each SambaPOS
+inventory item is. Each order keeps SambaPOS's word on whether it took stock,
+so a void takes nothing and a gift does.
+
 ## Updating from GitHub
 
 The app updates itself from this repository. The download is checked before it

@@ -30,7 +30,7 @@ step.
 | ✅ | 3.2 Receipts with lines (2026.11.11.14) | — |
 | ✅ | 3.3 Barcode scanner everywhere (2026.11.11.15) | — |
 | ✅ | 3.4 Filling a bucket (mixes) (2026.11.11.16) | — |
-| ○ | 3.5 Recipes: what each menu item uses | 1.4, 3.1 |
+| ✅ | 3.5 Recipes: what each menu item uses (2026.11.11.17) | — |
 | ○ | 3.6 Expected stock and the gap at each count | 3.2, 3.4, 3.5 |
 | ○ | 3.7 Ratio items: foil, coal, filters, cups | 3.6 |
 | ○ | 3.8 Shortage warnings | 3.6 |
@@ -633,7 +633,7 @@ can be deleted, and the mix's price goes back unless something has changed
 it since. Expected stock (3.6) takes the packs off each tobacco and adds the
 grams to the mix.
 
-### 3.5 Recipes: what each menu item uses ○
+### 3.5 Recipes: what each menu item uses ✅
 
 Each SambaPOS menu item, linked by SambaPOS's menu item number, says what
 one of it uses: a hookah of a flavour takes so many grams from its bucket (or
@@ -642,6 +642,19 @@ is one can. Every kept night (orders are already archived) then takes stock
 off automatically. Items with no recipe are listed until they have one.
 A head takes the same grams whatever the flavour, so that is one setting; it
 is filled by hand, so it is an average, and 3.6 allows for that.
+
+As built (2026.11.11.17): the recipes are SambaPOS's own. SambaPOS already
+has one for most menu items, each naming its own inventory items (so many
+grams of a tobacco, one of a drink), and they come in with every reading.
+So recipes stay in SambaPOS, where the menu is, and Setup → **What
+SambaPOS's recipes take** says once which stock item each SambaPOS inventory
+item is here, and how many of SambaPOS's units make one of ours (worked out
+when it can be: 1000 grams to a kilo, the package's pieces to a package).
+**Grams in a head**, if set, replaces what each recipe says for tobacco. Each
+order now keeps its menu item number and whether it took stock — SambaPOS
+says so: a gift does, a void does not; nights kept before this count what
+was charged. The card shows what the last night kept took, and lists the
+menu items with no recipe in SambaPOS. Stock comes off the shelves in 3.6.
 
 ### 3.6 Expected stock and the gap at each count ○
 

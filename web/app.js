@@ -62,7 +62,7 @@ const VIEWS = {
     + C.editList('income', 'Other income', '')
     + C.editList('reason', 'Reasons for a cash difference', '')
     + section('SambaPOS', 'Keeping each night before the reset deletes it')
-    + C.sambaposCard() + C.sambaposAccounts() + C.sambaposMenu()
+    + C.sambaposCard() + C.sambaposAccounts() + C.sambaposMenu() + C.sambaposStock()
     + section('This app', 'The business, the backups, and updates')
     + C.businessCard() + C.backupCard() + C.updateCard(),
 };
