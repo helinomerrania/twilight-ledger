@@ -33,7 +33,7 @@ step.
 | ✅ | 3.5 Recipes: what each menu item uses (2026.11.11.17) | — |
 | ✅ | 3.6 Expected stock and the gap at each count (2026.11.11.19) | — |
 | ✅ | 3.7 Ratio items: foil, coal, filters, cups (2026.11.11.20) | — |
-| ○ | 3.8 Shortage warnings | 3.6 |
+| ✅ | 3.8 Shortage warnings (2026.11.11.21) | — |
 | ○ | 3.9 Cost and profit per hookah and per item | 3.4, 3.5 |
 | ✅ | 4.1 Read the menu from SambaPOS (2026.11.11.12) | — |
 | ○ | 4.2 Pictures and descriptions in the app | 4.1 |
@@ -704,11 +704,18 @@ the hookahs sold divided by the ratio learnt before that count. A pair under
 80% of the ratio before it is pointed out. A hookah is an order whose recipe
 takes tobacco or a mix, so the tobacco has to be linked (3.5) first.
 
-### 3.8 Shortage warnings ○
+### 3.8 Shortage warnings ✅
 
 When an item's expected stock falls below its minimum, Tonight says so —
 and, from the recent pace of sales, roughly how many nights are left — so
 reordering happens before it runs out.
+
+As built (2026.11.11.21): Tonight's list has **Nothing is running low** as
+soon as any item has a minimum (Setup → Stock items → Warn below). It names
+each item whose should-be (3.6) is under its minimum, with what is left and
+about how many nights at the pace of the last 30 days' kept nights — sales by
+recipe and by ratio, and sealed tobacco going into buckets. What should be on
+the shelf marks those items too.
 
 ### 3.9 Cost and profit per hookah and per item ○
 

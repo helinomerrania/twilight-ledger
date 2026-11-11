@@ -10,7 +10,7 @@ only fails when there is something to do today:
 
 Every check that fails says, in its own words, what to do about it.
 """
-from . import backup, db, queries
+from . import backup, db, expected, queries
 from .dates import month_name, month_of, prev_month, today
 from .pos import auto, links
 from .registry import pot_lows
@@ -69,6 +69,16 @@ def checks(con, month):
             "" if c["raw"] >= 0 else f"came out at {c['raw']:,}",
             "More stock than you started with plus everything bought: a "
             "delivery is missing, or a count is wrong.", "stock")
+
+    # ---- stock running low, where Setup gives a minimum
+    lows = expected.low(con)
+    if lows is not None:
+        add(not lows, "Nothing is running low",
+            "everything with a minimum is above it" if not lows else
+            "; ".join(expected.said(r) for r in lows[:6])
+            + (f"; and {len(lows) - 6} more" if len(lows) > 6 else ""),
+            "Order more before it runs out. Stock shows what should be on the shelf.",
+            "stock")
 
     # ---- what is owed, up to the end of the last finished month
     if queries.period(con, due):

@@ -864,7 +864,8 @@ export function expectedCard() {
       ? (a < 1 ? `${Math.round(a * 1000)} g` : `${+a.toFixed(3)} kg`) : `${+a.toFixed(2)}`);
   };
   const row = (r, lit) => `<tr${lit && r.flag ? ' class="found"' : ''}>
-      <td>${esc(r.name)}</td>
+      <td>${esc(r.name)}${r.minimum !== null && r.should < r.minimum
+        ? `<br><span class="warnc">below its minimum of ${qty(r, r.minimum)}</span>` : ''}</td>
       <td class="num quiet">${qty(r, r.was)}</td>
       <td class="num quiet">${qty(r, r.in, true)}</td>
       <td class="num quiet">${qty(r, r.buckets, true)}</td>

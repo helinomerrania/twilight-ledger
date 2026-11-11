@@ -115,7 +115,8 @@ def view(con, count_date=None):
                "was": float(start), "in": float(m["in"]),
                "buckets": float(m["filled_in"] - m["filled_out"]), "sold": float(m["sold"]),
                "should": float(should), "counted": None, "gap": None, "worth": None,
-               "flag": False}
+               "flag": False, "minimum": it["minimum_milli"] / 1000
+               if it["minimum_milli"] is not None else None}
         if line is not None:
             have = Fraction(line["qty_milli"], 1000)
             gap = have - should
@@ -135,6 +136,60 @@ def view(con, count_date=None):
             "over": sum(r["worth"] for r in gaps if r["worth"] > 0), "flagged": len(gaps),
             "drying": float(allow), "no_recipe": sorted(no_recipe),
             "not_linked": sorted(not_linked)}
+
+
+NIGHTS = 30                 # the pace of use is taken over this many days
+
+
+def pace(con, upto):
+    """What a night has been using of each item lately: sales by recipe and by
+    ratio, and sealed tobacco going into buckets, over the kept nights of the
+    last NIGHTS days. {item id: exact quantity a night}."""
+    since = (date.fromisoformat(upto) - timedelta(days=NIGHTS)).isoformat()
+    nights = db.scalar(con, "SELECT COUNT(DISTINCT night) FROM pos_period "
+                            "WHERE night > ? AND night <= ?", (since, upto))
+    if not nights:
+        return {}
+    mov, _, _ = movements(con, since, upto)
+    return {item: (m["sold"] + m["filled_out"]) / nights for item, m in mov.items()
+            if m["sold"] or m["filled_out"]}
+
+
+def low(con, on=None):
+    """Items whose stock should now be below the minimum set for them, with
+    roughly how many nights are left at the recent pace. None when there is
+    nothing to tell: no minimum set, or no count to go from."""
+    mins = {r["id"]: r for r in db.all_(con, """
+        SELECT si.id, si.name, si.minimum_milli, sc.letter FROM stock_item si
+          JOIN stock_category sc ON sc.id = si.category_id
+         WHERE si.minimum_milli IS NOT NULL AND si.active = 1""")}
+    if not mins:
+        return None
+    v = view(con, on)
+    if not v:
+        return None
+    should = {r["item"]: Fraction(r["should"]).limit_denominator(1000) for r in v["rows"]}
+    speed = pace(con, v["to"])
+    out = []
+    for item_id, m in mins.items():
+        if item_id not in should or should[item_id] >= Fraction(m["minimum_milli"], 1000):
+            continue
+        left = max(should[item_id], Fraction(0))
+        a_night = speed.get(item_id)
+        out.append({"item": item_id, "name": m["name"], "letter": m["letter"],
+                    "left": float(left), "minimum": m["minimum_milli"] / 1000,
+                    "nights": int(left / a_night) if a_night else None})
+    return sorted(out, key=lambda r: (r["nights"] is None, r["nights"] or 0, r["name"]))
+
+
+def said(r):
+    """'Hill Leaf: 450 g left, about 3 nights'."""
+    q = r["left"]
+    amount = ((f"{round(q * 1000)} g" if q < 1 else f"{q:.3g} kg") if r["letter"] in ("A", "B")
+              else f"{q:.3g}")
+    nights = ("" if r["nights"] is None else ", none left at the pace it goes"
+              if r["nights"] == 0 else f", about {r['nights']} night{'s' if r['nights'] != 1 else ''}")
+    return f"{r['name']}: {amount} left{nights}"
 
 
 @action("drying_pct", guard_pots=False,
