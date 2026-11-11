@@ -26,7 +26,7 @@ step.
 | ✅ | 2.3 Blind count (2026.11.11.11) | — |
 | ✅ | 2.4 Opening float (2026.11.11.11) | — |
 | ✅ | 2.5 Differences over time, and who closed (2026.11.11.11) | — |
-| ○ | 3.1 Stock items: brand and flavour, barcodes, pack weights, minimums | — |
+| ✅ | 3.1 Stock items: brand and flavour, barcodes, pack weights, minimums (2026.11.11.13) | — |
 | ○ | 3.2 Receipts with lines | 3.1 |
 | ○ | 3.3 Barcode scanner everywhere | 3.1 |
 | ○ | 3.4 Filling a bucket (mixes) | 3.1 |
@@ -518,10 +518,10 @@ Everything bought is recorded, in one of two ways:
 - **things used up the same day** — fruit, vegetables, ice, staff food: a
   daily expense, as now
 
-### 3.1 Stock items: brand and flavour, barcodes, pack weights, minimums ○
+### 3.1 Stock items: brand and flavour, barcodes, pack weights, minimums ✅
 
-- Sealed tobacco becomes one item per brand and flavour (Fakher · Two
-  Apples, Fakher · Mint, Adalya · Love 66, …), grouped under the brand on
+- Sealed tobacco becomes one item per brand and flavour (Hill Leaf · Two
+  Apples, Hill Leaf · Mint, Star Leaf · Love, …), grouped under the brand on
   the count sheet, flavours not carried folded away.
 - The price is set per brand; a flavour can override it.
 - Pack weight per item, default 50 g (10 packs to a block today, set in
@@ -533,6 +533,30 @@ Everything bought is recorded, in one of two ways:
 - Migration: these columns, and a way to move the existing counts across —
   today's sealed tobacco lines are per brand, so old counts stay per brand
   and new ones are per flavour.
+
+As built (2026.11.11.13), in Setup → Stock items:
+
+- **Comes as.** Packs differ by brand — 50 g, 10×50 g, 12×10×50 g, 1 kg,
+  3×1 kg, 6×1 kg, 250 g — so a sealed tobacco says how it comes, typed the
+  way the box says it. Blank means the usual packs (Setup → How sealed
+  tobacco converts) or, for a flavour, its brand's. The count sheet shows a
+  box for each size the item comes in, with the size written under it.
+- **Flavours.** "Add a flavour" puts one under its brand, named
+  "Brand · Flavour". It costs what its brand costs, comes as its brand does
+  and is on its brand's supplier's statement, unless it says otherwise.
+  Renaming a brand renames its flavours; stopping a brand stops them, and
+  bringing it back brings them back.
+- **Old counts stay per brand.** On the count sheet a brand with flavours is
+  only their heading, unless the count being looked at has a line for the
+  brand itself.
+- **Warn below.** A minimum per item, in kilos for tobacco and packages for
+  the rest, for 3.8.
+- **Barcodes.** As many per item as needed: scan (or type) into the item's
+  box and it is added; ✕ takes one off. A code belongs to one item only.
+  3.3 puts the scanner to work.
+- Not built: a separate "how it is tracked" per item. The category already
+  says it (weighed, sealed, ice cream, packages); tracking by ratio waits
+  for 3.7.
 
 ### 3.2 Receipts with lines ○
 
@@ -558,7 +582,7 @@ counting packs, not weighing.
   6 Adalya · Love 66 + 6 Serbetli · Mint.
 - Stock → **Fill a bucket**: pick the mix, press "the usual" or change the
   numbers (or scan the packs as they go in), optionally weigh the full
-  bucket. Molasses, glycerin or fruit added are ingredients too.
+  bucket. Only tobacco goes into a mix.
 - Saving it is a stock move, not money: those packs come off each item, and
   their weight goes into the bucket at their cost. A bucket that still had
   some mix in it averages the cost of old and new.
@@ -576,6 +600,8 @@ one of it uses: a hookah of a flavour takes so many grams from its bucket (or
 straight from one flavour), a tea takes a tea bag and sugar, a can of drink
 is one can. Every kept night (orders are already archived) then takes stock
 off automatically. Items with no recipe are listed until they have one.
+A head takes the same grams whatever the flavour, so that is one setting; it
+is filled by hand, so it is an average, and 3.6 allows for that.
 
 ### 3.6 Expected stock and the gap at each count ○
 
@@ -594,7 +620,8 @@ Count the expensive things (tobacco) weekly and cheap things monthly.
 
 ### 3.7 Ratio items: foil, coal, filters, cups ○
 
-These are counted roughly (foil in rolls, with fractions). Between two
+Foil comes in rolls, 6 to a carton, and the staff cut and pierce it; coal
+comes in 12 kg cartons. Both are counted roughly, with fractions. Between two
 counts the app divides the hookahs SambaPOS sold by what was used and learns
 **hookahs per roll** (per box of coal, and so on). From then on it knows
 roughly what each night uses. A ratio that suddenly drops means more is
@@ -669,10 +696,12 @@ Ideas raised and worth keeping, not yet planned in detail:
 - 1.1 — answered: see 1.1, 1.2 and 1.4. Purchases are not entered in
   SambaPOS; inventory items and recipes are set up but not used.
 - 2.1 — answered: cash is the only payment type in use.
-- 2.4 — whether a float is already left in the drawer, and how much (Setup →
-  Counting the cash is ready for it).
-- 3.1 — whether every tobacco brand comes in 50 g packs.
-- 3.4 — whether anything besides tobacco goes into the mixes, and the usual
-  batch for each mix.
-- 3.5 — grams in one head, per flavour or the same for all.
-- 3.7 — foil as rolls or pre-cut sheets; coal by the box or by weight.
+- 2.4 — answered: a float is always left in the drawer. Its amount is set in
+  Setup → Counting the cash.
+- 3.1 — answered: no, packs differ by brand (see 3.1 as built).
+- 3.4 — answered: only tobacco goes into the mixes. Still to settle when 3.4
+  is built: the usual batch for each mix.
+- 3.5 — answered: the same for all flavours, and rough, since heads are
+  filled by hand.
+- 3.7 — answered: foil in rolls, 6 to a carton, cut by the staff; coal in
+  12 kg cartons.

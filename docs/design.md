@@ -262,6 +262,16 @@ float in the drawer and moves the rest out in a transfer tied to the count,
 and keeps each night's own difference over the month. A difference accepted
 as real is still written off, as a cost of its month.
 
+## Stock items as they come
+
+Sealed tobacco does not all come the same way, so an item can say how it
+comes (`stock_item.packs`, typed as the box says it: `3×1 kg`), and a count
+line converts with the packs the item had when it was counted, so changing
+them later never moves a count already taken. A flavour is an item with a
+`parent_id`: it borrows its brand's price, packs and supplier until it has
+its own, which keeps the old per-brand counts valid beside new per-flavour
+ones. Barcodes are a table of their own, one item per code.
+
 ## Updating from GitHub
 
 The app updates itself from this repository. The download is checked before it

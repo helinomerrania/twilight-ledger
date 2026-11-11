@@ -847,7 +847,7 @@ document.addEventListener('click', async e => {
     const keys = [];
     adder.closest('.addrow').querySelectorAll('[data-f]').forEach(el => {
       body[el.dataset.f] = el.value.trim();
-      keys.push(fieldKey(el));
+      if (el.dataset.keep === undefined) keys.push(fieldKey(el));     // kept for the next one
     });
     const out = await act(() => send(adder.dataset.add, body), { skip: keys });
     if (out) say('Added.');

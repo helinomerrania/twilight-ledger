@@ -7,8 +7,9 @@ And nothing here can reach a closed month. A salary or the rent applies from
 the first month that is still open; a new price values the next stock count.
 """
 import json
+import re
 
-from . import backup, db, money, post, queries
+from . import backup, db, money, post, queries, stock
 from .dates import month_of, next_month, today
 from .money import to_int
 from .registry import ApiError, action, name_of
@@ -230,6 +231,17 @@ def _list_remove(con, body):
 
 @action("item_add", guard_pots=False, summary=_line("item_add"))
 def _item_add(con, body):
+    """A new stock item; or, with `brand`, a flavour of that brand, named
+    'Brand · Flavour' and in the brand's category, at its price and packs."""
+    brand = None
+    if body.get("brand"):
+        brand = db.one(con, "SELECT si.*, sc.letter FROM stock_item si JOIN stock_category "
+                            "sc ON sc.id = si.category_id WHERE si.id = ?",
+                       (int(body["brand"]),))
+        if not brand or brand["parent_id"]:
+            raise ApiError("a flavour belongs to a brand")
+        body = {**body, "letter": brand["letter"],
+                "name": brand["name"] + FLAVOUR + name_of(body), "price": body.get("price") or 0}
     cat = db.one(con, "SELECT * FROM stock_category WHERE letter = ?",
                  (str(body.get("letter") or "").upper(),))
     if not cat:
@@ -241,23 +253,27 @@ def _item_add(con, body):
     unit = {"A": "kg", "B": "kg", "E": "carton"}.get(cat["letter"], "piece")
     sort = db.scalar(con, "SELECT COALESCE(MAX(sort), 0) + 1 FROM stock_item")
     cur = con.execute(
-        "INSERT INTO stock_item(name, category_id, unit, price, pack_size, sort) "
-        "VALUES (?,?,?,?,?,?)",
-        (name, cat["id"], unit, to_int(body.get("price"), "price"),
-         to_int(body.get("pack_size")) or None, sort))
+        "INSERT INTO stock_item(name, category_id, unit, price, pack_size, sort, parent_id) "
+        "VALUES (?,?,?,?,?,?,?)",
+        (name, cat["id"], unit, to_int(body.get("price") or 0, "price"),
+         to_int(body.get("pack_size")) or None, sort, brand["id"] if brand else None))
     return {"id": cur.lastrowid}
+
+
+FLAVOUR = " · "
 
 
 @action("item_update", guard_pots=False, summary=_line("item_update"))
 def _item_update(con, body):
     """Change an item. A new price values the next count; counts already
-    taken keep the price they were counted at."""
-    item = db.one(con, "SELECT * FROM stock_item WHERE id = ?", (int(body["id"]),))
+    taken keep the price they were counted at. A flavour is always called
+    'Brand · Flavour', and a brand's flavours stop and come back with it."""
+    item = db.one(con, "SELECT si.*, sc.letter FROM stock_item si JOIN stock_category sc "
+                       "ON sc.id = si.category_id WHERE si.id = ?", (int(body["id"]),))
     if not item:
         raise ApiError("no such item")
     if "name" in body:
-        con.execute("UPDATE stock_item SET name = ? WHERE id = ?",
-                    (name_of(body), item["id"]))
+        _rename(con, item, name_of(body))
     if "price" in body:
         price = to_int(body.get("price"), "price")
         if price < 0:
@@ -267,9 +283,63 @@ def _item_update(con, body):
         con.execute("UPDATE stock_item SET pack_size = ? WHERE id = ?",
                     (to_int(body.get("pack_size")) or None, item["id"]))
     if "active" in body:
-        con.execute("UPDATE stock_item SET active = ? WHERE id = ?",
-                    (1 if body.get("active") else 0, item["id"]))
+        con.execute("UPDATE stock_item SET active = ? WHERE id = ? OR parent_id = ?",
+                    (1 if body.get("active") else 0, item["id"], item["id"]))
+    if "packs" in body:
+        if item["letter"] != "B":
+            raise ApiError("only sealed tobacco comes in packs and blocks")
+        try:
+            packs = stock.parse_packs(body.get("packs"))
+        except ValueError as e:
+            raise ApiError(str(e)) from None
+        con.execute("UPDATE stock_item SET packs = ? WHERE id = ?",
+                    (json.dumps(packs) if packs else None, item["id"]))
+    if "minimum" in body:
+        raw = str(body.get("minimum") or "").strip()
+        try:
+            low = stock.to_milli(raw) if raw else None
+        except (ValueError, ZeroDivisionError):
+            raise ApiError("a minimum is a number") from None
+        if low is not None and low < 0:
+            raise ApiError("a minimum cannot be less than nothing")
+        con.execute("UPDATE stock_item SET minimum_milli = ? WHERE id = ?", (low, item["id"]))
+    if body.get("barcode_add"):
+        _barcode_add(con, item, body["barcode_add"])
+    if body.get("barcode_remove"):
+        con.execute("DELETE FROM stock_barcode WHERE code = ? AND item_id = ?",
+                    (str(body["barcode_remove"]), item["id"]))
     return {"id": item["id"]}
+
+
+def _rename(con, item, name):
+    """A flavour keeps its brand in front of its name; a brand takes its
+    flavours' names with it."""
+    if item["parent_id"]:
+        brand = db.scalar(con, "SELECT name FROM stock_item WHERE id = ?", (item["parent_id"],))
+        if not name.startswith(brand + FLAVOUR):
+            name = brand + FLAVOUR + name
+    con.execute("UPDATE stock_item SET name = ? WHERE id = ?", (name, item["id"]))
+    for f in db.all_(con, "SELECT id, name FROM stock_item WHERE parent_id = ?", (item["id"],)):
+        if f["name"].startswith(item["name"] + FLAVOUR):
+            con.execute("UPDATE stock_item SET name = ? WHERE id = ?",
+                        (name + f["name"][len(item["name"]):], f["id"]))
+
+
+def _barcode_add(con, item, raw):
+    """One more barcode an item answers to (or several, between spaces or
+    commas). A code belongs to one item only. A scanner types the code and
+    presses Enter, so this is what a scan into Setup does."""
+    for code in re.split(r"[\s,;]+", str(raw).strip()):
+        if not code:
+            continue
+        if not re.fullmatch(r"[0-9A-Za-z._-]{3,64}", code):
+            raise ApiError(f"{code[:20]} is not a barcode")
+        other = db.one(con, "SELECT si.id, si.name FROM stock_barcode b JOIN stock_item si "
+                            "ON si.id = b.item_id WHERE b.code = ?", (code,))
+        if other and other["id"] != item["id"]:
+            raise ApiError(f"{code} is already {other['name']}")
+        con.execute("INSERT OR IGNORE INTO stock_barcode(code, item_id) VALUES (?,?)",
+                    (code, item["id"]))
 
 
 @action("tare_set", guard_pots=False, summary=_line("tare_set"))

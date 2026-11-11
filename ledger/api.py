@@ -11,7 +11,7 @@ what registers their actions.
 """
 import json
 
-from . import (accruals, actions, backup, cash, checks as _checks, db, kinds, money,
+from . import (accruals, actions, backup, cash, checks as _checks, db, kinds, money, stock,
                post, queries, setup, update)
 from .dates import month_of, today
 from .pos import actions as pos
@@ -143,14 +143,47 @@ def setup_view(con, month):
         "fixed": [dict(r) for r in db.all_(con, "SELECT * FROM fixed_charge ORDER BY name")],
         "categories": [dict(r) for r in db.all_(
             con, "SELECT * FROM stock_category ORDER BY sort, letter")],
-        "items": [dict(r) for r in db.all_(con, """
-            SELECT si.*, sc.letter FROM stock_item si
-              JOIN stock_category sc ON sc.id = si.category_id
-             ORDER BY sc.sort, sc.letter, si.active DESC, si.sort, si.name""")],
+        "items": _setup_items(con),
         "tares": [dict(r) for r in db.all_(con, "SELECT * FROM tare ORDER BY name")],
         "conversions": db.setting(con, "conversions", {}) or {},
         "elec_factors": accruals.factors(con),
     }
+
+
+def _flavour(item, brand):
+    """A flavour's own part of its name: 'Mint' of 'Hill Leaf · Mint'."""
+    if not brand:
+        return None
+    head = brand["name"] + setup.FLAVOUR
+    return item["name"][len(head):] if item["name"].startswith(head) else item["name"]
+
+
+def _setup_items(con):
+    """Every stock item for Setup, a flavour after its brand, each with its
+    packs said the way the boxes say them and its barcodes."""
+    conv = db.setting(con, "conversions", {}) or {}
+    rows = [dict(r) for r in db.all_(con, """
+        SELECT si.*, sc.letter FROM stock_item si
+          JOIN stock_category sc ON sc.id = si.category_id
+         ORDER BY sc.sort, sc.letter, si.active DESC, si.sort, si.name""")]
+    by_id = {r["id"]: r for r in rows}
+    codes = {}
+    for b in db.all_(con, "SELECT code, item_id FROM stock_barcode ORDER BY code"):
+        codes.setdefault(b["item_id"], []).append(b["code"])
+    for r in rows:
+        brand = by_id.get(r["parent_id"])
+        r["flavour"] = _flavour(r, brand)
+        if r["letter"] == "B":
+            own = stock.packs_of(r)
+            r["comes_as"] = stock.packs_label(conv, own) if own else ""
+            r["comes_as_else"] = stock.packs_label(conv, stock.packs_of(brand) if brand else None)
+            r["levels"] = [lab for _, lab in stock.pack_levels(conv, stock.packs_of(r, brand))]
+        r["barcodes"] = codes.get(r["id"], [])
+        r["minimum"] = r["minimum_milli"] / 1000 if r["minimum_milli"] is not None else None
+    order = {r["id"]: n for n, r in enumerate(rows)}
+    rows.sort(key=lambda r: (order.get(r["parent_id"], order[r["id"]]),
+                             r["parent_id"] is not None, r["name"]))
+    return rows
 
 
 def pick_lists(con):
@@ -200,8 +233,10 @@ def count_sheet(con, count_date):
     so an old count keeps adding up to the figure it was booked at.
     """
     head = db.one(con, "SELECT * FROM stock_count WHERE count_date = ?", (count_date,))
+    conv = db.setting(con, "conversions", {}) or {}
     rows = db.all_(con, """
         SELECT si.id, si.name, si.unit, si.price, si.pack_size, si.active,
+               si.parent_id, si.packs,
                sc.letter, sc.name AS category,
                l.packages_milli, l.blocks_milli, l.loose_milli,
                l.gross_grams, l.tare_id, l.qty_milli, l.value,
@@ -213,13 +248,35 @@ def count_sheet(con, count_date):
                 AND l.count_id = (SELECT id FROM stock_count WHERE count_date = ?)
          WHERE si.active = 1 OR l.id IS NOT NULL
          ORDER BY sc.sort, sc.letter, si.sort, si.name""", (count_date,))
+    items = {r["id"]: dict(r) for r in db.all_(con, "SELECT * FROM stock_item")}
+    flavours = {}
+    for i in items.values():
+        if i["parent_id"] and i["active"]:
+            flavours[i["parent_id"]] = flavours.get(i["parent_id"], 0) + 1
     groups = {}
     for r in rows:
         g = groups.setdefault(r["letter"], {"letter": r["letter"],
                                             "name": r["category"], "items": [],
                                             "value": 0})
-        g["items"].append(dict(r))
+        line = dict(r)
+        brand = items.get(r["parent_id"])
+        line["brand"] = brand["name"] if brand else None
+        line["flavour"] = _flavour(r, brand)
+        line["flavours"] = flavours.get(r["id"], 0)
+        if brand and not r["price"]:
+            line["price"] = brand["price"]
+            if line["counted_at"] == 0:
+                line["counted_at"] = brand["price"]
+        if r["letter"] == "B":
+            line["levels"] = [{"key": k, "label": lab} for k, lab in stock.pack_levels(
+                conv, stock.packs_of(items[r["id"]], brand))]
+        g["items"].append(line)
         g["value"] += r["value"] or 0
+    for g in groups.values():
+        # a flavour sits under its brand, whatever it is called
+        order = {i["id"]: n for n, i in enumerate(g["items"])}
+        g["items"].sort(key=lambda i: (order.get(i["parent_id"], order[i["id"]]),
+                                       i["parent_id"] is not None, i["name"]))
     return {"date": count_date,
             "closing": head["closing"] if head else 0,
             "source": head["source"] if head else None,

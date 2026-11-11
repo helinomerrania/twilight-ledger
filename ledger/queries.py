@@ -523,7 +523,9 @@ def supplier_lines(con, supplier_id, month):
         SELECT COALESCE(SUM(l.value), 0) FROM stock_count_line l
           JOIN stock_item si ON si.id = l.item_id
           JOIN stock_count sc ON sc.id = l.count_id
-         WHERE si.supplier_id = ? AND sc.count_date = ?""", (supplier_id, cd)) if cd else 0
+         WHERE COALESCE(si.supplier_id, (SELECT b.supplier_id FROM stock_item b
+                                          WHERE b.id = si.parent_id)) = ?
+           AND sc.count_date = ?""", (supplier_id, cd)) if cd else 0
     return {"id": a["id"], "name": a["name"], "month": month, "opening": opening,
             "lines": lines, "closing": closing, "owed_now": balance(con, a["code"]),
             "received": sum(l["amount"] for l in lines if l["amount"] > 0),

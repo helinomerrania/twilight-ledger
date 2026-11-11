@@ -695,7 +695,7 @@ export function countPicker() {
       ? 'This count is what a closed month was built on, so it is locked along with the prices it was valued at.'
       : c.source === 'carried'
         ? 'This figure was carried in from the Excel workbook, not counted item by item.'
-        : 'Weigh the bucket and the tare comes off. Sealed tobacco converts from cartons, blocks and packs to kilos. Everything else is whole packages plus loose pieces. Each box saves as you leave it.'}
+        : 'Weigh the bucket and the tare comes off. Sealed tobacco is counted in the boxes it comes in, each size said under its box, and converts to kilos. Everything else is whole packages plus loose pieces. Each box saves as you leave it.'}
       ${c.date ? ` <strong>Valued at ${money(c.closing)}.</strong>` : ''}</p>`);
 }
 
@@ -706,6 +706,13 @@ export function countSheet() {
   const ro = c.locked ? ' disabled' : '';
   const box = (k, v, step = '0.1') => `<input type="number" step="${step}" min="0" data-k="${k}"
       value="${v ? v / 1000 : ''}" placeholder="0"${ro} inputmode="decimal">`;
+  // sealed tobacco: each box the size it comes in, said under it
+  const sizes = i => ['packages', 'blocks', 'loose'].map(k => {
+    const l = (i.levels || []).find(x => x.key === k);
+    const v = i[`${k}_milli`];
+    return l || v ? `<td class="num">${box(k, v)}${l ? `<span class="size">${esc(l.label)}</span>` : ''}</td>`
+                  : '<td></td>';
+  }).join('');
   const body = c.groups.map(g => {
     const weighed = g.letter === 'A';
     const sealed = g.letter === 'B';
@@ -714,27 +721,37 @@ export function countSheet() {
       : sealed
         ? `<th>Item</th><th class="num">Cartons</th><th class="num">Blocks</th><th class="num">Packs</th><th class="num">Kilos</th><th class="num">Value</th>`
         : `<th>Item</th><th class="num">Packages</th><th class="num">Loose</th><th class="num">Comes to</th><th class="num">Value</th>`;
+    const cols = sealed ? 6 : 5;
+    let brand = null;
     const rows = g.items.map(i => {
+      const under = i.parent_id && i.parent_id === brand;
+      if (!i.parent_id) brand = i.id;
+      const price = `<span class="quiet">${money(i.counted_at)} / ${esc(i.unit)}</span>`;
+      // a brand counted by flavour is only their heading, unless this count has it
+      if (i.flavours && i.qty_milli == null) {
+        return `<tr class="brandh"><td colspan="${cols}"><strong>${esc(i.name)}</strong> ${price}</td></tr>`;
+      }
       const q = (i.qty_milli || 0) / 1000;
       const unit = weighed || sealed ? 'kg' : '';
-      return `<tr data-item="${i.id}"${i.active ? '' : ' class="quiet"'}>
-        <td>${esc(i.name)}<br><span class="quiet">${money(i.counted_at)} / ${esc(i.unit)}</span></td>
+      return `<tr data-item="${i.id}" class="${[i.active ? '' : 'quiet', under ? 'flavour' : ''].join(' ').trim()}">
+        <td>${esc(under ? i.flavour : i.name)}<br>${price}</td>
         ${weighed
           ? `<td><select data-k="tare_id"${ro} style="min-width:110px">
                <option value="">no bucket</option>
                ${options(c.tares.map(t => ({ value: t.id, label: `${t.name} (${t.grams}g)` })), i.tare_id)}</select></td>
              <td class="num"><input type="number" min="0" data-k="gross_grams" value="${i.gross_grams ?? ''}"
                   placeholder="0"${ro} inputmode="numeric"></td>`
-          : `<td class="num">${box('packages', i.packages_milli)}</td>
-             ${sealed ? `<td class="num">${box('blocks', i.blocks_milli)}</td>` : ''}
-             <td class="num">${box('loose', i.loose_milli)}</td>`}
+          : sealed
+            ? sizes(i)
+            : `<td class="num">${box('packages', i.packages_milli)}</td>
+               <td class="num">${box('loose', i.loose_milli)}</td>`}
         <td class="num quiet">${q ? q.toFixed(3).replace(/\.?0+$/, '') + (unit ? ' ' + unit : '') : ''}</td>
         <td class="num">${i.value ? money(i.value) : ''}</td>
       </tr>`;
     }).join('');
     return `<h3 class="grouph">${esc(g.name)}</h3>
       ${table(head, rows, `<tr class="tot"><td>Total</td>
-        <td colspan="${sealed ? 4 : 3}"></td><td class="num">${money(g.value)}</td></tr>`)}`;
+        <td colspan="${cols - 2}"></td><td class="num">${money(g.value)}</td></tr>`)}`;
   }).join('');
   return card(`<h2>Count for ${esc(c.date)}</h2>
     <p class="sub">Quantities only — prices and pack sizes come from Setup.
@@ -1019,32 +1036,70 @@ export function editList(name, title, note) {
 export function editItems() {
   const s = S.data.setup;
   const sups = S.data.people.supplier.map(a => ({ value: a.id, label: a.name }));
+  const whole = 'type="number" min="0" inputmode="numeric"';
+  const codes = i => `<div class="codes">${(i.barcodes || []).map(c => `<button class="mini"
+        data-do="item_update" data-args="${args({ id: i.id, barcode_remove: c })}"
+        title="Take this barcode off">${esc(c)} ✕</button>`).join('')}
+      ${save('item_update', { id: i.id }, 'barcode_add', '',
+        'placeholder="Scan or type" autocomplete="off" spellcheck="false"')}</div>`;
   const groups = s.categories.map(c => {
     const items = s.items.filter(i => i.letter === c.letter);
     if (!items.length) return '';
+    const sealed = c.letter === 'B';
     const packs = !['A', 'B', 'E'].includes(c.letter);
-    const row = i => `<tr>
-        <td>${save('item_update', { id: i.id }, 'name', i.name)}</td>
-        <td class="num">${save('item_update', { id: i.id }, 'price', i.price,
-          'type="number" min="0" inputmode="numeric" style="max-width:120px"')}</td>
-        ${packs ? `<td class="num">${save('item_update', { id: i.id }, 'pack_size', i.pack_size || '',
-          'type="number" min="0" inputmode="numeric" style="max-width:90px"')}</td>` : ''}
-        <td><select data-save="item_supplier" data-args="${args({ id: i.id })}" data-field="supplier_id">
-          <option value="">—</option>${options(sups, i.supplier_id)}</select></td>
-        <td><button class="mini" data-do="item_update" data-args="${args({ id: i.id, active: i.active ? 0 : 1 })}">
-          ${i.active ? 'Stop stocking' : 'Bring back'}</button></td>
-      </tr>`;
+    const unit = { A: 'kg', B: 'kg', E: 'cartons' }[c.letter] || 'packages';
+    const byId = Object.fromEntries(items.map(i => [i.id, i]));
+    const flavours = id => items.filter(f => f.parent_id === id && f.active).length;
+    const rows = list => {
+      let brand = null;                 // a flavour right under its brand says only its own name
+      return list.map(i => {
+        const under = i.parent_id && i.parent_id === brand;
+        if (!i.parent_id) brand = i.id;
+        const b = byId[i.parent_id];
+        const u = { id: i.id };
+        const n = flavours(i.id);
+        return `<tr${under ? ' class="flavour"' : ''}>
+          <td>${save('item_update', u, 'name', under ? i.flavour : i.name)}</td>
+          <td class="num">${save('item_update', u, 'price', b && !i.price ? '' : i.price,
+            `${whole} style="max-width:110px"${b ? ` placeholder="${esc(b.price)}"` : ''}`)}</td>
+          ${sealed ? `<td>${save('item_update', u, 'packs', i.comes_as,
+            `placeholder="${esc(i.comes_as_else)}" style="max-width:130px" spellcheck="false"`)}</td>` : ''}
+          ${packs ? `<td class="num">${save('item_update', u, 'pack_size', i.pack_size || '',
+            `${whole} style="max-width:90px"`)}</td>` : ''}
+          <td class="num">${save('item_update', u, 'minimum', i.minimum ?? '',
+            `type="number" min="0" step="0.1" inputmode="decimal" placeholder="${unit}" style="max-width:90px"`)}</td>
+          <td>${codes(i)}</td>
+          <td><select data-save="item_supplier" data-args="${args(u)}" data-field="supplier_id"
+              style="min-width:140px">
+            <option value="">${b ? 'as the brand' : '—'}</option>${options(sups, i.supplier_id)}</select></td>
+          <td class="actions"><button class="mini" data-do="item_update" data-args="${args({ id: i.id, active: i.active ? 0 : 1 })}"
+            ${i.active && n ? `data-confirm="${esc(`Stop stocking ${i.name} and its ${n} flavour${n === 1 ? '' : 's'}?`)}"
+              data-yes="Stop stocking"` : ''}>
+            ${i.active ? 'Stop stocking' : 'Bring back'}</button></td>
+        </tr>`;
+      }).join('');
+    };
     const live = items.filter(i => i.active);
     const gone = items.filter(i => !i.active);
-    const head = `<th>Item</th><th class="num">Price</th>${packs ? '<th class="num">Pieces a package</th>' : ''}<th>From</th><th></th>`;
+    const brands = live.filter(i => !i.parent_id).map(i => ({ value: i.id, label: i.name }));
+    const head = `<th>Item</th><th class="num">Price</th>${sealed ? '<th>Comes as</th>' : ''}
+      ${packs ? '<th class="num">Pieces a package</th>' : ''}<th class="num">Warn below</th>
+      <th>Barcodes</th><th>From</th><th></th>`;
     return `<h3 class="grouph">${esc(c.name)}</h3>
-      ${live.length ? table(head, live.map(row).join('')) : ''}
+      ${live.length ? table(head, rows(live)) : ''}
+      ${sealed && brands.length ? `<div class="row addrow">
+        <select data-f="brand" data-keep style="max-width:220px">${options(brands)}</select>
+        <input data-f="name" placeholder="Flavour" style="max-width:200px">
+        <button class="btn" data-add="item_add" data-args="{}">Add a flavour</button></div>` : ''}
       ${gone.length ? `<details class="fold"><summary>No longer stocked (${gone.length})</summary>
-        ${table(head, gone.map(row).join(''))}</details>` : ''}`;
+        ${table(head, rows(gone))}</details>` : ''}`;
   }).join('');
   return card(`<h2>Stock items</h2>
     <p class="sub">A new price values the next count; counts already taken keep the
-      price they were counted at. “From” is the supplier, used on their statement.</p>
+      price they were counted at. “From” is the supplier, used on their statement.
+      Sealed tobacco “comes as” the box says it: 12×10×50 g, 3×1 kg, 250 g.
+      A flavour comes as its brand and costs what its brand does, unless it says otherwise.
+      “Warn below” is for the shortage warnings to come.</p>
     ${groups}
     <div class="row addrow" style="margin-top:14px">
       <input data-f="name" placeholder="New item" style="max-width:200px">

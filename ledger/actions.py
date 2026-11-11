@@ -419,17 +419,24 @@ def _count_line(con, body):
     tare_grams = db.scalar(con, "SELECT grams FROM tare WHERE id = ?",
                            (tare_id,)) if tare_id else 0
 
+    # a flavour comes in its brand's packs, at its brand's price, unless it
+    # has its own
+    brand = db.one(con, "SELECT * FROM stock_item WHERE id = ?",
+                   (item["parent_id"],)) if item["parent_id"] else None
+    conv = stock.item_conversions(db.setting(con, "conversions", {}),
+                                  stock.packs_of(dict(item), dict(brand) if brand else None))
     qty = stock.quantity(item["letter"], packages_milli=packages,
                          blocks_milli=blocks, loose_milli=loose,
                          gross_grams=gross, tare_grams=tare_grams,
-                         pack_size=item["pack_size"],
-                         conv=db.setting(con, "conversions", {}))
+                         pack_size=item["pack_size"] or (brand["pack_size"] if brand else None),
+                         conv=conv)
     qty_milli = stock.qty_milli_of(qty)
     # A line keeps the price it was counted at. Re-pricing an item in Setup
     # then changes what the next count is worth, never what an old one was.
     existing = db.one(con, "SELECT price FROM stock_count_line WHERE count_id = ? "
                            "AND item_id = ?", (head["id"], item["id"]))
-    price = (existing["price"] if existing and existing["price"] else item["price"])
+    price = (existing["price"] if existing and existing["price"]
+             else item["price"] or (brand["price"] if brand else 0))
     value = stock.value_of(qty, price)
 
     if stock.is_empty(packages, blocks, loose, gross):
