@@ -36,9 +36,9 @@ step.
 | ✅ | 3.8 Shortage warnings (2026.11.11.21) | — |
 | ✅ | 3.9 Cost and profit per hookah and per item (2026.11.11.22) | — |
 | ✅ | 4.1 Read the menu from SambaPOS (2026.11.11.12) | — |
-| ○ | 4.2 Pictures and descriptions in the app | 4.1 |
-| ○ | 4.3 Publish one menu for Twilight TV and the QR menu | 4.2 |
-| ○ | 4.4 Sold out, from stock | 3.8, 4.3 |
+| ✅ | 4.2 Pictures and descriptions — already in Twilight TV | — |
+| ✅ | 4.3 One menu for the TV and the QR code — already in Twilight TV | — |
+| ○ | 4.4 Sold out, from stock (not now: by hand in Twilight TV) | a link to Twilight TV |
 | ○ | 5. Later | — |
 
 ---
@@ -753,13 +753,13 @@ and how many sold over the last 30 nights kept, and the prices that are not
 a multiple of the smallest note. Learned: every whole price on the menu is a
 multiple of 250; the only others are below 250, prices per gram or per piece.
 
-### 4.2 Pictures and descriptions in the app ○
+### 4.2 Pictures and descriptions ✅ (in Twilight TV)
 
 Linked by SambaPOS's menu item number: a picture, a description, which
 items show on the TV and in what order. A rename or price change in
 SambaPOS flows through by itself.
 
-### 4.3 Publish one menu for Twilight TV and the QR menu ○
+### 4.3 Publish one menu for Twilight TV and the QR menu ✅ (in Twilight TV)
 
 The app writes a menu-only file (names, groups, prices, pictures) and
 publishes it where the TV box and customers' phones can reach it — for
@@ -768,10 +768,25 @@ Never the books, and the books server stays on 127.0.0.1. Twilight TV (its
 own repository) and the QR menu page both read that one file, so a price
 changed in SambaPOS changes on the TV and the QR menu the same night.
 
-### 4.4 Sold out, from stock ○
+### 4.4 Sold out, from stock ○ (not now)
 
 When the expected stock of what an item needs reaches nothing (3.6, 3.8),
 the published menu marks it sold out.
+
+Found when step 4 came up (11 Nov), by reading Twilight TV
+(`helinomerrania/twilight-tv-android`): it already does 4.2 and 4.3 itself.
+Its phone page's Menu tab keeps every menu item's names in Kurdish, Arabic and
+English, a description, a picture, a 3D model, whether it shows on the TV
+between songs, and its place; the TV box serves that menu on the café Wi-Fi,
+and customers open it from the QR code on the TV. So nothing is built here
+for it, and the books stay on 127.0.0.1.
+
+What is not joined up: the TV menu's prices are typed on its phone page,
+apart from SambaPOS's, and a sold-out item is hidden there by hand ("On the
+menu for customers"). Joining either needs the TV box to read something from
+the books PC and a change to Twilight TV. Not worth it while prices change
+rarely: a price changed in SambaPOS is changed on the phone page too. 4.4
+waits until the stock figures have been trusted for a while.
 
 ---
 
