@@ -325,11 +325,17 @@ def _rename(con, item, name):
                         (name + f["name"][len(item["name"]):], f["id"]))
 
 
+# A scanner types through the keyboard layout in use, so with a Kurdish or
+# Arabic layout a code can arrive in Eastern Arabic digits. They are the same
+# code.
+EASTERN_DIGITS = str.maketrans("٠١٢٣٤٥٦٧٨٩۰۱۲۳۴۵۶۷۸۹", "01234567890123456789")
+
+
 def _barcode_add(con, item, raw):
     """One more barcode an item answers to (or several, between spaces or
     commas). A code belongs to one item only. A scanner types the code and
     presses Enter, so this is what a scan into Setup does."""
-    for code in re.split(r"[\s,;]+", str(raw).strip()):
+    for code in re.split(r"[\s,;]+", str(raw).strip().translate(EASTERN_DIGITS)):
         if not code:
             continue
         if not re.fullmatch(r"[0-9A-Za-z._-]{3,64}", code):

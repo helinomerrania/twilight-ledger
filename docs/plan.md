@@ -28,7 +28,7 @@ step.
 | ✅ | 2.5 Differences over time, and who closed (2026.11.11.11) | — |
 | ✅ | 3.1 Stock items: brand and flavour, barcodes, pack weights, minimums (2026.11.11.13) | — |
 | ✅ | 3.2 Receipts with lines (2026.11.11.14) | — |
-| ○ | 3.3 Barcode scanner everywhere | 3.1 |
+| ✅ | 3.3 Barcode scanner everywhere (2026.11.11.15) | — |
 | ○ | 3.4 Filling a bucket (mixes) | 3.1 |
 | ○ | 3.5 Recipes: what each menu item uses | 1.4, 3.1 |
 | ○ | 3.6 Expected stock and the gap at each count | 3.2, 3.4, 3.5 |
@@ -578,12 +578,27 @@ kept as they were. Purchases are not entered in SambaPOS (1.1), so nothing
 comes in from the nightly save. A mix is made here, not bought, so weighed
 items are not received.
 
-### 3.3 Barcode scanner everywhere ○
+### 3.3 Barcode scanner everywhere ✅
 
 A USB scanner types the code and presses Enter, like a keyboard, so it needs
 no setup: any box that accepts a scan works with it. Used in receipts,
 counts, and filling buckets. The first time an unknown barcode is scanned,
 the app asks once what it is (brand, flavour, pack weight) and remembers.
+
+As built (2026.11.11.15): a scan works wherever the cursor is. Very fast
+typing that ends in Enter is a scan, and it is taken back out of whatever box
+it landed in, so a code can never become a count or an amount. Then:
+
+- with a receipt's lines open, the item goes on the receipt
+- on Stock with a count open, the sheet goes to the item's line, lights it
+  and puts the cursor in its first box
+- anywhere else, it says what the item is
+
+Setup's barcode boxes take a scan as typed. A code nobody has seen asks once
+which item it is, from the list, and is remembered; an item that is not on
+the list yet is added in Setup first. A code typed through a Kurdish or
+Arabic keyboard layout (٠١٢…) is read as the same code. Filling a bucket
+(3.4) takes scans the same way.
 
 ### 3.4 Filling a bucket (mixes) ○
 

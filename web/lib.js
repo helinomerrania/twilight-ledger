@@ -174,6 +174,49 @@ export function ask(title, body, yes = 'Yes', no = 'Cancel') {
   });
 }
 
+/** Ask which stock item something is, from a box offering every item's
+    name. Resolves the item, or null. */
+export function pickItem(title, body, items) {
+  return new Promise(resolve => {
+    const host = document.getElementById('toast');
+    const box = document.createElement('div');
+    box.className = 'ask';
+    box.innerHTML = `<strong>${esc(title)}</strong>
+      <p style="margin:6px 0 10px;white-space:pre-line">${esc(body)}</p>
+      <input list="pickNames" data-scan placeholder="Item" autocomplete="off" spellcheck="false">
+      <datalist id="pickNames">${items.map(i => `<option value="${esc(i.name)}">`).join('')}</datalist>
+      <p class="neg" style="margin:6px 0 0" hidden>Pick one from the list.</p>
+      <div class="row" style="margin-top:10px"><button class="btn primary" data-yes>That is it</button>
+        <button class="btn" data-no>Cancel</button></div>`;
+    const input = box.querySelector('input');
+    const opener = document.activeElement;
+    const done = answer => {
+      box.remove();
+      if (opener && document.contains(opener)) opener.focus({ preventScroll: true });
+      resolve(answer);
+    };
+    const yes = () => {
+      const v = input.value.trim().toLowerCase();
+      const it = items.find(i => i.name.toLowerCase() === v);
+      if (!it) {
+        box.querySelector('p.neg').hidden = false;
+        input.focus();
+        return;
+      }
+      done(it);
+    };
+    box.setAttribute('role', 'dialog');
+    box.querySelector('[data-yes]').onclick = yes;
+    box.querySelector('[data-no]').onclick = () => done(null);
+    box.addEventListener('keydown', e => {
+      if (e.key === 'Escape') { e.preventDefault(); done(null); }
+      if (e.key === 'Enter' && e.target === input) { e.preventDefault(); e.stopPropagation(); yes(); }
+    });
+    host.append(box);
+    input.focus();
+  });
+}
+
 /* -------------------------------------------------------------------- print */
 
 /** Print a till slip. The page is stripped to the slip only while printing,

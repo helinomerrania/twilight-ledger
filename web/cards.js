@@ -698,7 +698,7 @@ export function countPicker() {
       ? 'This count is what a closed month was built on, so it is locked along with the prices it was valued at.'
       : c.source === 'carried'
         ? 'This figure was carried in from the Excel workbook, not counted item by item.'
-        : 'Weigh the bucket and the tare comes off. Sealed tobacco is counted in the boxes it comes in, each size said under its box, and converts to kilos. Everything else is whole packages plus loose pieces. Each box saves as you leave it.'}
+        : 'Weigh the bucket and the tare comes off. Sealed tobacco is counted in the boxes it comes in, each size said under its box, and converts to kilos. Everything else is whole packages plus loose pieces. Each box saves as you leave it. Scanning a barcode goes straight to its item.'}
       ${c.date ? ` <strong>Valued at ${money(c.closing)}.</strong>` : ''}</p>`);
 }
 
@@ -736,7 +736,8 @@ export function countSheet() {
       }
       const q = (i.qty_milli || 0) / 1000;
       const unit = weighed || sealed ? 'kg' : '';
-      return `<tr data-item="${i.id}" class="${[i.active ? '' : 'quiet', under ? 'flavour' : ''].join(' ').trim()}">
+      return `<tr data-item="${i.id}" class="${[i.active ? '' : 'quiet', under ? 'flavour' : '',
+                                                  S.draft.found === i.id ? 'found' : ''].join(' ').trim()}">
         <td>${esc(under ? i.flavour : i.name)}<br>${price}</td>
         ${weighed
           ? `<td><select data-k="tare_id"${ro} style="min-width:110px">
@@ -1116,7 +1117,7 @@ export function editItems() {
         data-do="item_update" data-args="${args({ id: i.id, barcode_remove: c })}"
         title="Take this barcode off">${esc(c)} ✕</button>`).join('')}
       ${save('item_update', { id: i.id }, 'barcode_add', '',
-        'placeholder="Scan or type" autocomplete="off" spellcheck="false"')}</div>`;
+        'placeholder="Scan or type" autocomplete="off" spellcheck="false" data-scan')}</div>`;
   const groups = s.categories.map(c => {
     const items = s.items.filter(i => i.letter === c.letter);
     if (!items.length) return '';

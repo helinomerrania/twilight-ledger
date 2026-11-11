@@ -206,6 +206,10 @@ class Items(unittest.TestCase):
             self.update(other, barcode_add="6281234500011")
         self.assertIn("Hill Leaf", str(cm.exception))
 
+    def test_a_code_scanned_through_a_kurdish_layout_is_the_same_code(self):
+        self.update(self.brand, barcode_add="٦٢٨١٢٣٤٥٠٠٠١١")
+        self.assertEqual(self.setup_item(self.brand)["barcodes"], ["6281234500011"])
+
     def test_a_barcode_is_a_barcode(self):
         with self.assertRaises(api.ApiError):
             self.update(self.brand, barcode_add="<script>")

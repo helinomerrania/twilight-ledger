@@ -15,8 +15,8 @@
 
 import * as C from './cards.js';
 import {
-  S, ask, closeCheck, esc, get, load, money, monthName, post, printSlip, say,
-  send, signed,
+  S, ask, closeCheck, esc, get, load, money, monthName, pickItem, post, printSlip,
+  say, send, signed,
 } from './lib.js';
 
 /* ------------------------------------------------------------- the screens */
@@ -594,22 +594,16 @@ const H = {
      code and presses Enter, which lands here. */
   addRLine() {
     const box = document.getElementById('rlItem');
-    const rid = S.draft.rlines;
-    const v = box ? box.value.trim() : '';
-    if (!v || !rid) return;
+    const v = box ? westernDigits(box.value.trim()) : '';
+    if (!v || !S.draft.rlines) return;
     const items = S.data.setup.items.filter(i => i.letter !== 'A');
     const it = items.find(i => (i.barcodes || []).includes(v))
             || items.find(i => i.name.toLowerCase() === v.toLowerCase());
     if (!it) {
       return say(`Nothing is called ${v}, and no item has that barcode. Add it in Setup → Stock items first.`, true);
     }
-    const p = (S.draft.rpending = S.draft.rpending || {});
-    p[rid] = p[rid] || [];
-    if (!p[rid].includes(it.id)) p[rid].push(it.id);
     box.value = '';
-    render({ skip: ['#rlItem'] });
-    const row = document.querySelector(`tr[data-receipt="${rid}"][data-item="${it.id}"]`);
-    if (row) row.querySelector('input[data-k]').focus();
+    receiptItem(it);
   },
 
   dropRLine(el) {
@@ -950,6 +944,94 @@ async function saveLine(row) {
   const before = S.data.stock.count.closing;
   const out = await act(() => send('count_line', body), { skip: keys });
   if (out && out.closing !== before) say(`Counted value now ${money(out.closing)}.`);
+}
+
+/** A scanner types through the keyboard layout in use: with a Kurdish or
+    Arabic layout the digits of a code can arrive as ٠١٢… They are the same
+    code. */
+const westernDigits = s => s.replace(/[\u0660-\u0669]/g, d => d.charCodeAt(0) - 0x0660)
+                            .replace(/[\u06F0-\u06F9]/g, d => d.charCodeAt(0) - 0x06F0);
+
+/** Put an item on the open receipt, or go to its line if it is there. */
+function receiptItem(it) {
+  const rid = S.draft.rlines;
+  const p = (S.draft.rpending = S.draft.rpending || {});
+  p[rid] = p[rid] || [];
+  if (!p[rid].includes(it.id)) p[rid].push(it.id);
+  render({ skip: ['#rlItem'] });
+  const row = document.querySelector(`tr[data-receipt="${rid}"][data-item="${it.id}"]`);
+  if (row) row.querySelector('input[data-k]').focus();
+}
+
+/* A barcode scanner is a keyboard that types very fast and then presses
+   Enter. Wherever the cursor is, a scan is caught here and taken back out of
+   the box it landed in, so a code can never become a count or an amount.
+   A box marked data-scan is meant for codes and takes it as typed. */
+const SCAN = { el: null, before: '', chars: '', first: 0, last: 0 };
+
+window.addEventListener('keydown', e => {
+  const now = performance.now();
+  if (e.key.length === 1 && !e.ctrlKey && !e.metaKey && !e.altKey) {
+    if (now - SCAN.last > 80) {                 // a new burst of typing
+      const el = document.activeElement;
+      SCAN.el = el;
+      SCAN.before = el && 'value' in el ? el.value : '';
+      SCAN.chars = '';
+      SCAN.first = now;
+    }
+    SCAN.chars += e.key;
+    SCAN.last = now;
+    return;
+  }
+  if (e.key === 'Shift') return;
+  const code = SCAN.chars;
+  SCAN.chars = '';
+  if (e.key !== 'Enter' || code.length < 6 || now - SCAN.last > 80
+      || (SCAN.last - SCAN.first) / (code.length - 1) > 35) return;   // a person typing
+  const el = document.activeElement;
+  if (el && el.dataset && el.dataset.scan !== undefined) return;
+  e.preventDefault();
+  e.stopImmediatePropagation();
+  if (SCAN.el === el && el && 'value' in el) el.value = SCAN.before;
+  scanned(code.trim());
+}, true);
+
+/** What a scan does depends on what is open: the receipt being listed takes
+    the item, else the count sheet goes to its line, else it says what it is.
+    A code nobody has seen is asked about once and remembered. */
+async function scanned(raw) {
+  const code = westernDigits(raw);
+  if (!S.data || !/^[0-9A-Za-z._-]{3,64}$/.test(code)) return;
+  const items = S.data.setup.items;
+  let it = items.find(i => (i.barcodes || []).includes(code));
+  if (!it) {
+    it = await pickItem(`${code} is new`, 'Which item is it? Once you say, every scan of it knows.',
+                        items.filter(i => i.active));
+    if (!it) return;
+    const out = await act(() => send('item_update', { id: it.id, barcode_add: code }));
+    if (!out) return;
+    say(`${code} is now ${it.name}.`);
+  }
+  if (S.tab === 'stock' && S.draft.rlines && document.getElementById('rlItem')) {
+    if (it.letter === 'A') return say(`${it.name} is a mix, made here, not bought.`, true);
+    return receiptItem(it);
+  }
+  const sheet = S.tab === 'stock' && S.data.stock.count.date;
+  if (sheet) {
+    const row = document.querySelector(`#main tr[data-item="${it.id}"]:not([data-receipt])`);
+    if (!row) return say(`${it.name} is not on this count.`, true);
+    row.scrollIntoView({ block: 'center' });
+    S.draft.found = it.id;                      // lit, even if the screen is redrawn meanwhile
+    row.classList.add('found');
+    setTimeout(() => {
+      if (S.draft.found === it.id) S.draft.found = null;
+      document.querySelectorAll(`#main tr.found[data-item="${it.id}"]`).forEach(r => r.classList.remove('found'));
+    }, 1600);
+    const box = row.querySelector('input:not([disabled]), select:not([disabled])');
+    if (box) box.focus({ preventScroll: true });
+    return;
+  }
+  say(`${code} is ${it.name}.`);
 }
 
 async function saveReceiptLine(row) {

@@ -424,6 +424,7 @@ tr.typeh > td { background: var(--paper); padding: 8px 12px; font-size: 13px; }
 select.link { max-width: 300px; margin-top: 4px; }
 tr.brandh > td { background: var(--paper); padding: 8px 10px; font-size: 13px; }
 tr.flavour > td:first-child { padding-left: 26px; }
+tr.found > td { background: var(--accent-soft); }
 .sizes { display: flex; flex-wrap: wrap; gap: 8px; }
 label.sizebox { display: block; margin: 0; }
 label.sizebox input { width: 86px; text-align: right; }
@@ -528,6 +529,7 @@ details.flow > .scroll { margin: 0 0 10px 18px; }
   font-size: 14px;
 }
 #toast > .ask strong { font-size: 15px; }
+#toast > .ask input { margin-top: 2px; }
 
 @media (max-width: 860px) {
   :root { --rail: 0px; }
