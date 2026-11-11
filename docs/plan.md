@@ -29,7 +29,7 @@ step.
 | ✅ | 3.1 Stock items: brand and flavour, barcodes, pack weights, minimums (2026.11.11.13) | — |
 | ✅ | 3.2 Receipts with lines (2026.11.11.14) | — |
 | ✅ | 3.3 Barcode scanner everywhere (2026.11.11.15) | — |
-| ○ | 3.4 Filling a bucket (mixes) | 3.1 |
+| ✅ | 3.4 Filling a bucket (mixes) (2026.11.11.16) | — |
 | ○ | 3.5 Recipes: what each menu item uses | 1.4, 3.1 |
 | ○ | 3.6 Expected stock and the gap at each count | 3.2, 3.4, 3.5 |
 | ○ | 3.7 Ratio items: foil, coal, filters, cups | 3.6 |
@@ -600,7 +600,7 @@ the list yet is added in Setup first. A code typed through a Kurdish or
 Arabic keyboard layout (٠١٢…) is read as the same code. Filling a bucket
 (3.4) takes scans the same way.
 
-### 3.4 Filling a bucket (mixes) ○
+### 3.4 Filling a bucket (mixes) ✅
 
 Mohammed makes his own mixes in buckets from several brands and flavours,
 counting packs, not weighing.
@@ -619,6 +619,19 @@ counting packs, not weighing.
 Worked example, with invented prices: 8 packs of a brand at 30,000/kg is
 400 g, 12,000; 6 packs at 25,000/kg is 300 g, 7,500; 6 packs at 20,000/kg is
 300 g, 6,000 — a 1 kg bucket at 25,500 a kilo.
+
+As built (2026.11.11.16), on Stock → Fill a bucket: pick the mix and its
+usual batch is filled in. The first time there is none: add what goes in by
+name or barcode, and it is kept as the usual. Change any figure, or scan the
+packs as they go in (each scan is one more pack); grams and cost work
+themselves out from each tobacco's pack size and price. **Fill it** moves the
+packs and no money. The mix's price per kilo becomes the blend of what went
+in and what was already in the bucket, known when the full bucket is weighed
+(the scales less the bucket); unweighed, the bucket is taken as empty, so the
+price is what this batch cost. The new price values the next count. A fill
+can be deleted, and the mix's price goes back unless something has changed
+it since. Expected stock (3.6) takes the packs off each tobacco and adds the
+grams to the mix.
 
 ### 3.5 Recipes: what each menu item uses ○
 

@@ -679,6 +679,89 @@ export function stockFigures() {
       position rather than measuring a month.</p></div>` : '');
 }
 
+/* Filling a bucket: packs of sealed tobacco into one of the mixes. Nothing
+   is saved until "Fill it"; the figures work themselves out as packs are
+   typed or scanned. */
+export function fillCard() {
+  const st = S.data.stock;
+  if (!st.mixes.length) return '';
+  const f = S.draft.fill || {};
+  const mix = st.mixes.find(m => m.id === f.mix);
+  const items = Object.fromEntries(S.data.setup.items.map(i => [i.id, i]));
+  const head = `<div class="cardhead"><h2>Fill a bucket</h2>
+      <div class="right row"><select data-act="fillMix" style="width:auto">
+        <option value="">Which mix?</option>
+        ${options(st.mixes.map(m => ({ value: m.id, label: m.name })), f.mix)}</select></div></div>`;
+  const recent = fillsList(st.fills);
+  if (!mix) {
+    return card(`${head}<p class="sub">Packs of tobacco into one of the mixes. No money
+      moves: the packs come off their tobacco and go into the bucket at what they cost,
+      and the mix’s price follows.</p>${recent}`);
+  }
+  const loose = it => ((it.levels || []).find(l => l.key === 'loose') || {}).label || '';
+  const rows = (f.order || []).filter(id => items[id]).map(id => {
+    const it = items[id];
+    return `<tr data-fill="${id}"${S.draft.found === id ? ' class="found"' : ''}>
+      <td>${esc(it.name)}<br><span class="quiet">${money(it.cost)} / kg</span></td>
+      <td class="num"><input type="number" min="0" step="1" id="fill-${id}" data-fillpack="${id}"
+          value="${esc(f.packs[id] ?? '')}" placeholder="0" inputmode="decimal">
+        <span class="size">packs of ${esc(loose(it))}</span></td>
+      <td class="num quiet" data-fillgrams="${id}"></td>
+      <td class="num" data-fillvalue="${id}"></td>
+      <td class="actions"><button class="mini" data-act="fillDrop" data-id="${id}" title="Leave it out">✕</button></td>
+    </tr>`;
+  }).join('');
+  const sealed = S.data.setup.items.filter(i => i.letter === 'B' && i.active);
+  return card(`${head}
+    <p class="sub">${mix.usual.length ? `The usual for ${esc(mix.name)} is filled in; change any
+      figure, or scan the packs as they go in.` : `No usual batch for ${esc(mix.name)} yet: add what
+      goes in, or scan the packs as they go in, and keep it as the usual.`}
+      Its price is ${money(mix.price)} a kilo.</p>
+    ${rows ? table(`<th>Tobacco</th><th class="num">Packs</th><th class="num">Grams</th>
+        <th class="num">Cost</th><th></th>`, rows,
+        `<tr class="tot"><td>Into the bucket</td><td></td><td class="num" id="fillGrams"></td>
+          <td class="num" id="fillValue"></td><td></td></tr>`) : ''}
+    <div class="row" style="margin-top:10px">
+      <input id="fillItem" list="sealedNames" placeholder="Tobacco or barcode" autocomplete="off"
+        spellcheck="false" style="max-width:280px">
+      <button class="btn" data-act="fillAdd">Add</button>
+      ${mix.usual.length ? '<button class="mini" data-act="fillUsual">Back to the usual</button>' : ''}
+    </div>
+    <datalist id="sealedNames">${sealed.map(i => `<option value="${esc(i.name)}">`).join('')}</datalist>
+    <div class="grid-form" style="margin-top:12px">
+      ${field('Filled on', `<input type="date" id="fillOn" value="${esc(f.on || S.data.today)}" max="${esc(S.data.today)}">`)}
+      ${field('Full bucket on the scales (g), if weighed', `<input type="number" min="0" id="fillGross"
+          placeholder="not weighed" inputmode="numeric">`)}
+      ${field('Bucket', `<select id="fillTare"><option value="">no bucket</option>
+          ${options(S.data.stock.count.tares.map(t => ({ value: t.id, label: `${t.name} (${t.grams}g)` })))}</select>`)}
+    </div>
+    <label class="tick"><input type="checkbox" id="fillKeep"${mix.usual.length ? '' : ' checked'}>
+      Keep this as the usual for ${esc(mix.name)}</label>
+    <div class="row" style="margin-top:12px">
+      <button class="btn primary" data-act="fillBucket">Fill it</button>
+      <button class="btn" data-act="fillCancel">Cancel</button>
+      <span class="quiet" id="fillPrice"></span>
+    </div>
+    ${recent}`);
+}
+
+function fillsList(fills) {
+  if (!fills.length) return '';
+  const rows = fills.map(f => `<tr>
+      <td class="nowrap">${esc(f.filled_on)}</td>
+      <td>${esc(f.mix)}<br><span class="quiet">${esc(f.lines.map(l =>
+        `${+(l.packs_milli / 1000).toFixed(3)} × ${l.name}`).join(', '))}</span></td>
+      <td class="num">${f.grams.toLocaleString('en-US')} g</td>
+      <td class="num">${money(Math.round(f.value * 1000 / f.grams))}</td>
+      <td class="num quiet">${money(f.price_before)} → ${money(f.price_after)}</td>
+      <td class="actions">${f.locked ? '' : `<button class="mini danger" data-act="deleteFill"
+          data-id="${f.id}">Delete</button>`}</td>
+    </tr>`).join('');
+  return `<details class="fold"><summary>Recent fills (${fills.length})</summary>
+    ${table(`<th>Date</th><th>Mix</th><th class="num">Went in</th><th class="num">Cost a kilo</th>
+      <th class="num">Mix price</th><th></th>`, rows)}</details>`;
+}
+
 export function countPicker() {
   const s = S.data.stock;
   const c = s.count;

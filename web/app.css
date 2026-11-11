@@ -425,6 +425,9 @@ select.link { max-width: 300px; margin-top: 4px; }
 tr.brandh > td { background: var(--paper); padding: 8px 10px; font-size: 13px; }
 tr.flavour > td:first-child { padding-left: 26px; }
 tr.found > td { background: var(--accent-soft); }
+label.tick { display: flex; align-items: center; gap: 8px; margin: 12px 0 0;
+             font-size: 14px; color: var(--ink); cursor: pointer; }
+label.tick input { width: auto; margin: 0; }
 .sizes { display: flex; flex-wrap: wrap; gap: 8px; }
 label.sizebox { display: block; margin: 0; }
 label.sizebox input { width: 86px; text-align: right; }

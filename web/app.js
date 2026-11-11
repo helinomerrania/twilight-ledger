@@ -36,7 +36,7 @@ const VIEWS = {
   tonight: () => C.needsALook() + C.closingUp() + C.nightDrawer() + C.todayFigures()
                + C.todayEntries() + C.nightSold(),
 
-  stock: () => C.stockFigures() + C.countPicker() + C.countSheet()
+  stock: () => C.stockFigures() + C.fillCard() + C.countPicker() + C.countSheet()
              + C.receiptForm() + C.receiptList() + C.countHistory(),
 
   month: () => C.periodPicker() + C.monthFigures() + C.soFarCard() + C.resultCard()
@@ -154,6 +154,7 @@ function render({ fresh = false, skip = [] } = {}) {
   renderRail();
   const [title, sub] = TITLES[S.tab];
   main.innerHTML = `<h1>${esc(title)}</h1><p class="sub">${esc(sub)}</p>` + VIEWS[S.tab]();
+  if (S.tab === 'stock' && S.draft.fill) fillFigures();
   if (!kept.size && !focus) return;
   const byKey = new Map();
   for (const el of fields()) {
@@ -606,6 +607,75 @@ const H = {
     receiptItem(it);
   },
 
+  /* ---------------------------------------------------- filling a bucket */
+
+  fillMix(el) {
+    const id = Number(el.value) || null;
+    const mix = S.data.stock.mixes.find(m => m.id === id);
+    S.draft.fill = mix ? usualOf(mix) : null;
+    render({ skip: fillKeys() });
+  },
+
+  fillUsual() {
+    const mix = S.data.stock.mixes.find(m => m.id === (S.draft.fill || {}).mix);
+    if (!mix) return;
+    S.draft.fill = { ...usualOf(mix), on: S.draft.fill.on };
+    fillValues();
+    render({ skip: fillKeys() });
+  },
+
+  fillAdd() {
+    const box = document.getElementById('fillItem');
+    const v = box ? westernDigits(box.value.trim()) : '';
+    if (!v) return;
+    const sealed = S.data.setup.items.filter(i => i.letter === 'B');
+    const it = sealed.find(i => (i.barcodes || []).includes(v))
+            || sealed.find(i => i.name.toLowerCase() === v.toLowerCase());
+    if (!it) return say(`No sealed tobacco is called ${v}, and none has that barcode.`, true);
+    box.value = '';
+    fillItem(it, 0);
+  },
+
+  fillDrop(el) {
+    const id = Number(el.dataset.id);
+    const f = S.draft.fill;
+    f.order = f.order.filter(i => i !== id);
+    delete f.packs[id];
+    render({ skip: fillKeys() });
+  },
+
+  fillCancel() {
+    S.draft.fill = null;
+    render();
+  },
+
+  async fillBucket() {
+    const f = S.draft.fill;
+    if (!f) return;
+    fillValues();
+    const lines = f.order.map(id => ({ item: id, packs: f.packs[id] })).filter(l => Number(l.packs) > 0);
+    if (!lines.length) return say('Say how many packs of which tobacco went in.', true);
+    const mix = S.data.stock.mixes.find(m => m.id === f.mix);
+    const out = await act(() => send('bucket_fill', {
+      mix: f.mix, on: val('fillOn'), lines, gross_grams: val('fillGross'),
+      tare_id: val('fillTare'), usual: document.getElementById('fillKeep').checked,
+    }), { skip: ['#fillGross', '#fillOn', '#fillTare'] });
+    if (!out) return;
+    S.draft.fill = null;
+    render();
+    say(`Filled ${mix.name}: ${out.grams.toLocaleString('en-US')} g at ${money(Math.round(out.value * 1000 / out.grams))} a kilo.`
+      + (out.price_after !== out.price_before ? ` Its price is now ${money(out.price_after)} a kilo.` : ''));
+  },
+
+  async deleteFill(el) {
+    const ok = await ask('Delete this fill?',
+      'The packs go back to their tobacco, and the mix’s price goes back to what it was if nothing has changed it since.',
+      'Delete it');
+    if (!ok) return;
+    const out = await act(() => send('bucket_fill_delete', { id: Number(el.dataset.id) }));
+    if (out) say('Fill deleted.');
+  },
+
   dropRLine(el) {
     const rid = S.draft.rlines;
     const p = (S.draft.rpending || {})[rid];
@@ -859,7 +929,7 @@ const H = {
 
 /* ------------------------------------------------------------------ events */
 
-const ON_CHANGE = new Set(['setDay', 'setMonth', 'setCount', 'pickKind']);
+const ON_CHANGE = new Set(['setDay', 'setMonth', 'setCount', 'pickKind', 'fillMix']);
 
 document.addEventListener('click', async e => {
   /* Setup: one button does one thing, described entirely by its attributes */
@@ -921,6 +991,13 @@ document.addEventListener('change', async e => {
   if (el && ON_CHANGE.has(el.dataset.act)) H[el.dataset.act](el);
 });
 
+document.addEventListener('input', e => {
+  if (e.target.dataset && e.target.dataset.fillpack !== undefined) {
+    S.draft.fill.packs[e.target.dataset.fillpack] = e.target.value.trim();
+    fillFigures();
+  }
+});
+
 /* A stock count saves a line when you leave it. Typing a figure and walking
    away should not lose it, and a Save button at the bottom of a sheet of
    fifty items is a Save button nobody reaches. */
@@ -951,6 +1028,63 @@ async function saveLine(row) {
     code. */
 const westernDigits = s => s.replace(/[\u0660-\u0669]/g, d => d.charCodeAt(0) - 0x0660)
                             .replace(/[\u06F0-\u06F9]/g, d => d.charCodeAt(0) - 0x06F0);
+
+/** A fill starting from a mix's usual batch. */
+function usualOf(mix) {
+  const packs = {};
+  mix.usual.forEach(u => { packs[u.item] = String(u.packs); });
+  return { mix: mix.id, order: mix.usual.map(u => u.item), packs, on: S.data.today };
+}
+
+/** The packs typed on the fill so far, into the draft, so a redraw keeps them. */
+function fillValues() {
+  const f = S.draft.fill;
+  if (!f) return;
+  document.querySelectorAll('[data-fillpack]').forEach(el => { f.packs[el.dataset.fillpack] = el.value.trim(); });
+}
+
+const fillKeys = () => [...document.querySelectorAll('[data-fillpack]')].map(el => '#' + el.id);
+
+/** Grams and cost of each line and of the whole fill, as the packs stand. */
+function fillFigures() {
+  const f = S.draft.fill;
+  if (!f) return;
+  const items = Object.fromEntries(S.data.setup.items.map(i => [i.id, i]));
+  let grams = 0;
+  let value = 0;
+  document.querySelectorAll('[data-fillpack]').forEach(el => {
+    const it = items[el.dataset.fillpack];
+    const g = Math.round((Number(el.value) || 0) * it.pack_grams);
+    const v = g * it.cost / 1000;
+    grams += g;
+    value += v;
+    document.querySelector(`[data-fillgrams="${it.id}"]`).textContent = g ? `${g.toLocaleString('en-US')} g` : '';
+    document.querySelector(`[data-fillvalue="${it.id}"]`).textContent = g ? money(Math.round(v)) : '';
+  });
+  const set = (id, text) => { const el = document.getElementById(id); if (el) el.textContent = text; };
+  set('fillGrams', grams ? `${grams.toLocaleString('en-US')} g` : '');
+  set('fillValue', grams ? money(Math.round(value)) : '');
+  set('fillPrice', grams ? `${money(Math.round(value * 1000 / grams))} a kilo` : '');
+}
+
+/** One more pack of a tobacco on the fill (a scan), or just its line (Add). */
+function fillItem(it, more) {
+  const f = S.draft.fill;
+  fillValues();
+  if (!f.order.includes(it.id)) f.order.push(it.id);
+  if (more) f.packs[it.id] = String((Number(f.packs[it.id]) || 0) + more);
+  S.draft.found = it.id;
+  render({ skip: fillKeys().concat(['#fill-' + it.id, '#fillItem']) });
+  const box = document.getElementById('fill-' + it.id);
+  if (box) {
+    box.closest('tr').scrollIntoView({ block: 'nearest' });
+    if (!more) box.focus();
+  }
+  setTimeout(() => {
+    if (S.draft.found === it.id) S.draft.found = null;
+    document.querySelectorAll(`tr.found[data-fill="${it.id}"]`).forEach(r => r.classList.remove('found'));
+  }, 1600);
+}
 
 /** Put an item on the open receipt, or go to its line if it is there. */
 function receiptItem(it) {
@@ -1012,6 +1146,10 @@ async function scanned(raw) {
     if (!out) return;
     say(`${code} is now ${it.name}.`);
   }
+  if (S.tab === 'stock' && S.draft.fill && S.draft.fill.mix) {
+    if (it.letter !== 'B') return say(`Only sealed tobacco goes into a mix, not ${it.name}.`, true);
+    return fillItem(it, 1);
+  }
   if (S.tab === 'stock' && S.draft.rlines && document.getElementById('rlItem')) {
     if (it.letter === 'A') return say(`${it.name} is a mix, made here, not bought.`, true);
     return receiptItem(it);
@@ -1061,7 +1199,7 @@ document.addEventListener('keydown', e => {
   if (e.key !== 'Enter' || e.isComposing || !el.matches('input, select')) return;
 
   const submit = { nSales: 'sales', nAmt: 'nAdd', eAmt: 'addEntry', rAmt: 'receipt', q: 'search',
-                   rlItem: 'addRLine' };
+                   rlItem: 'addRLine', fillItem: 'fillAdd' };
   if (submit[el.id]) {
     e.preventDefault();
     H[submit[el.id]](el);

@@ -278,6 +278,12 @@ of balance. Each line keeps the boxes as typed and what they came to when
 saved, belongs to the receipt row, and moves to the new row when the receipt
 is corrected.
 
+Filling a bucket (`ledger/buckets.py`) is a stock move with no money in it:
+packs leave their tobacco at its price per kilo and the mix takes the grams.
+The mix's price is a moving average, weighted by what was already in the
+bucket when it was weighed, and each fill keeps the price before and after,
+so taking a fill back can put the price back.
+
 ## Updating from GitHub
 
 The app updates itself from this repository. The download is checked before it

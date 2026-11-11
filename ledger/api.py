@@ -11,8 +11,8 @@ what registers their actions.
 """
 import json
 
-from . import (accruals, actions, backup, cash, checks as _checks, db, kinds, money, stock,
-               post, queries, setup, update)
+from . import (accruals, actions, backup, buckets, cash, checks as _checks, db, kinds, money,
+               stock, post, queries, setup, update)
 from .dates import month_of, today
 from .pos import actions as pos
 from .registry import ACTIONS, ApiError, run            # noqa: F401  (re-exported)
@@ -183,6 +183,9 @@ def _setup_items(con):
         r["levels"] = _levels(conv, r, brand)
         if r["letter"] == "B":
             own = stock.packs_of(r)
+            mine = stock.packs_of(r, brand)
+            r["pack_grams"] = mine["grams"] if mine else stock.conversions(conv)["grams_per_pack"]
+            r["cost"] = r["price"] or (brand["price"] if brand else 0)
             r["comes_as"] = stock.packs_label(conv, own) if own else ""
             r["comes_as_else"] = stock.packs_label(conv, stock.packs_of(brand) if brand else None)
         r["barcodes"] = codes.get(r["id"], [])
@@ -244,7 +247,7 @@ def stock_view(con, month, count_date=None):
     lines = receipt_lines(con)
     for e in receipts:
         e["lines"] = lines.get((e["receipt"] or {}).get("id"), [])
-    return {"cogs": c, "count_dates": dates, "count_date": chosen,
+    return {**buckets.view(con), "cogs": c, "count_dates": dates, "count_date": chosen,
             "count": count_sheet(con, chosen),
             "counts": [dict(r) for r in db.all_(
                 con, "SELECT count_date, closing, source, note FROM stock_count "
