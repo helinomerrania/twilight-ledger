@@ -105,7 +105,7 @@ def menu(con, nights=30):
         for p in sorted(portions[it["Id"]], key=lambda p: p["Id"]):
             for pr in prices[p["Id"]] or [{}]:
                 price = _whole(pr.get("Price")) if pr else None
-                ports.append({"name": p.get("Name"), "price": price,
+                ports.append({"id": p["Id"], "name": p.get("Name"), "price": price,
                               "tag": pr.get("PriceTag") or None})
                 # a price below the smallest note is a price per gram or per
                 # piece, paid in multiples; only a whole price can need change

@@ -303,7 +303,9 @@ def items(con, *, night=None, month=None):
                COALESCE(NULLIF(o.portion, 'Normal'), '') AS size,
                SUM(CASE WHEN o.counted THEN o.qty_milli ELSE 0 END) AS qty_milli,
                SUM(CASE WHEN o.counted THEN o.qty_milli * o.price ELSE 0 END) AS value_milli,
-               SUM(CASE WHEN o.counted THEN 0 ELSE o.qty_milli END) AS free_milli
+               SUM(CASE WHEN o.counted THEN 0 ELSE o.qty_milli END) AS free_milli,
+               SUM(CASE WHEN COALESCE(o.used, o.counted) THEN o.qty_milli ELSE 0 END)
+                   AS took_milli
           FROM pos_order o
           JOIN pos_ticket t ON t.id = o.ticket_id
           JOIN pos_period p ON p.id = t.period_id
@@ -312,7 +314,7 @@ def items(con, *, night=None, month=None):
                   COALESCE(NULLIF(o.portion, 'Normal'), '')""", args)
     out = [{"group": r["grp"], "item": r["name"], "portion": r["size"],
             "qty": r["qty_milli"] / 1000, "value": whole(Decimal(r["value_milli"]) / 1000),
-            "free": r["free_milli"] / 1000} for r in rows]
+            "free": r["free_milli"] / 1000, "took": r["took_milli"] / 1000} for r in rows]
     return sorted(out, key=lambda r: (-r["value"], -r["qty"], r["item"]))
 
 

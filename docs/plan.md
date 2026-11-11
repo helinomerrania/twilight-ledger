@@ -34,7 +34,7 @@ step.
 | ✅ | 3.6 Expected stock and the gap at each count (2026.11.11.19) | — |
 | ✅ | 3.7 Ratio items: foil, coal, filters, cups (2026.11.11.20) | — |
 | ✅ | 3.8 Shortage warnings (2026.11.11.21) | — |
-| ○ | 3.9 Cost and profit per hookah and per item | 3.4, 3.5 |
+| ✅ | 3.9 Cost and profit per hookah and per item (2026.11.11.22) | — |
 | ✅ | 4.1 Read the menu from SambaPOS (2026.11.11.12) | — |
 | ○ | 4.2 Pictures and descriptions in the app | 4.1 |
 | ○ | 4.3 Publish one menu for Twilight TV and the QR menu | 4.2 |
@@ -717,11 +717,21 @@ about how many nights at the pace of the last 30 days' kept nights — sales by
 recipe and by ratio, and sealed tobacco going into buckets. What should be on
 the shelf marks those items too.
 
-### 3.9 Cost and profit per hookah and per item ○
+### 3.9 Cost and profit per hookah and per item ✅
 
 From recipes and mix costs: what each menu item costs to make, beside its
 price, so it is clear which flavours and items make the most. Best and worst
 sellers by month, from the archive.
+
+As built (2026.11.11.22): what one of each portion costs is its SambaPOS
+recipe at the stock's prices — a mix at the price its fills gave it (3.4), a
+flavour at its brand's unless it has its own, a head at Setup's grams if set.
+Setup's menu shows it beside each price, with the share of the price it is.
+Month → **What each item made**: each item sold that month, what it came to,
+the stock it took (a gift takes stock as a sale does; a void does not) and
+what it made, most first, with the ones that made the most and the least
+named. Items with no recipe, or whose recipe is not linked to priced stock,
+are listed apart.
 
 ---
 

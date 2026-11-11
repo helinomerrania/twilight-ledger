@@ -97,7 +97,7 @@ class KeptEarly(unittest.TestCase):
         self.assertEqual(sorted(groups), ["Drinks", "Hookah"])
         apple = groups["Hookah"][0]
         self.assertEqual((apple["name"], apple["portions"], apple["sold"]),
-                         ("Apple", [{"name": "Normal", "price": 5000, "tag": None}], 2))
+                         ("Apple", [{"id": 70, "name": "Normal", "price": 5000, "tag": None}], 2))
         self.assertEqual(groups["Drinks"][0]["sold"], 2)        # one of them given free
         self.assertEqual(m["odd"], [])
 

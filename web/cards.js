@@ -1505,6 +1505,43 @@ export function nightSold() {
 }
 
 /** The month as SambaPOS saw it, night by night against the books. */
+export function monthMakes() {
+  const m = S.data.pos && S.data.pos.month;
+  if (!m || !m.items.length) return '';
+  const moved = m.items.filter(i => i.qty || i.took);           // not only voided
+  const known = moved.filter(i => i.makes !== null && i.makes !== undefined)
+    .sort((a, b) => b.makes - a.makes);
+  const unknown = moved.filter(i => i.makes === null || i.makes === undefined);
+  if (!known.length) {
+    return card(`<h2>What each item made</h2>
+      <p class="sub">Once SambaPOS’s inventory items are linked to stock here (Setup → What
+        SambaPOS’s recipes take), every item sold shows what it cost to make and what it made.</p>`);
+  }
+  const qty = q => (Number.isInteger(q) ? String(q) : q.toFixed(2).replace(/\.?0+$/, ''));
+  const name = i => `<bdi>${esc(i.item)}</bdi>${i.portion ? ` <span class="quiet"><bdi>${esc(i.portion)}</bdi></span>` : ''}`;
+  const row = i => `<tr><td>${name(i)}</td>
+      <td class="num">${qty(i.qty)}${i.took > i.qty ? ` <span class="quiet">+${qty(i.took - i.qty)} given</span>` : ''}</td>
+      <td class="num">${money(i.value)}</td>
+      <td class="num quiet">${money(i.cost)}</td>
+      <td class="num ${cls(i.makes)}">${money(i.makes)}</td>
+      <td class="num quiet">${i.value ? `${Math.round(i.makes / i.value * 100)}%` : ''}</td></tr>`;
+  const head = `<th>Item</th><th class="num">Sold</th><th class="num">Came to</th><th class="num">Stock it took</th>
+    <th class="num">Made</th><th class="num">Of the price</th>`;
+  const sum = k => known.reduce((t, i) => t + i[k], 0);
+  const names = list => list.map(name).join(', ');
+  return card(`<h2>What each item made</h2>
+    <p class="sub">${known.length} item${known.length === 1 ? '' : 's'} came to ${money(sum('value'))}
+      and took ${money(sum('cost'))} of stock, so made ${money(sum('makes'))} before rent, salaries
+      and the rest. Made the most: ${names(known.slice(0, 3))}.${known.length > 3
+        ? ` Made the least: ${names(known.slice(-3).reverse())}.` : ''}</p>
+    ${table(head, known.slice(0, 10).map(row).join(''))}
+    ${known.length > 10 ? `<details class="fold"><summary>${known.length - 10} more</summary>
+      ${table(head, known.slice(10).map(row).join(''))}</details>` : ''}
+    ${unknown.length ? `<details class="fold"><summary>${unknown.length} item${unknown.length === 1 ? '' : 's'}
+      with no cost yet</summary><p class="note">No recipe in SambaPOS, or what the recipe takes is
+      not linked to priced stock here.</p><ul class="note">${unknown.map(i => `<li>${name(i)}</li>`).join('')}</ul></details>` : ''}`);
+}
+
 export function monthSold() {
   const m = S.data.pos && S.data.pos.month;
   if (!m) return '';
@@ -1762,17 +1799,21 @@ export function sambaposMenu() {
     : `<p class="note">Every price is a multiple of ${money(S.data.note)}, so change is always possible.</p>`;
   const groups = m.groups.map(g => `<details class="fold"><summary><bdi>${esc(g.name || 'No group')}</bdi>
       <span class="quiet">${g.items.length} item${g.items.length === 1 ? '' : 's'}</span></summary>
-      ${table(`<th>Item</th><th>Portion</th><th class="num">Price</th><th class="num">Sold, last ${m.nights} nights</th>`,
+      ${table(`<th>Item</th><th>Portion</th><th class="num">Price</th><th class="num">Costs to make</th>
+          <th class="num">Sold, last ${m.nights} nights</th>`,
         g.items.map(i => i.portions.map((p, n) => `<tr>
           <td>${n ? '' : `<bdi>${esc(i.name)}</bdi>`}</td>
           <td class="quiet"><bdi>${esc(p.name || '')}</bdi>${p.tag ? ` · <bdi>${esc(p.tag)}</bdi>` : ''}</td>
           <td class="num ${p.price && p.price % S.data.note ? 'warnc' : ''}">${p.price === null ? '—' : money(p.price)}</td>
+          <td class="num quiet">${p.cost === null || p.cost === undefined ? '' : money(p.cost)}${p.cost
+            && p.price ? ` · ${Math.round(p.cost / p.price * 100)}%` : ''}</td>
           <td class="num">${n ? '' : (i.sold ? Number(i.sold).toLocaleString('en') : '<span class="quiet">0</span>')}</td>
         </tr>`).join('')).join(''))}</details>`).join('');
   return card(`<h2>The menu, as SambaPOS has it</h2>
     <p class="sub">${m.items} items in ${m.groups.length} groups. Names and prices are set in
       SambaPOS, where the customer is charged; the app reads them each time SambaPOS is read,
-      ready for the TV and the QR menu later.</p>${odd}${groups}`);
+      ready for the TV and the QR menu later. What each costs to make comes from SambaPOS’s
+      recipes and the stock’s prices, once the stock is linked below.</p>${odd}${groups}`);
 }
 
 /** Every SambaPOS account money moves through, and what it is in the books. */

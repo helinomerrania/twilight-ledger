@@ -295,7 +295,10 @@ fills, minus what the recipes say was sold. Nothing in it moves money, so a
 wrong recipe or a missing receipt line shows up as a gap, never as a wrong
 balance. Foil, coal and the like have no recipe; `ledger/ratios.py` learns
 hookahs to each one between counts, and should-be uses the ratio learnt
-before a count, never the one the count itself would give.
+before a count, never the one the count itself would give. What an item costs
+to make is the same recipes at the stock's prices, so it is only as good as
+the links and the prices, and an item that cannot be costed says so instead
+of showing a cost of nothing.
 
 ## Updating from GitHub
 

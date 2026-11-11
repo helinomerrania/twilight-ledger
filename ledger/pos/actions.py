@@ -8,6 +8,7 @@ takings as its sales goes through the ordinary `sales` action.
 from pathlib import Path
 
 from .. import db
+from ..money import half_up
 from ..registry import ApiError, action, clean_date
 from . import adding, archive, auto, catalog, links, recipes, sources
 
@@ -18,6 +19,25 @@ def settings(con):
     return {**DEFAULTS, **(db.setting(con, "sambapos", {}) or {})}
 
 
+def _menu(con):
+    """The menu, each portion with what one costs to make beside its price."""
+    m = catalog.menu(con)
+    costs = recipes.portion_costs(con)
+    for g in m["groups"]:
+        for it in g["items"]:
+            for p in it["portions"]:
+                c = costs.get(p["id"])
+                p["cost"] = half_up(c) if c is not None else None
+    return m
+
+
+def _month(con, month):
+    m = archive.month(con, month)
+    if m:
+        m["items"] = recipes.costed(con, m["items"])
+    return m
+
+
 def view(con, on, month):
     """Everything the screens show about SambaPOS."""
     return {"settings": settings(con),
@@ -25,11 +45,11 @@ def view(con, on, month):
             "windows_user": sources.windows_user(),
             "status": archive.status(con),
             "catalog": catalog.counts(con),
-            "menu": catalog.menu(con),
+            "menu": _menu(con),
             "auto": auto.view(con),
             "night": archive.night(con, on),
             "adding": adding.plan(con, on) if on else None,
-            "month": archive.month(con, month),
+            "month": _month(con, month),
             "accounts": links.listing(con),
             "targets": links.targets(con),
             "gone": links.gone_but_here(con),

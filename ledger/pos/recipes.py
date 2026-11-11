@@ -21,6 +21,7 @@ from collections import defaultdict
 from fractions import Fraction
 
 from .. import db
+from ..money import half_up
 from ..registry import ApiError, action
 from . import catalog
 
@@ -167,6 +168,58 @@ def hookahs(con, since, until):
         if lines and any((place(inv_id)[0] or {}).get("letter") in WEIGHED for inv_id, _ in lines):
             n += qty
     return n
+
+
+def _unit_costs(con):
+    """What one of each stock item costs, in its own quantity: a kilo of
+    tobacco or of a mix (whose price follows its fills), a package of the
+    rest. A flavour costs what its brand does unless it says otherwise."""
+    items = _items(con)
+    return {i["id"]: Fraction(i["price"] or (items[i["parent_id"]]["price"]
+                                             if i["parent_id"] in items else 0) or 0)
+            for i in items.values()}
+
+
+def portion_costs(con):
+    """What one of each portion costs to make, by its recipe: {portion id:
+    exact dinar}, or None where some of it is not linked here or not priced."""
+    place = _placed(con)
+    head = head_grams(con)
+    unit = _unit_costs(con)
+    out = {}
+    for pid, lines in _recipes(con).items():
+        if not lines:
+            continue
+        total = Fraction(0)
+        for inv_id, q in lines:
+            item, per, i = place(inv_id)
+            if not item or not unit.get(item["id"]):
+                total = None
+                break
+            if head and item["letter"] in WEIGHED and _unit(i) == "g":
+                q = Fraction(head)
+            total += q / per * unit[item["id"]]
+        out[pid] = total
+    return out
+
+
+def costed(con, sold):
+    """What sold (archive.items), each with what one costs to make, what all
+    that took stock cost — a gift costs as much as a sale — and what it made."""
+    costs = portion_costs(con)
+    portions, ids = _portions(con)
+    out = []
+    for s in sold:
+        menu_id = ids.get(s["item"])
+        pid = portions.get((menu_id, s["portion"] or "Normal"))
+        if pid is None:
+            mine = [p for (m, _), p in portions.items() if m == menu_id]
+            pid = mine[0] if len(mine) == 1 else None
+        one = costs.get(pid)
+        cost = half_up(one * Fraction(str(s["took"]))) if one is not None else None
+        out.append({**s, "one": half_up(one) if one is not None else None, "cost": cost,
+                    "makes": s["value"] - cost if cost is not None else None})
+    return out
 
 
 def view(con):

@@ -43,7 +43,7 @@ const VIEWS = {
   month: () => C.periodPicker() + C.monthFigures() + C.soFarCard() + C.resultCard()
              + C.settleCard() + C.electricityCard() + C.payrollCard() + C.partnersCard()
              + C.suppliersCard() + C.moneyFlow() + C.salesByDay() + C.cashDifferences()
-             + C.monthSold() + C.allChecks()
+             + C.monthSold() + C.monthMakes() + C.allChecks()
              + C.closeCard() + C.everyMonth(),
 
   books: () => C.newEntryCard() + C.entryList() + C.recentChanges()

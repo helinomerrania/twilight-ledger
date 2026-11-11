@@ -24,6 +24,8 @@ def with_recipes(snap, *, decrease=True, void=False):
                             "CalculatePrice": False, "DecreaseInventory": False})
     t["MenuItemPortions"] = [{"Id": 70, "MenuItemId": 7, "Name": "Normal"},
                              {"Id": 90, "MenuItemId": 9, "Name": "Normal"}]
+    t["MenuItemPrices"] = [{"Id": 700, "MenuItemPortionId": 70, "Price": "5000.00"},
+                           {"Id": 900, "MenuItemPortionId": 90, "Price": "4000.00"}]
     t["InventoryItems"] = [{"Id": 1, "Name": "Apple tobacco", "BaseUnit": "g"},
                            {"Id": 2, "Name": "Tea bag", "BaseUnit": "piece"},
                            {"Id": 3, "Name": "Sugar", "BaseUnit": "g"}]
