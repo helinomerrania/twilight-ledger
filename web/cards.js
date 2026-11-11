@@ -848,6 +848,73 @@ export function countSheet() {
       rounded to the note.</p>`);
 }
 
+/* What should be on the shelf, from the count before: receipts in, buckets
+   filled, and what SambaPOS's recipes say the nights sold; and the gap at
+   this count. */
+export function expectedCard() {
+  const v = S.data.stock.expected;
+  if (!v) return '';
+  const cats = Object.fromEntries(S.data.setup.categories.map(c => [c.letter, c.name]));
+  const qty = (r, x, signed) => {
+    if (x === null || x === undefined) return '';
+    if (Math.abs(x) < 0.0005) return signed ? '' : '0';
+    const sign = x < 0 ? '−' : signed ? '+' : '';
+    const a = Math.abs(x);
+    return sign + (['A', 'B'].includes(r.letter)
+      ? (a < 1 ? `${Math.round(a * 1000)} g` : `${+a.toFixed(3)} kg`) : `${+a.toFixed(2)}`);
+  };
+  const row = (r, lit) => `<tr${lit && r.flag ? ' class="found"' : ''}>
+      <td>${esc(r.name)}</td>
+      <td class="num quiet">${qty(r, r.was)}</td>
+      <td class="num quiet">${qty(r, r.in, true)}</td>
+      <td class="num quiet">${qty(r, r.buckets, true)}</td>
+      <td class="num quiet">${qty(r, -r.sold, true)}</td>
+      <td class="num">${qty(r, r.should)}</td>
+      <td class="num">${r.counted === null ? '<span class="quiet">not counted</span>' : qty(r, r.counted)}</td>
+      <td class="num ${r.flag ? (r.gap < 0 ? 'neg' : 'warnc') : 'quiet'}">${r.gap === null ? ''
+        : `${qty(r, r.gap, true) || '—'}${r.flag && r.worth ? `<br>${money(r.worth)}` : ''}`}</td>
+    </tr>`;
+  const head = `<th>Item</th><th class="num">At ${esc(v.from)}</th><th class="num">In</th>
+    <th class="num">Buckets</th><th class="num">Sold</th><th class="num">Should be</th>
+    <th class="num">Counted</th><th class="num">Gap</th>`;
+  const grouped = (list, lit) => {
+    let last = null;
+    return list.map(r => {
+      const h = r.letter !== last ? `<tr class="typeh"><td colspan="8">${esc(cats[r.letter] || r.letter)}</td></tr>` : '';
+      last = r.letter;
+      return h + row(r, lit);
+    }).join('');
+  };
+  const off = v.rows.filter(r => r.flag);
+  const says = v.counted
+    ? (off.length
+      ? `${off.length} item${off.length === 1 ? ' is' : 's are'} off: ${money(-v.short)} short and
+         ${money(v.over)} over, at the prices counted.`
+      : 'Everything counted is where it should be.')
+    : `There is no count on ${esc(v.to)}, so this is what should be on the shelf now.`;
+  const caveats = [
+    v.no_recipe.length ? `${v.no_recipe.length} menu item${v.no_recipe.length === 1 ? '' : 's'} sold
+      ${v.no_recipe.length === 1 ? 'has' : 'have'} no recipe in SambaPOS and took nothing:
+      ${v.no_recipe.map(n => `<bdi>${esc(n)}</bdi>`).join(', ')}.` : '',
+    v.not_linked.length ? `${v.not_linked.length} of SambaPOS’s inventory items sold
+      ${v.not_linked.length === 1 ? 'is' : 'are'} not linked to stock here (Setup → What
+      SambaPOS’s recipes take): ${v.not_linked.map(n => `<bdi>${esc(n)}</bdi>`).join(', ')}.` : '',
+  ].filter(Boolean);
+  return card(`<h2>What should be on the shelf</h2>
+    <p class="sub">From the count on ${esc(v.from)}: what receipts brought in, what went into
+      and out of buckets, and what SambaPOS’s recipes say the nights sold, up to ${esc(v.to)}.
+      <strong>${says}</strong></p>
+    ${off.length ? table(head, grouped(off)) : ''}
+    <details class="fold"><summary>Every item (${v.rows.length})</summary>
+      ${table(head, grouped(v.rows, true))}</details>
+    ${caveats.map(c => `<p class="note">${c}</p>`).join('')}
+    <div class="row" style="margin-top:10px;align-items:center">
+      <label style="margin:0">Buckets may dry by up to</label>
+      ${save('drying_pct', {}, 'pct', v.drying || '', 'type="number" min="0" max="50" step="0.5" inputmode="decimal" placeholder="0" style="max-width:80px"')}
+      <span class="quiet">% between counts, without being pointed out.</span>
+    </div>`);
+}
+
 export function receiptForm() {
   const sup = S.data.people.supplier.filter(s => s.active);
   return card(`<h2>New receipt</h2>

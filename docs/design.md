@@ -289,6 +289,12 @@ not kept twice: the only thing set here is which stock item each SambaPOS
 inventory item is. Each order keeps SambaPOS's word on whether it took stock,
 so a void takes nothing and a gift does.
 
+What should be on the shelf (`ledger/expected.py`) is worked out when asked,
+never stored: the count before, plus receipt lines, plus and minus bucket
+fills, minus what the recipes say was sold. Nothing in it moves money, so a
+wrong recipe or a missing receipt line shows up as a gap, never as a wrong
+balance.
+
 ## Updating from GitHub
 
 The app updates itself from this repository. The download is checked before it

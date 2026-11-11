@@ -31,7 +31,7 @@ step.
 | ✅ | 3.3 Barcode scanner everywhere (2026.11.11.15) | — |
 | ✅ | 3.4 Filling a bucket (mixes) (2026.11.11.16) | — |
 | ✅ | 3.5 Recipes: what each menu item uses (2026.11.11.17) | — |
-| ○ | 3.6 Expected stock and the gap at each count | 3.2, 3.4, 3.5 |
+| ✅ | 3.6 Expected stock and the gap at each count (2026.11.11.19) | — |
 | ○ | 3.7 Ratio items: foil, coal, filters, cups | 3.6 |
 | ○ | 3.8 Shortage warnings | 3.6 |
 | ○ | 3.9 Cost and profit per hookah and per item | 3.4, 3.5 |
@@ -658,7 +658,7 @@ SambaPOS no longer has count what was charged. The card shows what the last
 night kept took, and lists the menu items with no recipe in SambaPOS. Stock
 comes off the shelves in 3.6.
 
-### 3.6 Expected stock and the gap at each count ○
+### 3.6 Expected stock and the gap at each count ✅
 
 For every item at every moment:
 
@@ -672,6 +672,18 @@ At a count, the gap between expected and counted shows item by item:
   going into a bucket
 
 Count the expensive things (tobacco) weekly and cheap things monthly.
+
+As built (2026.11.11.19), on Stock → **What should be on the shelf**, under
+the count sheet: for the count on screen (or today, with none), every item
+from the count before it — what was there, what receipts brought in, what
+went into or out of buckets, what SambaPOS's recipes say the nights sold —
+what should be there, what was counted, and the gap, with what it is worth at
+the prices counted. Items off are listed first; every item folds away below.
+A bucket may dry by an allowance set on the card (a percentage of what should
+be there), and a weighed gap of a few grams is the scales. Everything dated on
+or before a count is in it. An item not on the count shows only what should
+be there. Sales with no recipe, and SambaPOS inventory items not linked, are
+named, since they took nothing.
 
 ### 3.7 Ratio items: foil, coal, filters, cups ○
 

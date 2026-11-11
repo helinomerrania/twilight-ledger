@@ -36,7 +36,7 @@ const VIEWS = {
   tonight: () => C.needsALook() + C.closingUp() + C.nightDrawer() + C.todayFigures()
                + C.todayEntries() + C.nightSold(),
 
-  stock: () => C.stockFigures() + C.fillCard() + C.countPicker() + C.countSheet()
+  stock: () => C.stockFigures() + C.fillCard() + C.countPicker() + C.countSheet() + C.expectedCard()
              + C.receiptForm() + C.receiptList() + C.countHistory(),
 
   month: () => C.periodPicker() + C.monthFigures() + C.soFarCard() + C.resultCard()
