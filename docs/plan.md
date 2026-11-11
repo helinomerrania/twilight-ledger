@@ -14,18 +14,18 @@ step.
 | | Step | Needs |
 |---|---|---|
 | ✅ | 0. What is already built | — |
-| ▶ | 0.1 Take real names and figures out of this repository | the files: done in 2026.11.11.5 · the history: Mohammed's yes, and the PC on 2026.11.11.5 |
+| ▶ | 0.1 Take real names and figures out of this repository | the files ✅ 2026.11.11.5 · the history ✅ 11 Nov · two migration comments: the PC on 2026.11.11.5 or later |
 | ✅ | 1.1 Read the current SambaPOS backups | — |
 | ✅ | 1.2 Link SambaPOS accounts to the books (2026.11.11.7) | — |
 | ✅ | 1.3 Bring a whole night in with one click (2026.11.11.8, .9) | — |
 | ✅ | 1.4 Keep everything SambaPOS knows, early (2026.11.11.10) | — |
 | ○ | 1.5 First live read on the PC (optional now) | the PC |
 | ✅ | 1.6 Bring in SambaPOS's own backups by itself (2026.11.11.6) | — |
-| ○ | 2.1 Cash and card kept apart | 1.3 |
-| ○ | 2.2 Count against SambaPOS, at the end of the work period | 1.3 |
-| ○ | 2.3 Blind count | — |
-| ○ | 2.4 Opening float | — |
-| ○ | 2.5 Differences over time, and who closed | 1.4 |
+| ✅ | 2.1 Cash and card kept apart (2026.11.11.11) | — |
+| ✅ | 2.2 Count against SambaPOS, at the end of the work period (2026.11.11.11) | — |
+| ✅ | 2.3 Blind count (2026.11.11.11) | — |
+| ✅ | 2.4 Opening float (2026.11.11.11) | — |
+| ✅ | 2.5 Differences over time, and who closed (2026.11.11.11) | — |
 | ○ | 3.1 Stock items: brand and flavour, barcodes, pack weights, minimums | — |
 | ○ | 3.2 Receipts with lines | 3.1 |
 | ○ | 3.3 Barcode scanner everywhere | 3.1 |
@@ -68,8 +68,10 @@ Mohammed, not a side effect of a step.
   once, halves away from zero, to the note (250). No floats near money.
 - **Double entry:** money moves only through the recipes in `ledger/post.py`;
   entries are voided, never deleted; a closed month is frozen.
-- **Migrations are forward-only.** `001`–`006` are applied on the PC; never
-  edit one. A change is a new numbered file.
+- **Migrations are forward-only.** Once one has shipped it is applied on the
+  PC; never edit it. A change is a new numbered file. (The one exception is
+  `db.REWORDED`, below in 0.1: a comment, agreed in advance with the version
+  already installed.)
 - **Every change ships the same way:** tests pass
   (`python -m unittest discover -s tests -t .`), the gate passes against a
   local export (`twilight.py verify`), every screen is opened in a browser,
@@ -130,22 +132,26 @@ Done in 2026.11.11.5:
 - the app accepts two old migrations reworded in a comment and nowhere else
   (`db.REWORDED`), so that line can go — see below
 
-Still to do, together, when Mohammed says yes **and** Setup → Update on the
-PC shows 2026.11.11.5 or later:
+Done on 11 November, with Mohammed's yes: the history on GitHub was
+rewritten to one fresh commit of the cleaned files, force-pushed to `main`.
+The old branches `audit-fixes` and `sambapos-archive` were pointed at that
+same commit (deleting a branch is refused from Claude's workspace; they can be
+deleted on GitHub's website, the branch list, the bin icon). A fresh clone's
+`tools/privacy_scan.py --history` finds one line: the migration comment below.
+GitHub can keep old commits reachable by their id for a while; GitHub Support
+can purge them for good.
+
+Still to do once Setup → Update on the PC shows 2026.11.11.5 or later
+(Mohammed to confirm):
 
 1. Reword the comments in `001_core.sql` and `002_stock.sql` exactly as
    `NEW_WORDING` in `tests/test_update.py` says, line for line. The app
    already installed accepts exactly that wording and refuses any other
    change to an applied migration. Shipping it before the PC has
    2026.11.11.5 would stop the PC from updating at all.
-2. Rewrite the history on GitHub so the old versions are gone: one fresh
-   commit of the cleaned files, force-pushed to `main`. The app downloads
-   `main` as a zip, so nothing on the PC depends on the history.
-3. Delete the old branches `audit-fixes` and `sambapos-archive` on GitHub;
-   they hold old versions too. Deleting a branch was refused from Claude's
-   workspace, so this may have to be done on GitHub's website (the branch
-   list, the bin icon).
-4. Run `tools/privacy_scan.py --history` again: nothing found.
+2. Squash the history to one commit again and force-push, so the old wording
+   is gone from it too, and point the two old branches at it.
+3. Run `tools/privacy_scan.py --history` on a fresh clone: nothing found.
 
 Anything already copied from GitHub cannot be recalled; that is why this
 comes first.
@@ -424,7 +430,7 @@ show the real sales and the difference separately — if the sales figure is
 ever adjusted to match the cash, a shortage disappears and no pattern can be
 seen.
 
-### 2.1 Cash and card kept apart ○
+### 2.1 Cash and card kept apart ✅
 
 Use SambaPOS's payment types (1.4). Only cash goes to the Box; a card or
 transfer payment goes to its own pot (a bank or FIB pot) automatically when
@@ -436,33 +442,65 @@ as money customers owe until they pay — collecting it is its own SambaPOS
 document type. Until this step is done, **Use** on Tonight takes every
 payment as cash, so a night with credit on it needs checking by hand.
 
-### 2.2 Count against SambaPOS, at the end of the work period ○
+### 2.2 Count against SambaPOS, at the end of the work period ✅
 
 What should be in the drawer = opening float + cash payments − cash out of
 the drawer + cash into it, all from SambaPOS for that work period. Tonight's
 count compares against that, and says when the count was taken long after
 the work period ended.
 
-### 2.3 Blind count ○
+### 2.3 Blind count ✅
 
 An option in Setup. Whoever counts types what they find before the app shows
 what was expected; the expected figure and the difference appear only once
 the count is saved. A well-known control: nobody can count towards the
 answer.
 
-### 2.4 Opening float ○
+### 2.4 Opening float ✅
 
 A fixed float in small notes at the start of each work period, set once in
 Setup, so change is always possible and the count knows what was there
 before the first sale. Prices that are all multiples of 250 also cut change
 mistakes; worth a check on the menu (4.1 makes that easy).
 
-### 2.5 Differences over time, and who closed ○
+### 2.5 Differences over time, and who closed ✅
 
 A card on Month: each night's difference, as a small chart, and differences
 grouped by who closed the work period (1.4). Small ups and downs are normal;
 a steady shortage on certain nights or shifts is not. Write-offs stay as
 they are: a difference accepted as real becomes a cost of its month.
+
+### Step 2 as built (2026.11.11.11)
+
+`ledger/cash.py`; Tonight's count step; Setup → Counting the cash; Month →
+Cash differences. Decided while building it:
+
+- **2.1** A payment's type leads to its SambaPOS account, and that account's
+  link (1.2) to a pot: cash into the drawer's pot, a card or FIB into the
+  bank's, one sales entry each. Payments kept before their types were go
+  into the drawer as one line, as before. A way of paying whose account is
+  not a pot — credit (قەرز) would be one — says "enter by hand": customers
+  owing money is not in the books yet, and only cash is in use today.
+- **2.2** The count step shows, under the drawer's pot, what SambaPOS says
+  went in as cash and out and in through the drawer that night, and with a
+  float set, what should be there. When the books' sales for the night are
+  not SambaPOS's, it says a shortage (or surplus) of the difference may be
+  hidden in them. Not built: saying the count was taken long after the work
+  period ended. The app only knows when a count was typed in, not when it
+  was taken, and SambaPOS's own backup never records the close, so the note
+  would mislead.
+- **2.3** Blind counting is a choice in Setup. Until the night's count is
+  saved, Tonight hides what the books and SambaPOS expect. It is a habit for
+  the counting screen, not a lock: the same figures are on other screens.
+- **2.4** The float is set in Setup. After the count, Tonight offers to move
+  everything above it out of the drawer's pot in one click. That transfer is
+  tied to the count (`source_ref = 'count:<id>:rest'`), so the night's count
+  does not expect it: it happened after the counting.
+- **2.5** Month → Cash differences: each night's own difference — its gap
+  with the books, less whatever the count before it left unexplained, so a
+  shortage nobody wrote off counts once — with totals, and grouped by who
+  **opened** SambaPOS that night. Who closed is never in SambaPOS's backup
+  (see 1.4), so it can only come from a live read after closing (1.5).
 
 ---
 

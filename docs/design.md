@@ -251,6 +251,17 @@ adding it would count the money twice.
 
 Nothing here writes to SambaPOS, and nothing here runs or changes the reset.
 
+## Cash you can trust
+
+The counted cash and what SambaPOS says sometimes differ. The books keep the
+real sales and the difference apart: if the sales were worked out from the
+count, a shortage would disappear into them and no pattern could be seen.
+`ledger/cash.py` sets the count beside what SambaPOS says went into and out of
+the drawer, points out a night whose sales are not SambaPOS's, leaves a fixed
+float in the drawer and moves the rest out in a transfer tied to the count,
+and keeps each night's own difference over the month. A difference accepted
+as real is still written off, as a cost of its month.
+
 ## Updating from GitHub
 
 The app updates itself from this repository. The download is checked before it

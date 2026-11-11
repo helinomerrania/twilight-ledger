@@ -16,6 +16,7 @@ the same person or expense, that night. When they do and the amounts agree,
 the line is already in the books; when they do not, it is left for Mohammed
 to put right, because adding it would count the money twice.
 """
+import json
 from collections import defaultdict
 
 from .. import db, post, queries
@@ -155,6 +156,64 @@ def _books(con, on):
     return [dict(r) for r in rows]
 
 
+def _takings(con, on, night, linked, pots):
+    """The night's takings as sales lines: one for each way of paying, each
+    into the pot its SambaPOS account is linked to — cash into the drawer's
+    pot, a card or transfer into the bank's — so the count compares cash with
+    cash. With one way of paying it is the single line it always was."""
+    base = {"at": None, "what": "Takings", "kind": "daily_sales",
+            "detail": "Total sales of the day", "account": None}
+    drawer = _drawer_pot(con, linked, pots)
+    takings = night["takings"]
+    if takings <= 0:
+        return [{**base, "amount": takings, "pot": drawer, "status": "skip",
+                 "words": "nothing was paid"}]
+    types = {r["pos_id"]: json.loads(r["data"]) for r in db.all_(
+        con, "SELECT pos_id, data FROM pos_catalog WHERE kind = 'payment_type'")}
+    groups = db.all_(con, """
+        SELECT pp.type_id, pp.kind, SUM(pp.amount) AS amount FROM pos_payment pp
+          JOIN pos_ticket t ON t.id = pp.ticket_id
+          JOIN pos_period p ON p.id = t.period_id
+         WHERE p.night = ? GROUP BY pp.type_id, pp.kind ORDER BY amount DESC""", (on,))
+    # payments kept before their types were: one line into the drawer, as
+    # it always was
+    untyped = [g for g in groups if g["type_id"] is None]
+    groups = [g for g in groups if g["type_id"] is not None]
+    if untyped:
+        groups.append({"type_id": None, "kind": "",
+                       "amount": sum(g["amount"] for g in untyped)})
+    lines = []
+    for g in groups:
+        if not g["amount"]:
+            continue
+        line = {**base, "amount": g["amount"], "payment": g["kind"]}
+        acct = (types.get(g["type_id"]) or {}).get("Account_Id")
+        if acct is None:
+            line.update(pot=drawer, status="new")
+        elif acct not in linked:
+            known = links.account(con, acct) or {"pos_id": acct, "name": g["kind"]}
+            was_drawer = bool(db.scalar(con, "SELECT 1 FROM pos_doc_line WHERE account_id = ? "
+                                             "AND drawer = 1 LIMIT 1", (acct,)))
+            line.update(pot=None, status="held", words="needs linking", account={
+                "pos_id": acct, "name": known["name"], "type": known.get("type_name"),
+                "link": None, "suggest": links.suggest(con, known, drawer=was_drawer)})
+        elif linked[acct]["as_what"] == "pot" and linked[acct]["account_id"] in pots:
+            line.update(pot=pots[linked[acct]["account_id"]], status="new")
+        else:
+            line.update(pot=None, status="manual",
+                        words=f"paid by {g['kind']}, which is not money in a pot: "
+                              "enter it by hand")
+        lines.append(line)
+    one = len(lines) == 1
+    for l in lines:
+        if l["status"] == "new":
+            l["ref"] = (f"pos:sales:{on}:{l['amount']}" if one
+                        else f"pos:sales:{on}:{l['payment']}:{l['amount']}")
+            l["words"] = (f"Sales, into {l['pot']}" if one
+                          else f"Sales by {l['payment']}, into {l['pot']}")
+    return lines
+
+
 def plan(con, on):
     """Every line SambaPOS recorded on the night of `on`, as the entry it
     becomes, and whether it is in the books already. None if no night was
@@ -168,24 +227,16 @@ def plan(con, on):
     by_ref = {b["source_ref"]: b for b in books if b["source"] == "pos" and b["source_ref"]}
     lines = []
 
-    # the takings: one figure for the night. One added from SambaPOS before,
-    # when less of the night was in, is replaced; one typed by hand is not
-    # touched — Use, on Tonight, is the way to replace that on purpose
+    # the takings. Takings added from SambaPOS before, when less of the night
+    # was in, are replaced; takings typed by hand are not touched — Use, on
+    # Tonight, is the way to replace those on purpose
     takings = night["takings"]
-    pot = _drawer_pot(con, linked, pots)
-    sales = {"at": None, "what": "Takings", "kind": "daily_sales",
-             "detail": "Total sales of the day", "pot": pot, "amount": takings,
-             "ref": f"pos:sales:{on}:{takings}", "account": None,
-             "words": f"Sales, into {pot}"}
+    sales_lines = _takings(con, on, night, linked, pots)
+    refs = {l.get("ref") for l in sales_lines}
     other_sales = [b for b in books if b["kind"] == "daily_sales" and not b["voided_at"]
-                   and b["source_ref"] != sales["ref"]]
+                   and b["source_ref"] not in refs]
     typed_sales = [b for b in other_sales if b["source"] != "pos"]
-    if takings <= 0:
-        sales.update(status="skip", words="nothing was paid")
-    else:
-        sales["status"] = "new"
-        sales["replaces"] = sum(b["amount"] or 0 for b in other_sales)
-    lines.append(sales)
+    lines += sales_lines
 
     docs = db.all_(con, """
         SELECT d.* FROM pos_doc d JOIN pos_period p ON p.id = d.period_id
@@ -233,15 +284,16 @@ def plan(con, on):
                 l["status"] = "check"
                 l["note"] = ("entered by hand as " + ", ".join(f"{a:,}" for a in theirs)
                              + ": put one of them right")
-    if sales["status"] == "new" and typed_sales:
+    new_sales = [l for l in sales_lines if l["status"] == "new"]
+    if new_sales and typed_sales:
         hand_total = sum(b["amount"] or 0 for b in typed_sales)
-        sales.pop("replaces", None)
-        if hand_total == takings:
-            sales["status"] = "typed"
-        else:
-            sales["status"] = "check"
-            sales["note"] = (f"entered by hand as {hand_total:,}. To make SambaPOS's figure "
-                             "the sales, use it in step 1")
+        for l in new_sales:
+            l["status"] = "typed" if hand_total == takings else "check"
+        if hand_total != takings:
+            new_sales[0]["note"] = (f"entered by hand as {hand_total:,}. To make "
+                                    "SambaPOS's figure the sales, use it in step 1")
+    elif new_sales and other_sales:
+        new_sales[0]["replaces"] = sum(b["amount"] or 0 for b in other_sales)
     only_books = [{"id": b["id"], "kind": b["kind"], "label": _label(b["kind"]),
                    "detail": b["detail"], "amount": b["amount"]}
                   for group in hand.values() for b in group]
@@ -253,16 +305,22 @@ def plan(con, on):
 def add(con, p):
     """Post every line of a plan that is new. Call inside a transaction."""
     on, n = p["night"], 0
+    sales = [l for l in p["lines"] if l.get("kind") == "daily_sales"]
+    if any(l["status"] == "new" for l in sales):
+        # replace takings added from SambaPOS before, never ones typed by hand
+        # (the plan holds new takings back while there are any)
+        keep = {l["ref"] for l in sales if l["status"] == "added"}
+        for e in db.all_(con, "SELECT id, source_ref FROM entry WHERE happened_on = ? AND "
+                              "kind = 'daily_sales' AND source = 'pos' AND voided_at IS NULL",
+                         (on,)):
+            if e["source_ref"] not in keep:
+                post.void(con, e["id"], why="replaced by a fuller copy of the night")
     for line in p["lines"]:
         if line["status"] != "new":
             continue
         src = {"source": "pos", "source_ref": line["ref"]}
         kind, amount, pot, detail = line["kind"], line["amount"], line["pot"], line["detail"]
         if kind == "daily_sales":
-            # only ever replaces takings added from SambaPOS before (see plan)
-            for e in queries.entries(con, on=on, kind="daily_sales"):
-                if e["source"] == "pos":
-                    post.void(con, e["id"], why="replaced by a fuller copy of the night")
             post.sales(con, amount, on=on, into=pot, **src)
         elif kind == "daily_expense":
             post.daily_expense(con, amount, detail=detail, on=on, out_of=pot, **src)

@@ -558,6 +558,20 @@ def cash_counts(con):
             continue
         key = (count_id, r["account_id"])
         written[key] = written.get(key, 0) + r["amount"]
+    # what was moved out of the drawer after a count, leaving the float: it
+    # happened after the counting, so that night's count must not expect it
+    after = {}
+    for r in db.all_(con, """
+            SELECT e.source_ref, e.happened_on, p.account_id, p.amount FROM entry e
+              JOIN posting p ON p.entry_id = e.id
+             WHERE e.kind = 'transfer' AND e.voided_at IS NULL
+               AND e.source_ref LIKE 'count:%:rest'"""):
+        try:
+            count_id = int(r["source_ref"].split(":")[1])
+        except (IndexError, ValueError):
+            continue
+        key = (count_id, r["account_id"], r["happened_on"])
+        after[key] = after.get(key, 0) + r["amount"]
 
     out = []
     for c in db.all_(con, "SELECT * FROM cash_count ORDER BY counted_on"):
@@ -567,7 +581,8 @@ def cash_counts(con):
             "ORDER BY a.sort", (c["id"],))
         per_pot, counted, expected, found, left = [], 0, 0, 0, 0
         for line in lines:
-            now = balance(con, line["code"], as_of=c["counted_on"])
+            now = balance(con, line["code"], as_of=c["counted_on"]) \
+                - after.get((c["id"], line["account_id"], c["counted_on"]), 0)
             off = written.get((c["id"], line["account_id"]), 0)
             before = now - off                 # what the books said that night
             per_pot.append({"name": line["name"], "counted": line["counted"],

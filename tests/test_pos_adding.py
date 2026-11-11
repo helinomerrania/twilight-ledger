@@ -199,7 +199,9 @@ class AddingANight(unittest.TestCase):
     def test_a_fuller_copy_of_the_night_replaces_the_takings_added_before(self):
         self.link_all()
         self.add()
+        # a later copy of the night, with 3,000 more paid on it
         self.con.execute("UPDATE pos_period SET takings = 15000 WHERE night = ?", (NIGHT,))
+        self.con.execute("UPDATE pos_payment SET amount = amount + 3000")
         sales = self.plan()["lines"][0]
         self.assertEqual((sales["status"], sales["replaces"]), ("new", 12000))
         self.add()

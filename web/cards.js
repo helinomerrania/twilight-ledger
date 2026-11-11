@@ -77,19 +77,43 @@ export function closingUp() {
   const pots = d.pots.filter(p => p.active && (p.in_use || p.name in counted));
   const chips = kind === 'expense' ? names.slice(0, 12) : names;
 
+  // a blind count shows what was expected only once the count is saved
+  const dr = S.data.drawer || {};
+  const blind = dr.blind && !lastCount;
   const potCards = pots.map(p => {
     const got = counted[p.name];
     const diff = got === undefined ? null : got - p.balance;
+    const pos = p.name === dr.pot && dr.pos && !blind ? dr.pos : null;
     return `<div class="pot">
       <div class="nm">${esc(p.name)}</div>
-      <div class="bal">${money(p.balance)}</div>
-      <div class="sub">the books say</div>
+      ${blind ? '<div class="bal quiet">?</div><div class="sub">count it first</div>'
+        : `<div class="bal">${money(p.balance)}</div><div class="sub">the books say</div>`}
       <input type="number" step="${S.data.note}" min="0" placeholder="count it"
              data-pot="${esc(p.name)}" value="${got === undefined ? '' : got}" inputmode="numeric">
       ${diff === null ? '' : `<div class="sub ${cls(diff)}" style="margin-top:6px">
          ${diff === 0 ? 'ties exactly' : signed(diff)}</div>`}
+      ${pos ? `<div class="sub" style="margin-top:6px" title="What SambaPOS says went
+          into and out of its drawer this night">SambaPOS: cash ${money(pos.cash)}${pos.out
+          ? `, out ${money(pos.out)}` : ''}${pos.in ? `, in ${money(pos.in)}` : ''}${pos.expected
+          !== undefined ? `<br>with the float: ${money(pos.expected)}` : ''}</div>` : ''}
     </div>`;
   }).join('');
+  const sd = dr.sales_differ;
+  const hidden = sd && !blind
+    ? `<p class="note warnc">The books' sales this night are ${money(sd.books)}, but SambaPOS took
+         ${money(sd.pos)}. If the sales were worked out from the count, a
+         ${sd.gap > 0 ? 'shortage' : 'surplus'} of ${money(Math.abs(sd.gap))} is hidden in them.
+         Use SambaPOS's figure in step 1, and let the count show the difference.</p>` : '';
+  const there = counted[dr.pot];
+  const rest = there === undefined ? 0 : there - (dr.float || 0);
+  const move = !dr.float || !lastCount || there === undefined ? ''
+    : dr.moved ? `<p class="note">Moved ${money(dr.moved)} out of ${esc(dr.pot)} today.</p>`
+      : rest > 0 ? `<div class="row" style="margin-top:12px">
+          <span>Leave the float of ${money(dr.float)} in ${esc(dr.pot)} and move the rest,
+            <strong>${money(rest)}</strong>, to</span>
+          <select id="restTo" style="max-width:180px">${options(
+            S.data.pots.filter(p => p.active && p.name !== dr.pot).map(p => p.name), dr.rest_to)}</select>
+          <button class="btn" data-act="moveRest" data-amount="${rest}">Move it</button></div>` : '';
 
   return card(`
     <div class="cardhead">
@@ -135,15 +159,68 @@ export function closingUp() {
         <h3>Count the cash</h3>
         <p>Count each place the money sits. A difference then tells you which
            pot it is in, instead of just that there is one.</p>
+        ${blind ? '<p class="note">Counting blind: what the books expect shows once the count is saved.</p>' : ''}
         <div class="potgrid">${potCards || empty('No pots in use.')}</div>
+        ${hidden}
         <div class="row" style="margin-top:12px">
           <select id="nReason" style="max-width:260px">
             <option value="">no reason needed</option>
             ${options(S.data.lists.reason, lastCount ? lastCount.reason : '')}</select>
           <button class="btn primary" data-act="saveCount">
             ${lastCount ? 'Update count' : 'Save count'}</button>
-        </div></div></div>
+        </div>${move}</div></div>
     </div>`);
+}
+
+/** How the cash is counted: the float, a blind count, where the rest goes. */
+export function cashCountingCard() {
+  const c = S.data.drawer || {};
+  const pots = S.data.pots.filter(p => p.active).map(p => p.name);
+  return card(`<h2>Counting the cash</h2>
+    <p class="sub">A float is left in the drawer at the end of each night, in small notes, so
+      there is change from the first sale. After the count, Tonight offers to move everything
+      above it out of ${esc(c.pot || 'the drawer')} in one click.</p>
+    <div class="grid-form">
+      ${field('Float left in the drawer (0 for none)', save('cash_settings', {}, 'float', c.float || 0,
+        `type="number" min="0" step="${S.data.note}" inputmode="numeric"`))}
+      ${field('The rest usually goes to', `<select data-save="cash_settings" data-args="${args({})}"
+        data-field="rest_to">${options([{ value: '', label: 'choose each time' }, ...pots],
+          c.rest_to || '')}</select>`)}
+      ${field('While counting', `<select data-save="cash_settings" data-args="${args({})}"
+        data-field="blind">${options([{ value: '0', label: 'show what the books expect' },
+          { value: '1', label: 'count blind: show it once the count is saved' }],
+          c.blind ? '1' : '0')}</select>`)}
+    </div>
+    <p class="note">A blind count is a well-known control: whoever counts types what they find
+      before seeing what was expected, so nobody can count towards the answer.</p>`);
+}
+
+/** Each count's difference over the month, and who opened SambaPOS those nights. */
+export function cashDifferences() {
+  const d = S.data.differences;
+  if (!d || !d.rows.length) return '';
+  const max = Math.max(...d.rows.map(r => Math.abs(r.found)), 1);
+  const bars = d.rows.map(r => {
+    const h = Math.round(Math.abs(r.found) / max * 44);
+    return `<div class="dday" title="${esc(r.on)}: ${r.found ? signed(r.found) : 'ties'}${
+        r.opened_by ? ` · opened by ${esc(r.opened_by)}` : ''}">
+      <span class="up">${r.found > 0 ? `<span class="good" style="height:${h}px"></span>` : ''}</span>
+      <span class="down">${r.found < 0 ? `<span class="bad" style="height:${h}px"></span>` : ''}</span>
+      <span class="quiet">${Number(r.on.slice(8))}</span></div>`;
+  }).join('');
+  const known = d.by_who.filter(g => g.who !== 'not known');
+  const who = known.length ? table('<th>Opened SambaPOS</th><th class="num">Nights</th><th class="num">Short</th><th class="num">Over</th><th class="num">Net</th>',
+    d.by_who.map(g => `<tr><td><bdi>${esc(g.who)}</bdi></td><td class="num">${g.nights}</td>
+      <td class="num">${g.short || ''}</td><td class="num">${g.over || ''}</td>
+      <td class="num ${cls(g.net)}">${g.net ? signed(g.net) : '0'}</td></tr>`).join('')) : '';
+  return card(`<h2>Cash differences</h2>
+    <p class="sub">What each night's count added to the difference with the books. A shortage
+      nobody explained counts on the night it appeared, not again every night after. Small ups
+      and downs are normal; a steady shortage on certain nights or shifts is not.</p>
+    <div class="ddays">${bars}</div>
+    <p class="note">${d.rows.length} count${d.rows.length === 1 ? '' : 's'}: ${money(-d.short)} short,
+      ${money(d.over)} over, ${d.net ? signed(d.net) : 'nothing'} in all. A difference written off
+      becomes a cost of its month.</p>${who}`);
 }
 
 const hhmm = t => String(t || '').slice(11, 16);

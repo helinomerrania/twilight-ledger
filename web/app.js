@@ -41,7 +41,8 @@ const VIEWS = {
 
   month: () => C.periodPicker() + C.monthFigures() + C.soFarCard() + C.resultCard()
              + C.settleCard() + C.electricityCard() + C.payrollCard() + C.partnersCard()
-             + C.suppliersCard() + C.moneyFlow() + C.salesByDay() + C.monthSold() + C.allChecks()
+             + C.suppliersCard() + C.moneyFlow() + C.salesByDay() + C.cashDifferences()
+             + C.monthSold() + C.allChecks()
              + C.closeCard() + C.everyMonth(),
 
   books: () => C.newEntryCard() + C.entryList() + C.recentChanges()
@@ -52,7 +53,7 @@ const VIEWS = {
     + C.editAccounts('supplier', 'Suppliers', 'A positive balance is what you owe them.')
     + C.editAccounts('partner', 'Partners', 'Shares decide how a closed month’s profit is split.')
     + C.editAccounts('cash', 'Cash pots', 'Where the business keeps its money. The first one is the main pot, used unless another is picked.')
-    + C.floatsCard()
+    + C.floatsCard() + C.cashCountingCard()
     + C.editFixed() + C.editElecFactors()
     + section('Stock', 'What is counted and what it is worth')
     + C.editItems() + C.editTares() + C.editConversions()
@@ -672,6 +673,15 @@ const H = {
     }
   },
   async posFolder(el) { await keepPos(el, 'pos_folder'); },
+
+  async moveRest(el) {
+    const to = document.getElementById('restTo').value;
+    const dr = S.data.drawer;
+    if (!to) return say('Pick where the rest goes.', true);
+    const out = await act(() => sendGuarded('move_rest', {
+      amount: Number(el.dataset.amount), to, on: S.on }));
+    if (out) say(`Moved ${money(Number(el.dataset.amount))} to ${to}.`);
+  },
 
   async posAddNight(el) {
     el.disabled = true;

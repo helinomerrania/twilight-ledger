@@ -11,13 +11,13 @@ what registers their actions.
 """
 import json
 
-from . import (accruals, actions, backup, checks as _checks, db, kinds, money,
+from . import (accruals, actions, backup, cash, checks as _checks, db, kinds, money,
                post, queries, setup, update)
 from .dates import month_of, today
 from .pos import actions as pos
 from .registry import ACTIONS, ApiError, run            # noqa: F401  (re-exported)
 
-assert actions and setup and pos                         # imported to register
+assert actions and setup and pos and cash                # imported to register
 
 
 def bootstrap(con):
@@ -90,6 +90,8 @@ def state(con, *, month=None, on=None, count_date=None):
         "flow": queries.money_flow(con, month),
         "sales_by_day": queries.sales_by_day(con, month),
         "counts": queries.cash_counts(con)[-30:],
+        "drawer": cash.drawer(con, on),
+        "differences": cash.differences(con, month),
         "summary": queries.summary(con),
         "stock": stock_view(con, month, count_date),
         "checks": _checks.checks(con, month),

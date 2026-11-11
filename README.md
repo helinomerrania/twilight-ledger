@@ -82,6 +82,13 @@ shows each night as the entries it becomes, and **Add the night** puts them all
 in the books at once. Anything already typed by hand is recognised and not
 added twice.
 
+The count on Tonight sets the cash beside what SambaPOS says went in and out
+of the drawer, and says when the night's sales are not SambaPOS's, because a
+sales figure worked out from the count hides a shortage. Setup → Counting the
+cash sets a float to leave in the drawer (the rest is moved out in one click
+after the count) and can make counts blind. Month shows each night's
+difference over the month, and by who opened SambaPOS.
+
 On the PC SambaPOS runs on, its database can also be read directly — double-
 click **Save tonight from SambaPOS.bat**, or *Read SambaPOS now* in Setup — to
 see tonight before the reset. That uses Windows' own login, so no password is
@@ -122,7 +129,7 @@ both at once. Nothing has to be back-dated to make a month come out right.
 python -m unittest discover -s tests -t .
 ```
 
-271 tests, no dependencies. They run against real SQLite with the real
+292 tests, no dependencies. They run against real SQLite with the real
 migrations, because the schema's constraints are part of what is being tested.
 
 The tests in `tests/test_real_books.py` check the import against the actual
