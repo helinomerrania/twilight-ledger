@@ -652,9 +652,11 @@ item is here, and how many of SambaPOS's units make one of ours (worked out
 when it can be: 1000 grams to a kilo, the package's pieces to a package).
 **Grams in a head**, if set, replaces what each recipe says for tobacco. Each
 order now keeps its menu item number and whether it took stock — SambaPOS
-says so: a gift does, a void does not; nights kept before this count what
-was charged. The card shows what the last night kept took, and lists the
-menu items with no recipe in SambaPOS. Stock comes off the shelves in 3.6.
+says so: a gift does, a void does not. From 2026.11.11.18 the backups in
+the folder are read once more, so nights kept before learn it too; any
+SambaPOS no longer has count what was charged. The card shows what the last
+night kept took, and lists the menu items with no recipe in SambaPOS. Stock
+comes off the shelves in 3.6.
 
 ### 3.6 Expected stock and the gap at each count ○
 

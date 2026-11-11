@@ -30,8 +30,9 @@ GAP = 15                         # at least this many seconds between two looks
 # Raised whenever reading a backup starts keeping something it did not keep
 # before. Books read at a lower number read every backup in the folder once
 # more, so nights kept earlier get it too (1: SambaPOS's accounts, 2: who
-# opened and closed, payment types, the menu, recipes).
-READS = 2
+# opened and closed, payment types, the menu, recipes, 3: which menu item
+# each order was and whether it took stock).
+READS = 3
 _lock = threading.Lock()         # one reader at a time, whoever asked
 _wake = threading.Event()        # look now (a screen opened, or a folder was set)
 _now = threading.Event()         # ... without waiting out the gap
