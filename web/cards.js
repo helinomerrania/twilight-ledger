@@ -849,8 +849,8 @@ export function countSheet() {
 }
 
 /* What should be on the shelf, from the count before: receipts in, buckets
-   filled, and what SambaPOS's recipes say the nights sold; and the gap at
-   this count. */
+   filled, and what the nights sold by what each menu item takes; and the gap
+   at this count. */
 export function expectedCard() {
   const v = S.data.stock.expected;
   if (!v) return '';
@@ -894,16 +894,15 @@ export function expectedCard() {
       : 'Everything counted is where it should be.')
     : `There is no count on ${esc(v.to)}, so this is what should be on the shelf now.`;
   const caveats = [
-    v.no_recipe.length ? `${v.no_recipe.length} menu item${v.no_recipe.length === 1 ? '' : 's'} sold
-      ${v.no_recipe.length === 1 ? 'has' : 'have'} no recipe in SambaPOS and took nothing:
-      ${v.no_recipe.map(n => `<bdi>${esc(n)}</bdi>`).join(', ')}.` : '',
-    v.not_linked.length ? `${v.not_linked.length} of SambaPOS’s inventory items sold
-      ${v.not_linked.length === 1 ? 'is' : 'are'} not linked to stock here (Setup → What
-      SambaPOS’s recipes take): ${v.not_linked.map(n => `<bdi>${esc(n)}</bdi>`).join(', ')}.` : '',
+    v.not_set.length ? `${v.not_set.length} menu item${v.not_set.length === 1 ? '' : 's'} sold
+      ${v.not_set.length === 1 ? 'is' : 'are'} not yet set to take anything (Setup → What each menu
+      item takes), so took nothing: ${v.not_set.map(n => `<bdi>${esc(n)}</bdi>`).join(', ')}.` : '',
+    v.heads_unknown ? `${+v.heads_unknown.toFixed(1)} heads were sold while the grams in a head
+      are not set (Setup → What each menu item takes), so no tobacco came off for them.` : '',
   ].filter(Boolean);
   return card(`<h2>What should be on the shelf</h2>
     <p class="sub">From the count on ${esc(v.from)}: what receipts brought in, what went into
-      and out of buckets, and what SambaPOS’s recipes say the nights sold, up to ${esc(v.to)}.
+      and out of buckets, and what the nights sold, up to ${esc(v.to)}.
       <strong>${says}</strong></p>
     ${off.length ? table(head, grouped(off)) : ''}
     <details class="fold"><summary>Every item (${v.rows.length})</summary>
@@ -939,8 +938,8 @@ export function ratiosCard() {
       each one — a roll, a carton, whatever the count sheet counts it in. It needs two counts in
       a row that both counted it; then what should be on the shelf takes off what each night
       roughly used.${r.a_night ? ` Lately about ${fmt(r.a_night)} hookahs a night.` : ''}</p>
-    ${r.hookahs_known ? '' : `<p class="note warnc">Link SambaPOS’s tobacco first (Setup → What
-      SambaPOS’s recipes take), so the hookahs can be counted.</p>`}
+    ${r.hookahs_known ? '' : `<p class="note warnc">Give the hookahs on the menu their tobacco
+      first (Setup → What each menu item takes), so they can be counted.</p>`}
     ${rows ? table(`<th>Item</th><th class="num">Hookahs to each</th><th class="num">Used a night</th>
       <th>Count by count</th><th></th>`, rows) : ''}
     ${candidates.length ? `<div class="row addrow">
@@ -1514,8 +1513,8 @@ export function monthMakes() {
   const unknown = moved.filter(i => i.makes === null || i.makes === undefined);
   if (!known.length) {
     return card(`<h2>What each item made</h2>
-      <p class="sub">Once SambaPOS’s inventory items are linked to stock here (Setup → What
-        SambaPOS’s recipes take), every item sold shows what it cost to make and what it made.</p>`);
+      <p class="sub">Once the menu items are given what they take (Setup → What each menu item
+        takes), every item sold shows what it cost to make and what it made.</p>`);
   }
   const qty = q => (Number.isInteger(q) ? String(q) : q.toFixed(2).replace(/\.?0+$/, ''));
   const name = i => `<bdi>${esc(i.item)}</bdi>${i.portion ? ` <span class="quiet"><bdi>${esc(i.portion)}</bdi></span>` : ''}`;
@@ -1538,8 +1537,8 @@ export function monthMakes() {
     ${known.length > 10 ? `<details class="fold"><summary>${known.length - 10} more</summary>
       ${table(head, known.slice(10).map(row).join(''))}</details>` : ''}
     ${unknown.length ? `<details class="fold"><summary>${unknown.length} item${unknown.length === 1 ? '' : 's'}
-      with no cost yet</summary><p class="note">No recipe in SambaPOS, or what the recipe takes is
-      not linked to priced stock here.</p><ul class="note">${unknown.map(i => `<li>${name(i)}</li>`).join('')}</ul></details>` : ''}`);
+      with no cost yet</summary><p class="note">Not yet given what it takes, or what it takes has
+      no price, or the grams in a head are not set (Setup → What each menu item takes).</p><ul class="note">${unknown.map(i => `<li>${name(i)}</li>`).join('')}</ul></details>` : ''}`);
 }
 
 export function monthSold() {
@@ -1566,8 +1565,7 @@ export function monthSold() {
 /** What else is kept from SambaPOS, for later steps: its own lists. */
 function keptLists(c) {
   if (!c) return '';
-  const bits = [['menu_item', 'menu item'], ['menu_price', 'price'], ['recipe', 'recipe'],
-                ['inventory_item', 'inventory item'], ['payment_type', 'payment type']]
+  const bits = [['menu_item', 'menu item'], ['menu_price', 'price'], ['payment_type', 'payment type']]
     .filter(([k]) => c[k]).map(([k, w]) => `${c[k]} ${w}${c[k] === 1 ? '' : 's'}`);
   return bits.length ? `Also kept, as SambaPOS has them now: ${bits.join(', ')}.` : '';
 }
@@ -1729,34 +1727,43 @@ export function nightDrawer() {
 
 /** The menu as SambaPOS has it: names and prices are set there, where the
     customer is charged, and only read here. */
-/* SambaPOS's recipes say what each menu item takes from its own inventory
-   items; this says which stock item each of those is here, once. */
-export function sambaposStock() {
-  const r = S.data.pos && S.data.pos.recipes;
-  if (!r || !r.inventory.length) return '';
+/* What each menu item takes off the shelves, set here once: a hookah a head
+   from its bucket, a drink one of itself. */
+export function menuUses() {
+  const u = S.data.pos && S.data.pos.uses;
+  if (!u || !u.menu.length) return '';
   const all = S.data.setup.items;
   const byId = Object.fromEntries(all.map(i => [i.id, i]));
-  const pick = chosen => `<option value="">— not here</option>`
+  const pick = r => `<option value=""${r.set ? '' : ' selected'}>— not set yet</option>
+      <option value="0"${r.set && !r.item_id ? ' selected' : ''}>takes nothing</option>`
     + S.data.setup.categories.map(c => {
-      const list = all.filter(i => i.letter === c.letter && (i.active || i.id === chosen));
+      const list = all.filter(i => i.letter === c.letter && (i.active || i.id === r.item_id));
       return list.length ? `<optgroup label="${esc(c.name)}">${options(
-        list.map(i => ({ value: i.id, label: i.name })), chosen)}</optgroup>` : '';
+        list.map(i => ({ value: i.id, label: i.name })), r.item_id)}</optgroup>` : '';
     }).join('');
-  const ours = it => (['A', 'B'].includes(it.letter) ? 'kilo' : it.letter === 'E' ? 'carton'
-    : (it.pack_size || 1) > 1 ? `package of ${it.pack_size}` : 'piece');
-  const rows = r.inventory.map(x => {
-    const it = byId[x.item_id];
+  const row = r => {
+    const it = byId[r.item_id];
+    const [one, many] = r.unit || ['', ''];
     return `<tr>
-      <td><bdi>${esc(x.name)}</bdi><br><span class="quiet"><bdi>${esc(x.unit)}</bdi>${x.group
-        ? ` · <bdi>${esc(x.group)}</bdi>` : ''}${x.recipes ? ` · in ${x.recipes} recipe${x.recipes === 1 ? '' : 's'}` : ''}</span></td>
-      <td><select data-save="pos_stock_link" data-args="${args({ pos_id: x.pos_id })}" data-field="item_id"
-          style="min-width:200px">${pick(x.item_id)}</select></td>
-      <td class="num">${it ? save('pos_stock_link', { pos_id: x.pos_id }, 'per', x.per ?? '',
-        `type="number" min="1" inputmode="numeric" placeholder="${x.per_default ?? 'how many?'}"
-         style="max-width:100px"`) : ''}</td>
-      <td class="quiet">${it ? `<bdi>${esc(x.unit)}</bdi> make one ${esc(ours(it))}${!x.per && !x.per_default
-        ? ' <span class="warnc">— say how many</span>' : ''}` : ''}</td>
+      <td><bdi>${esc(r.name)}</bdi></td>
+      <td><select data-save="menu_use" data-args="${args({ menu_id: r.menu_id })}" data-field="item_id"
+          style="min-width:220px">${pick(r)}</select></td>
+      <td class="num">${it ? save('menu_use', { menu_id: r.menu_id }, 'amount', r.amount,
+        'type="number" min="0" step="0.5" inputmode="decimal" style="max-width:80px"') : ''}</td>
+      <td class="quiet">${it ? esc(r.amount === 1 ? one : many) : ''}</td>
     </tr>`;
+  };
+  const groups = new Map();
+  u.menu.forEach(r => {
+    if (!groups.has(r.group)) groups.set(r.group, []);
+    groups.get(r.group).push(r);
+  });
+  const blocks = [...groups.entries()].map(([g, list]) => {
+    const unset = list.filter(r => !r.set).length;
+    return `<details class="fold"${unset ? ' open' : ''}><summary><bdi>${esc(g || 'No group')}</bdi>
+        <span class="quiet">${list.length - unset} of ${list.length} set</span></summary>
+      ${table('<th>Menu item</th><th>Takes</th><th class="num">How much</th><th></th>',
+        list.map(row).join(''))}</details>`;
   }).join('');
   const amount = t => {
     const it = byId[t.item];
@@ -1767,25 +1774,18 @@ export function sambaposStock() {
     }
     return `${+t.qty.toFixed(2)} ${t.letter === 'E' ? 'cartons' : 'packages'}`;
   };
-  const linked = r.inventory.filter(x => x.item_id).length;
-  return card(`<h2>What SambaPOS’s recipes take</h2>
-    <p class="sub">SambaPOS’s recipes say what each menu item takes from its own inventory
-      items. Say which stock item each one is here, once, and every night kept takes what was
-      sold off the shelves: a gift takes stock, a void does not. ${linked} of ${r.inventory.length}
-      are linked.</p>
+  return card(`<h2>What each menu item takes</h2>
+    <p class="sub">For each item on SambaPOS’s menu, the stock it takes from and how much: a
+      hookah takes a head from its bucket, a can of drink takes one can. Set it once, and every
+      night kept takes what was sold off the shelves — a gift takes stock, a void does not.
+      ${u.set} of ${u.menu.length} are set.</p>
     <div class="grid-form" style="max-width:420px">
       ${field('Grams in a head, the same for every flavour', save('head_grams', {}, 'grams',
-        r.head_grams ?? '', 'type="number" min="1" inputmode="numeric" placeholder="as each SambaPOS recipe says"'))}
+        u.head_grams ?? '', 'type="number" min="1" inputmode="numeric"'))}
     </div>
-    ${r.took.length ? `<p class="note">The night of ${esc(r.last_night)} took ${r.took.map(t =>
+    ${u.took.length ? `<p class="note">The night of ${esc(u.last_night)} took ${u.took.map(t =>
       `${esc(amount(t))} of <bdi>${esc(t.name)}</bdi>`).join(', ')}.</p>` : ''}
-    <details class="fold"${linked ? '' : ' open'}><summary>SambaPOS’s inventory items
-      (${linked} of ${r.inventory.length} linked)</summary>
-      ${table(`<th>In SambaPOS</th><th>Here</th><th class="num">How many</th><th></th>`, rows)}</details>
-    ${r.no_recipe.length ? `<details class="fold"><summary>Menu items with no recipe in SambaPOS
-        (${r.no_recipe.length})</summary><p class="note">They take nothing off the shelves until
-        SambaPOS has a recipe for them.</p><ul class="note">${r.no_recipe.map(n =>
-        `<li><bdi>${esc(n)}</bdi></li>`).join('')}</ul></details>` : ''}`);
+    ${blocks}`);
 }
 
 export function sambaposMenu() {
@@ -1812,8 +1812,8 @@ export function sambaposMenu() {
   return card(`<h2>The menu, as SambaPOS has it</h2>
     <p class="sub">${m.items} items in ${m.groups.length} groups. Names and prices are set in
       SambaPOS, where the customer is charged; the app reads them each time SambaPOS is read,
-      ready for the TV and the QR menu later. What each costs to make comes from SambaPOS’s
-      recipes and the stock’s prices, once the stock is linked below.</p>${odd}${groups}`);
+      ready for the TV and the QR menu later. What each costs to make is what it takes (Setup →
+      What each menu item takes) at the stock’s prices.</p>${odd}${groups}`);
 }
 
 /** Every SambaPOS account money moves through, and what it is in the books. */

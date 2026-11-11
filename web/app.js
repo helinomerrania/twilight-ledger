@@ -57,13 +57,13 @@ const VIEWS = {
     + C.floatsCard() + C.cashCountingCard()
     + C.editFixed() + C.editElecFactors()
     + section('Stock', 'What is counted and what it is worth')
-    + C.editItems() + C.editTares() + C.editConversions()
+    + C.editItems() + C.menuUses() + C.editTares() + C.editConversions()
     + section('Lists', 'What the pickers offer')
     + C.editList('expense', 'Daily expenses', 'The first twelve show as buttons on Tonight.')
     + C.editList('income', 'Other income', '')
     + C.editList('reason', 'Reasons for a cash difference', '')
     + section('SambaPOS', 'Keeping each night before the reset deletes it')
-    + C.sambaposCard() + C.sambaposAccounts() + C.sambaposMenu() + C.sambaposStock()
+    + C.sambaposCard() + C.sambaposAccounts() + C.sambaposMenu()
     + section('This app', 'The business, the backups, and updates')
     + C.businessCard() + C.backupCard() + C.updateCard(),
 };

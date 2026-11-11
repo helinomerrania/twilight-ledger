@@ -6,7 +6,7 @@ from ledger import api, db, expected
 from ledger.pos import archive
 from tests.helpers import fresh_books
 from tests.test_pos import night_of_ten
-from tests.test_recipes import with_recipes
+from tests.test_menu_use import takes, with_menu
 
 ON = "2026-11-11"
 
@@ -19,8 +19,9 @@ class Low(unittest.TestCase):
         api.run(self.con, "count_line", {"on": "2026-11-08", "item": self.mix,
                                          "gross_grams": "1500"})
         with db.tx(self.con):
-            archive.keep(self.con, with_recipes(night_of_ten()))     # 2 heads of 25 g
-        api.run(self.con, "pos_stock_link", {"pos_id": 1, "item_id": self.mix})
+            archive.keep(self.con, with_menu(night_of_ten()))        # 2 heads of 25 g
+        takes(self.con, 7, self.mix)
+        api.run(self.con, "head_grams", {"grams": "25"})
 
     def minimum(self, kilos):
         api.run(self.con, "item_update", {"id": self.mix, "minimum": kilos})
@@ -40,7 +41,7 @@ class Low(unittest.TestCase):
         self.assertEqual(expected.said(r), "Apple Mix: 1.45 kg left, about 29 nights")
 
     def test_a_pace_nobody_knows_says_no_nights(self):
-        api.run(self.con, "pos_stock_link", {"pos_id": 1, "item_id": ""})
+        takes(self.con, 7, "")
         self.minimum("2")
         [r] = expected.low(self.con, ON)
         self.assertIsNone(r["nights"])

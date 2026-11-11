@@ -3,7 +3,7 @@
     should be = the count before  + what receipts brought in
                                    + what went into a bucket (a mix)
                                    - what went out of its packs into a bucket
-                                   - what the nights sold, by SambaPOS's recipes
+                                   - what the nights sold, by what each menu item takes
 
 Everything dated on or before a count is taken to be in it: a count dated the
 31st is the shelf after the night of the 31st. So the movements counted are
@@ -25,7 +25,7 @@ from fractions import Fraction
 from . import db, ratios
 from .dates import today
 from .money import half_up
-from .pos import recipes
+from .pos import uses
 from .registry import ApiError, action
 
 SCALES = Fraction(5, 1000)          # kg: what weighing the same bucket twice can differ by
@@ -73,13 +73,13 @@ def movements(con, after, upto):
              WHERE f.voided_at IS NULL AND f.filled_on > ? AND f.filled_on <= ?
              GROUP BY l.item_id""", (after, upto)):
         add(r["item_id"], "filled_out", Fraction(r["g"], 1000))
-    used, no_recipe, not_linked = recipes.usage(con, _day_after(after), upto)
+    used, not_set, heads_unknown = uses.usage(con, _day_after(after), upto)
     for item, q in used.items():
         add(item, "sold", q)
     # foil, coal and the like: the hookahs sold, by the ratio learnt before
     for item, q in ratios.used(con, after, upto).items():
         add(item, "sold", q)
-    return out, no_recipe, not_linked
+    return out, not_set, heads_unknown
 
 
 def drying(con):
@@ -97,7 +97,7 @@ def view(con, count_date=None):
     here = db.one(con, "SELECT * FROM stock_count WHERE count_date = ?", (upto,))
     counted = _lines(con, here["id"]) if here else {}
     was = _lines(con, base["id"])
-    mov, no_recipe, not_linked = movements(con, base["count_date"], upto)
+    mov, not_set, heads_unknown = movements(con, base["count_date"], upto)
     items = {r["id"]: dict(r) for r in db.all_(con, """
         SELECT si.*, sc.letter FROM stock_item si JOIN stock_category sc ON sc.id = si.category_id""")}
     allow = drying(con)
@@ -134,8 +134,8 @@ def view(con, count_date=None):
     return {"from": base["count_date"], "to": upto, "counted": bool(here and counted),
             "rows": rows, "short": sum(r["worth"] for r in gaps if r["worth"] < 0),
             "over": sum(r["worth"] for r in gaps if r["worth"] > 0), "flagged": len(gaps),
-            "drying": float(allow), "no_recipe": sorted(no_recipe),
-            "not_linked": sorted(not_linked)}
+            "drying": float(allow), "not_set": sorted(not_set),
+            "heads_unknown": float(heads_unknown)}
 
 
 NIGHTS = 30                 # the pace of use is taken over this many days

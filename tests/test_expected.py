@@ -6,7 +6,7 @@ from ledger import api, db, expected
 from ledger.pos import archive
 from tests.helpers import SUPPLIERS, fresh_books
 from tests.test_pos import night_of_ten
-from tests.test_recipes import with_recipes
+from tests.test_menu_use import takes, with_menu
 
 BEFORE, AFTER = "2026-11-08", "2026-11-11"
 
@@ -32,8 +32,9 @@ class ShouldBe(unittest.TestCase):
             "mix": self.mix, "on": "2026-11-09", "lines": [{"item": self.leaf, "packs": "8"}]})["id"]
         # the night of the 10th sells two apple hookahs at 25 g a head
         with db.tx(self.con):
-            archive.keep(self.con, with_recipes(night_of_ten()))
-        api.run(self.con, "pos_stock_link", {"pos_id": 1, "item_id": self.mix})
+            archive.keep(self.con, with_menu(night_of_ten()))
+        takes(self.con, 7, self.mix)
+        api.run(self.con, "head_grams", {"grams": "25"})
 
     def item(self, name, letter, price, **more):
         return api.run(self.con, "item_add", {"name": name, "letter": letter,
@@ -115,9 +116,13 @@ class ShouldBe(unittest.TestCase):
         self.assertEqual((v["from"], v["to"]), (BEFORE, AFTER))
 
     def test_what_sales_could_not_take_is_said(self):
-        api.run(self.con, "pos_stock_link", {"pos_id": 1, "item_id": ""})
-        v = expected.view(self.con, AFTER)
-        self.assertEqual(v["not_linked"], ["Apple tobacco", "Sugar", "Tea bag"])
+        self.assertEqual(expected.view(self.con, AFTER)["not_set"], ["Tea"])
+        takes(self.con, 7, "")
+        self.assertEqual(expected.view(self.con, AFTER)["not_set"], ["Apple", "Tea"])
+
+    def test_heads_with_no_grams_are_said(self):
+        api.run(self.con, "head_grams", {"grams": ""})
+        self.assertEqual(expected.view(self.con, AFTER)["heads_unknown"], 2)
 
 
 if __name__ == "__main__":

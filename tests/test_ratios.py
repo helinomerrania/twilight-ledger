@@ -9,8 +9,7 @@ from tests.helpers import SUPPLIERS, fresh_books
 
 
 def night(day, hookahs, n):
-    """A night that sold `hookahs` apple hookahs, with SambaPOS's recipe for
-    one: 25 g of apple tobacco."""
+    """A night that sold `hookahs` apple hookahs."""
     nxt = (date.fromisoformat(day) + timedelta(days=1)).isoformat()
     pay = str(5000 * hookahs)
     raw = {
@@ -27,9 +26,6 @@ def night(day, hookahs, n):
                       "Date": f"{day}T23:30:00", "Amount": pay}],
         "MenuItems": [{"Id": 7, "Name": "Apple", "GroupCode": "Hookah"}],
         "MenuItemPortions": [{"Id": 70, "MenuItemId": 7, "Name": "Normal"}],
-        "InventoryItems": [{"Id": 1, "Name": "Apple tobacco", "BaseUnit": "g"}],
-        "Recipes": [{"Id": 1, "Name": "Apple", "PortionId": 70}],
-        "RecipeItems": [{"Id": 1, "RecipeId": 1, "InventoryItem_Id": 1, "Quantity": "25"}],
     }
     return {"source": f"backup:{day}.zip", "tables": sources.normalise(raw)}
 
@@ -45,7 +41,7 @@ class Ratios(unittest.TestCase):
                                          ("2026-11-08", 60))):
             with db.tx(self.con):
                 archive.keep(self.con, night(day, sold, n))
-        api.run(self.con, "pos_stock_link", {"pos_id": 1, "item_id": self.mix})
+        api.run(self.con, "menu_use", {"menu_id": 7, "item_id": self.mix})
         self.count("2026-11-01", "10")
         self.count("2026-11-04", "8")             # 2 rolls for 100 hookahs
         r = api.run(self.con, "receipt", {"amount": 60000, "on": "2026-11-05",
@@ -88,8 +84,8 @@ class Ratios(unittest.TestCase):
         self.assertAlmostEqual(r["sold"], 1.2)         # 60 hookahs at 50 to a roll
         self.assertAlmostEqual(r["gap"], -0.8)
 
-    def test_nothing_is_known_without_tobacco_linked(self):
-        api.run(self.con, "pos_stock_link", {"pos_id": 1, "item_id": ""})
+    def test_nothing_is_known_until_a_hookah_takes_tobacco(self):
+        api.run(self.con, "menu_use", {"menu_id": 7, "item_id": ""})
         v = ratios.view(self.con)
         self.assertFalse(v["hookahs_known"])
         self.assertIsNone(self.foil_view()["ratio"])

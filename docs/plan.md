@@ -30,7 +30,7 @@ step.
 | ✅ | 3.2 Receipts with lines (2026.11.11.14) | — |
 | ✅ | 3.3 Barcode scanner everywhere (2026.11.11.15) | — |
 | ✅ | 3.4 Filling a bucket (mixes) (2026.11.11.16) | — |
-| ✅ | 3.5 Recipes: what each menu item uses (2026.11.11.17) | — |
+| ✅ | 3.5 Recipes: what each menu item uses (2026.11.11.23) | — |
 | ✅ | 3.6 Expected stock and the gap at each count (2026.11.11.19) | — |
 | ✅ | 3.7 Ratio items: foil, coal, filters, cups (2026.11.11.20) | — |
 | ✅ | 3.8 Shortage warnings (2026.11.11.21) | — |
@@ -370,9 +370,9 @@ Learned from the real backups:
   is made just before the reset, while the period is still open, and each
   backup holds only the current period. Who opened it is there. For 2.5,
   who closed has to come from a live read after closing, or be asked for.
-- SambaPOS already has inventory items and recipes set up (one recipe per
-  menu portion), but no inventory transactions and no end-of-day counts are
-  entered in it. 3.5 can start from those recipes rather than from nothing.
+- SambaPOS has inventory items and recipes in it, but they are test data
+  from trying SambaPOS out, not real, and nothing uses them. Nothing here
+  reads them (see 3.5).
 - One payment type is in use: cash.
 
 ### 1.5 First live read on the PC ○ (optional now)
@@ -643,20 +643,21 @@ off automatically. Items with no recipe are listed until they have one.
 A head takes the same grams whatever the flavour, so that is one setting; it
 is filled by hand, so it is an average, and 3.6 allows for that.
 
-As built (2026.11.11.17): the recipes are SambaPOS's own. SambaPOS already
-has one for most menu items, each naming its own inventory items (so many
-grams of a tobacco, one of a drink), and they come in with every reading.
-So recipes stay in SambaPOS, where the menu is, and Setup → **What
-SambaPOS's recipes take** says once which stock item each SambaPOS inventory
-item is here, and how many of SambaPOS's units make one of ours (worked out
-when it can be: 1000 grams to a kilo, the package's pieces to a package).
-**Grams in a head**, if set, replaces what each recipe says for tobacco. Each
-order now keeps its menu item number and whether it took stock — SambaPOS
-says so: a gift does, a void does not. From 2026.11.11.18 the backups in
-the folder are read once more, so nights kept before learn it too; any
-SambaPOS no longer has count what was charged. The card shows what the last
-night kept took, and lists the menu items with no recipe in SambaPOS. Stock
-comes off the shelves in 3.6.
+As built (2026.11.11.23): Setup → **What each menu item takes** lists every
+item on SambaPOS's menu, group by group. Each is given the one stock item it
+takes from — a hookah its bucket, a drink itself — and how much: heads of
+tobacco, buckets of ice cream, pieces of everything else. One can also take
+nothing, and one not set yet is listed until it is. **Grams in a head** is one
+number for every flavour, typed by Mohammed; until it is, the heads sold are
+counted and said, but take no tobacco. Each order keeps its menu item number
+and whether it took stock — SambaPOS says so: a gift does, a void does not;
+from 2026.11.11.18 the backups in the folder are read once more so older
+nights learn it too, and any SambaPOS no longer has count what was charged.
+The card shows what the last night kept took.
+
+(2026.11.11.17 to .22 read SambaPOS's own recipes instead. They turned out to
+be test data, never real, so .23 dropped them and the link to SambaPOS's
+inventory items that went with them.)
 
 ### 3.6 Expected stock and the gap at each count ✅
 
@@ -676,14 +677,14 @@ Count the expensive things (tobacco) weekly and cheap things monthly.
 As built (2026.11.11.19), on Stock → **What should be on the shelf**, under
 the count sheet: for the count on screen (or today, with none), every item
 from the count before it — what was there, what receipts brought in, what
-went into or out of buckets, what SambaPOS's recipes say the nights sold —
+went into or out of buckets, what the nights sold (3.5) —
 what should be there, what was counted, and the gap, with what it is worth at
 the prices counted. Items off are listed first; every item folds away below.
 A bucket may dry by an allowance set on the card (a percentage of what should
 be there), and a weighed gap of a few grams is the scales. Everything dated on
 or before a count is in it. An item not on the count shows only what should
-be there. Sales with no recipe, and SambaPOS inventory items not linked, are
-named, since they took nothing.
+be there. Menu items sold that are not set yet are named, since they took
+nothing, and so are heads sold while the grams in a head are not set.
 
 ### 3.7 Ratio items: foil, coal, filters, cups ✅
 
@@ -701,8 +702,8 @@ against the hookahs SambaPOS sold in between gives hookahs to each one; the
 last three pairs pooled are its ratio, shown with roughly what a night uses
 and the pairs it came from. What should be on the shelf (3.6) then takes off
 the hookahs sold divided by the ratio learnt before that count. A pair under
-80% of the ratio before it is pointed out. A hookah is an order whose recipe
-takes tobacco or a mix, so the tobacco has to be linked (3.5) first.
+80% of the ratio before it is pointed out. A hookah is an order of a menu
+item that takes tobacco or a mix, so the hookahs have to be set (3.5) first.
 
 ### 3.8 Shortage warnings ✅
 
@@ -713,9 +714,9 @@ reordering happens before it runs out.
 As built (2026.11.11.21): Tonight's list has **Nothing is running low** as
 soon as any item has a minimum (Setup → Stock items → Warn below). It names
 each item whose should-be (3.6) is under its minimum, with what is left and
-about how many nights at the pace of the last 30 days' kept nights — sales by
-recipe and by ratio, and sealed tobacco going into buckets. What should be on
-the shelf marks those items too.
+about how many nights at the pace of the last 30 days' kept nights — what
+the menu items sold took, foil and coal by their ratio, and sealed tobacco
+going into buckets. What should be on the shelf marks those items too.
 
 ### 3.9 Cost and profit per hookah and per item ✅
 
@@ -723,15 +724,15 @@ From recipes and mix costs: what each menu item costs to make, beside its
 price, so it is clear which flavours and items make the most. Best and worst
 sellers by month, from the archive.
 
-As built (2026.11.11.22): what one of each portion costs is its SambaPOS
-recipe at the stock's prices — a mix at the price its fills gave it (3.4), a
-flavour at its brand's unless it has its own, a head at Setup's grams if set.
-Setup's menu shows it beside each price, with the share of the price it is.
+As built (2026.11.11.22, and from .23 by what each menu item takes): what
+one of each menu item costs is what it takes (3.5) at the stock's prices — a
+mix at the price its fills gave it (3.4), a flavour at its brand's unless it
+has its own, a head at Setup's grams. Setup's menu shows it beside each
+price, with the share of the price it is.
 Month → **What each item made**: each item sold that month, what it came to,
 the stock it took (a gift takes stock as a sale does; a void does not) and
 what it made, most first, with the ones that made the most and the least
-named. Items with no recipe, or whose recipe is not linked to priced stock,
-are listed apart.
+named. Items not set yet, or whose stock has no price, are listed apart.
 
 ---
 
@@ -788,7 +789,7 @@ Ideas raised and worth keeping, not yet planned in detail:
 ## Questions to settle when the step comes up
 
 - 1.1 — answered: see 1.1, 1.2 and 1.4. Purchases are not entered in
-  SambaPOS; inventory items and recipes are set up but not used.
+  SambaPOS. Its inventory items and recipes are test data, not used.
 - 2.1 — answered: cash is the only payment type in use.
 - 2.4 — answered: a float is always left in the drawer. Its amount is set in
   Setup → Counting the cash.

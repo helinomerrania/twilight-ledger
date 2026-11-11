@@ -10,14 +10,14 @@ ratio, and from then on the nights' hookahs divided by it are roughly what
 they used. A pair well below the ones before it means more went than the
 sales explain.
 
-What a hookah is comes from SambaPOS's recipes: an order whose recipe takes
-tobacco or a mix (pos/recipes.py), so it needs the tobacco linked first.
+A hookah is an order of a menu item that takes tobacco or a mix (pos/uses.py),
+so the hookahs on the menu have to be given their tobacco first.
 """
 from datetime import date, timedelta
 from fractions import Fraction
 
 from . import db
-from .pos import recipes
+from .pos import uses
 from .registry import ApiError, action
 
 POOL = 3                     # pairs of counts pooled into the ratio
@@ -51,7 +51,7 @@ def pairs(con, item_id):
                AND r.received_on > ? AND r.received_on <= ?""",
                          (item_id, a["count_date"], b["count_date"]))
         used = Fraction(a["qty_milli"] + came - b["qty_milli"], 1000)
-        sold = recipes.hookahs(con, _day_after(a["count_date"]), b["count_date"])
+        sold = uses.hookahs(con, _day_after(a["count_date"]), b["count_date"])
         out.append({"from": a["count_date"], "to": b["count_date"], "used": used,
                     "hookahs": sold,
                     "ratio": sold / used if sold and used > 0 else None})
@@ -77,7 +77,7 @@ def used(con, after, upto):
         if not r:
             continue
         if sold is None:
-            sold = recipes.hookahs(con, _day_after(after), upto)
+            sold = uses.hookahs(con, _day_after(after), upto)
             if not sold:
                 return {}
         out[it["id"]] = sold / r
@@ -93,7 +93,7 @@ def view(con):
         if last else 0
     a_night = None
     if last and nights:
-        sold = recipes.hookahs(con, (date.fromisoformat(last) - timedelta(days=NIGHTS - 1))
+        sold = uses.hookahs(con, (date.fromisoformat(last) - timedelta(days=NIGHTS - 1))
                                .isoformat(), last)
         a_night = sold / nights if sold is not None else None
     out = []
@@ -112,7 +112,7 @@ def view(con):
                        "hookahs": float(p["hookahs"]) if p["hookahs"] is not None else None,
                        "ratio": float(p["ratio"]) if p["ratio"] else None}
                       for p in ps[-6:]]})
-    return {"items": out, "hookahs_known": recipes.tobacco_linked(con),
+    return {"items": out, "hookahs_known": uses.tobacco_set(con),
             "a_night": float(a_night) if a_night else None}
 
 

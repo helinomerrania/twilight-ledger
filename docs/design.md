@@ -284,20 +284,21 @@ The mix's price is a moving average, weighted by what was already in the
 bucket when it was weighed, and each fill keeps the price before and after,
 so taking a fill back can put the price back.
 
-What sales take is read from SambaPOS's own recipes (`ledger/pos/recipes.py`),
-not kept twice: the only thing set here is which stock item each SambaPOS
-inventory item is. Each order keeps SambaPOS's word on whether it took stock,
-so a void takes nothing and a gift does.
+What sales take is set here, menu item by menu item (`ledger/pos/uses.py`):
+the one stock item each takes from and how much, linked by SambaPOS's number
+for the menu item so a rename changes nothing. SambaPOS's own recipes are not
+read; the ones in it are test data. Each order keeps SambaPOS's word on
+whether it took stock, so a void takes nothing and a gift does.
 
 What should be on the shelf (`ledger/expected.py`) is worked out when asked,
 never stored: the count before, plus receipt lines, plus and minus bucket
-fills, minus what the recipes say was sold. Nothing in it moves money, so a
-wrong recipe or a missing receipt line shows up as a gap, never as a wrong
-balance. Foil, coal and the like have no recipe; `ledger/ratios.py` learns
+fills, minus what the menu items sold took. Nothing in it moves money, so a
+wrong setting or a missing receipt line shows up as a gap, never as a wrong
+balance. Foil, coal and the like are not taken by a menu item; `ledger/ratios.py` learns
 hookahs to each one between counts, and should-be uses the ratio learnt
 before a count, never the one the count itself would give. What an item costs
-to make is the same recipes at the stock's prices, so it is only as good as
-the links and the prices, and an item that cannot be costed says so instead
+to make is what it takes at the stock's prices, so it is only as good as
+those settings and prices, and an item that cannot be costed says so instead
 of showing a cost of nothing.
 
 ## Updating from GitHub

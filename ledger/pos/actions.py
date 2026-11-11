@@ -10,7 +10,7 @@ from pathlib import Path
 from .. import db
 from ..money import half_up
 from ..registry import ApiError, action, clean_date
-from . import adding, archive, auto, catalog, links, recipes, sources
+from . import adding, archive, auto, catalog, links, sources, uses
 
 DEFAULTS = {"folder": "", "server": "localhost", "database": "twilight"}
 
@@ -22,11 +22,11 @@ def settings(con):
 def _menu(con):
     """The menu, each portion with what one costs to make beside its price."""
     m = catalog.menu(con)
-    costs = recipes.portion_costs(con)
+    costs = uses.costs(con)
     for g in m["groups"]:
         for it in g["items"]:
+            c = costs.get(it["id"])
             for p in it["portions"]:
-                c = costs.get(p["id"])
                 p["cost"] = half_up(c) if c is not None else None
     return m
 
@@ -34,7 +34,7 @@ def _menu(con):
 def _month(con, month):
     m = archive.month(con, month)
     if m:
-        m["items"] = recipes.costed(con, m["items"])
+        m["items"] = uses.costed(con, m["items"])
     return m
 
 
@@ -54,7 +54,7 @@ def view(con, on, month):
             "targets": links.targets(con),
             "gone": links.gone_but_here(con),
             "left_used": links.left_but_used(con),
-            "recipes": recipes.view(con)}
+            "uses": uses.view(con)}
 
 
 def keep(con, snap, why):
