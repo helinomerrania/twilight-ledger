@@ -301,6 +301,19 @@ to make is what it takes at the stock's prices, so it is only as good as
 those settings and prices, and an item that cannot be costed says so instead
 of showing a cost of nothing.
 
+## Settling up with a supplier
+
+A supplier's balance is one running account, the same whichever month is on
+screen. Settle up asks it the question the lounge pays by: what has been used
+up. Their goods still on the shelf stay owed until they are used, so a month's
+due is what is owed at the end of the month less their stock at that month's
+count, rounded down to a whole note so the noise in weighing never asks to be
+paid. Both sides belong to the month: goods by the day they came, a payment by
+the month it was made for, so October's goods paid on 3 November are paid in
+October, and whatever Settle up pays is counted for the month on screen. When
+nothing is due the line says so, so a month whose goods are all paid for can
+be seen to be.
+
 ## The screens in Kurdish
 
 The screens are written in English, and Kurdish (Sorani) is laid over them as

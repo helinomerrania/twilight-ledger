@@ -491,9 +491,16 @@ export function settleCard() {
       A salary, rent or electricity paid from here counts for ${esc(monthName(S.data.month))}
       whatever today's date is — that is what stops a November payment counting
       against November.</p>
+    <p class="sub">A supplier is paid for what has been used up: what is owed, less their
+      stock still on the shelves at the month's count. That is paid for the month too.</p>
     ${table(`<th>What</th><th>Who</th><th class="num">Still to pay</th>
              <th style="width:150px">Amount</th><th>From</th><th></th>`,
-      lines.map(l => `<tr data-line="${esc(l.action + '|' + l.who)}">
+      lines.map(l => l.done ? `<tr>
+        <td>${esc(l.what)}</td>
+        <td>${esc(l.who)}${l.note ? `<br><span class="quiet">${esc(l.note)}</span>` : ''}</td>
+        <td class="num">${money(0)}</td>
+        <td colspan="3" class="quiet">${esc(l.done)}</td>
+      </tr>` : `<tr data-line="${esc(l.action + '|' + l.who)}">
         <td>${esc(l.what)}</td>
         <td>${esc(l.who)}${l.note ? `<br><span class="quiet">${esc(l.note)}</span>` : ''}</td>
         <td class="num">${money(l.amount)}</td>

@@ -718,15 +718,13 @@ const H = {
     if (!line) return;
     const amount = Number(String(row.querySelector('[data-s="amount"]').value).replace(/,/g, '')) || 0;
     if (!amount) return say('Type an amount first.', true);
-    const body = { amount, who: line.who, pot: row.querySelector('[data-s="pot"]').value };
-    // a salary, rent or bill paid from here belongs to the month on screen;
-    // a supplier is a running account, so a payment is simply dated today
-    if (line.action !== 'pay_supplier') body.period = S.month;
+    // whatever is paid from here belongs to the month on screen, whatever today's date is
+    const body = { amount, who: line.who, pot: row.querySelector('[data-s="pot"]').value,
+                   period: S.month };
     const out = await act(() => sendGuarded(line.action, body),
                           { skip: [`settle:${row.dataset.line}:amount`] });
     if (out) {
-      say(`Paid ${line.who} ${money(amount)}`
-        + (body.period ? `, counted for ${monthName(S.month)}.` : '.'));
+      say(`Paid ${line.who} ${money(amount)}, counted for ${monthName(S.month)}.`);
     }
   },
 

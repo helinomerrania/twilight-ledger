@@ -111,8 +111,11 @@ def settle(con, month):
     """Everything still unpaid up to the end of `month`, as one list.
 
     Salaries and rent are "up to the end of this month" — what is owed for it
-    and anything older that was never settled. A supplier is simply what is
-    owed to them now, because that debt is a running account, not a monthly one.
+    and anything older that was never settled. A supplier is paid for what has
+    been used up: what is owed to them at the end of the month, less their
+    goods still on the shelves at the month's count, which stay owed until they
+    are used. When that comes to nothing the line says so, so a month whose
+    goods are all paid for can be seen to be.
     """
     lines = []
     for p in queries.payroll(con, month):
@@ -129,11 +132,20 @@ def settle(con, month):
     if elec:
         lines.append({"action": "pay_electricity", "what": "Electricity",
                       "who": "Electricity", "amount": elec, "note": ""})
+    note = money.NOTE
     for s in queries.supplier_statement(con, month):
-        if s["owed_now"] > 0:
-            lines.append({"action": "pay_supplier", "what": "Supplier",
-                          "who": s["name"], "amount": s["owed_now"],
-                          "note": "everything owed to them now"})
+        owed, stock = s["closing"], s["on_shelves"]
+        if owed <= 0:
+            continue
+        # rounded down to a whole note, so the noise in weighing never asks to be paid
+        due = max(owed - stock, 0) // note * note
+        line = {"action": "pay_supplier", "what": "Supplier", "who": s["name"],
+                "amount": due,
+                "note": (f"{owed:,} owed − {stock:,} of their stock still here"
+                         if s["count_date"] else f"{owed:,} owed, with no count to set against it")}
+        if not due:
+            line["done"] = "paid" if s["paid"] else "nothing consumed to pay"
+        lines.append(line)
     return lines
 
 

@@ -470,12 +470,39 @@ def drawings(con, month):
 
 # ---------------------------------------------------------------- suppliers
 
+def supplier_owed(con, supplier_id, month):
+    """What a supplier is owed for everything up to the end of `month`. Goods
+    count on the day they came; a payment counts for the month it was made
+    for, so October's goods paid on 3 November are paid in October."""
+    _, end = month_range(month)
+    return db.scalar(con,
+        "SELECT COALESCE(SUM(m.amount * m.normal), 0) FROM movement m "
+        "WHERE m.account_id = ? AND CASE WHEN m.entry_kind = 'supplier_payment' "
+        "THEN m.period <= ? ELSE m.happened_on <= ? END", (supplier_id, month, end))
+
+
+def on_shelves(con, supplier_id, count_date):
+    """What a supplier's goods still on the shelves were worth at a count. A
+    flavour comes from its brand's supplier unless it says otherwise."""
+    if not count_date:
+        return 0
+    return db.scalar(con, """
+        SELECT COALESCE(SUM(l.value), 0) FROM stock_count_line l
+          JOIN stock_item si ON si.id = l.item_id
+          JOIN stock_count sc ON sc.id = l.count_id
+         WHERE COALESCE(si.supplier_id, (SELECT b.supplier_id FROM stock_item b
+                                          WHERE b.id = si.parent_id)) = ?
+           AND sc.count_date = ?""", (supplier_id, count_date))
+
+
 def supplier_statement(con, month):
-    """Owed coming in, what arrived, what was paid, owed going out."""
+    """Owed coming in, what arrived, what was paid for the month, owed going
+    out, and their goods still on the shelves at the month's count."""
     start, end = month_range(month)
+    cd = count_for(con, month)
     out = []
     for a in balances(con, "supplier"):
-        bf = balance(con, a["code"], as_of=_day_before(start))
+        bf = supplier_owed(con, a["id"], prev_month(month))
         got = db.scalar(con, "SELECT COALESCE(SUM(amount), 0) FROM receipt "
                              "WHERE supplier_id = ? AND terms = 'credit' "
                              "AND voided_at IS NULL "
@@ -483,33 +510,36 @@ def supplier_statement(con, month):
                         (a["id"], start, end))
         paid = db.scalar(con,
             "SELECT COALESCE(SUM(m.amount), 0) FROM movement m WHERE m.account_id = ? "
-            "AND m.entry_kind = 'supplier_payment' AND m.happened_on >= ? "
-            "AND m.happened_on <= ?", (a["id"], start, end))
-        closing = balance(con, a["code"], as_of=end)
+            "AND m.entry_kind = 'supplier_payment' AND m.period = ?", (a["id"], month))
+        closing = supplier_owed(con, a["id"], month)
         if not (bf or got or paid or closing):
             continue
         out.append({"id": a["id"], "name": a["name"], "brought_forward": bf,
                     "received": got, "paid": paid, "closing": closing,
-                    "owed_now": a["balance"], "active": a["active"]})
+                    "owed_now": a["balance"], "active": a["active"],
+                    "on_shelves": on_shelves(con, a["id"], cd), "count_date": cd})
     return out
 
 
 def supplier_lines(con, supplier_id, month):
     """One supplier's account for the month, line by line, built from the
     movements on the account itself so that it always adds up: what was owed
-    coming in, plus every line, is what is owed going out."""
+    coming in, plus every line, is what is owed going out. Goods are on the day
+    they came, a payment in the month it was made for."""
     a = db.one(con, "SELECT * FROM account WHERE id = ? AND kind = 'supplier'",
                (supplier_id,))
     if not a:
         return None
     start, end = month_range(month)
-    opening = balance(con, a["code"], as_of=_day_before(start))
+    opening = supplier_owed(con, supplier_id, prev_month(month))
     lines = []
     for m in db.all_(con,
             "SELECT m.happened_on, m.entry_kind, m.memo, m.amount * m.normal AS delta "
-            "FROM movement m WHERE m.account_id = ? AND m.happened_on >= ? "
-            "AND m.happened_on <= ? ORDER BY m.happened_on, m.entry_id",
-            (supplier_id, start, end)):
+            "FROM movement m WHERE m.account_id = ? AND CASE "
+            "WHEN m.entry_kind = 'supplier_payment' THEN m.period = ? "
+            "ELSE m.happened_on >= ? AND m.happened_on <= ? END "
+            "ORDER BY m.happened_on, m.entry_id",
+            (supplier_id, month, start, end)):
         what = {"receipt_credit": "Goods received",
                 "supplier_payment": "Paid",
                 "opening": "Owed when these books began"}.get(
@@ -517,20 +547,13 @@ def supplier_lines(con, supplier_id, month):
         if m["entry_kind"] == "receipt_credit" and m["memo"]:
             what += f" — {m['memo']}"
         lines.append({"on": m["happened_on"], "what": what, "amount": m["delta"]})
-    closing = balance(con, a["code"], as_of=end)
+    closing = supplier_owed(con, supplier_id, month)
     cd = count_for(con, month)
-    on_shelves = db.scalar(con, """
-        SELECT COALESCE(SUM(l.value), 0) FROM stock_count_line l
-          JOIN stock_item si ON si.id = l.item_id
-          JOIN stock_count sc ON sc.id = l.count_id
-         WHERE COALESCE(si.supplier_id, (SELECT b.supplier_id FROM stock_item b
-                                          WHERE b.id = si.parent_id)) = ?
-           AND sc.count_date = ?""", (supplier_id, cd)) if cd else 0
     return {"id": a["id"], "name": a["name"], "month": month, "opening": opening,
             "lines": lines, "closing": closing, "owed_now": balance(con, a["code"]),
             "received": sum(l["amount"] for l in lines if l["amount"] > 0),
             "paid": -sum(l["amount"] for l in lines if l["amount"] < 0),
-            "on_shelves": on_shelves, "count_date": cd}
+            "on_shelves": on_shelves(con, supplier_id, cd), "count_date": cd}
 
 
 def owed_to_suppliers(con, as_of=None):
