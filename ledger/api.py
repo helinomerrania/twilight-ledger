@@ -94,7 +94,7 @@ def state(con, *, month=None, on=None, count_date=None):
         "settle": settle(con, month),
         "flow": queries.money_flow(con, month),
         "sales_by_day": queries.sales_by_day(con, month),
-        "counts": queries.cash_counts(con)[-30:],
+        "counts": _counts_to_show(con),
         "drawer": cash.drawer(con, on),
         "differences": cash.differences(con, month),
         "summary": queries.summary(con),
@@ -108,6 +108,13 @@ def state(con, *, month=None, on=None, count_date=None):
         "recent": queries.recent(con, 40),
         "backup": backup.status(con),
     }
+
+
+def _counts_to_show(con, latest=30):
+    """The latest cash counts, and every older one that does not tie: one
+    that is still out must stay where it can be written off, however old."""
+    every = queries.cash_counts(con)
+    return [c for i, c in enumerate(every) if i >= len(every) - latest or c["diff"] != 0]
 
 
 def settle(con, month):
@@ -278,8 +285,9 @@ def stock_view(con, month, count_date=None):
             "ratios": ratios.view(con), "cogs": c, "count_dates": dates, "count_date": chosen,
             "count": count_sheet(con, chosen),
             "counts": [dict(r) for r in db.all_(
-                con, "SELECT count_date, closing, source, note FROM stock_count "
-                     "ORDER BY count_date DESC")],
+                con, "SELECT count_date, closing, source, note, EXISTS (SELECT 1 FROM "
+                     "stock_count_line l WHERE l.count_id = stock_count.id) AS has_lines "
+                     "FROM stock_count ORDER BY count_date DESC")],
             "receipts": receipts}
 
 

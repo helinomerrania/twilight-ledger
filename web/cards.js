@@ -1088,7 +1088,9 @@ export function countHistory() {
       `<th>Count date</th><th class="num">Valued at</th><th>Where it came from</th>`,
       rows.map(r => `<tr><td>${esc(r.count_date)}</td>
         <td class="num">${money(r.closing)}</td>
-        <td class="quiet">${r.source === 'counted' ? 'counted item by item' : 'carried in from the workbook'}</td></tr>`).join(''))
+        <td class="quiet">${r.source !== 'counted' ? 'carried in from the workbook'
+          : r.has_lines || r.closing ? 'counted item by item'
+            : 'started, with nothing counted yet: not a count until something is'}</td></tr>`).join(''))
       : empty('No counts yet.')}`);
 }
 
@@ -1129,7 +1131,7 @@ export function newEntryCard() {
       ? 'A transfer moves money between your pots. It never touches profit.'
       : 'For anything that is not part of closing up.'}</p>
     <div class="grid-form">
-      ${field('Date', `<input type="date" id="eDate" value="${esc(S.data.today)}" max="${esc(S.data.today)}">`)}
+      ${field('Date', `<input type="date" id="eDate" value="${esc(S.data.tonight)}" max="${esc(S.data.today)}">`)}
       ${field('What', `<select id="eKind" data-act="pickKind">${options(ENTRY_KINDS, kind)}</select>`)}
       ${isTransfer
         ? field('From', `<select id="eFrom">${potOptions()}</select>`)

@@ -31,15 +31,11 @@ export const signed = n => (Number(n) > 0 ? '+' : '') + money(n);
 
 /* ------------------------------------------------------------------- dates */
 
-export const today = () => (S.data ? S.data.today : new Date().toISOString().slice(0, 10));
-
 const MONTHS = ['January', 'February', 'March', 'April', 'May', 'June', 'July',
                 'August', 'September', 'October', 'November', 'December'];
 
 export const monthName = m =>
   m ? `${MONTHS[Number(m.slice(5, 7)) - 1]} ${m.slice(0, 4)}` : '';
-
-export const monthOf = d => String(d || '').slice(0, 7);
 
 /* ------------------------------------------------------------------ markup */
 
@@ -82,8 +78,6 @@ export const potOptions = chosen => {
 };
 
 export const field = (label, inner) => `<div><label>${esc(label)}</label>${inner}</div>`;
-
-export const kindName = k => (S.data && S.data.kinds[k]) || String(k || '').replace(/_/g, ' ');
 
 /* --------------------------------------------------------------- the server */
 

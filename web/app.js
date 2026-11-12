@@ -340,12 +340,24 @@ function watchBackups() {
 
 /* Amounts of money show their commas as they are typed: 1250000 is shown as
    1,250,000, with the cursor still after the same digit. */
-function moneyBox(el) {
-  const raw = westernDigits(el.value).replace(NO_FILS, '');
-  const at = el.selectionStart ?? raw.length;
+function moneyBox(el, how) {
+  let raw = westernDigits(el.value).replace(NO_FILS, '');
+  let at = el.selectionStart ?? raw.length;
+  const digitsOf = s => westernDigits(String(s)).replace(/[^\d]/g, '');
+  // Delete or Backspace on a comma took only the comma, which would come
+  // straight back and leave the box stuck: take the digit beyond it instead
+  if ((how === 'deleteContentBackward' || how === 'deleteContentForward')
+      && digitsOf(raw) === digitsOf(el.dataset.was ?? el.defaultValue)) {
+    const i = how === 'deleteContentBackward' ? at - 1 : at;
+    if (i >= 0 && i < raw.length) {
+      raw = raw.slice(0, i) + raw.slice(i + 1);
+      if (how === 'deleteContentBackward') at = i;
+    }
+  }
   const before = raw.slice(0, at).replace(/[^\d]/g, '').length;
   const digits = raw.replace(/[^\d]/g, '').replace(/^0+(?=\d)/, '');
   const shown = digits.replace(/\B(?=(\d{3})+(?!\d))/g, ',');
+  el.dataset.was = shown;
   if (shown === el.value) return;
   el.value = shown;
   let pos = 0;
@@ -385,7 +397,7 @@ function applyFind() {
 document.addEventListener('input', e => {
   const el = e.target;
   if (!(el instanceof HTMLInputElement)) return;
-  if (el.dataset.money !== undefined) moneyBox(el);
+  if (el.dataset.money !== undefined) moneyBox(el, e.inputType);
   if (el.dataset.find) {
     S.draft.find = { ...(S.draft.find || {}), [el.dataset.find]: el.value };
     applyFind();

@@ -181,7 +181,19 @@ class FloatAndBlind(Base):
         api.run(self.con, "sales", {"amount": 5000, "on": "2026-09-30"})
         out = api.run(self.con, "cash_count", {"on": "2026-09-30", "pots": {"Box": 1000}})
         self.assertEqual(out["diff"], -4000)
-        self.assertNotIn("2026-09-30", [c["on"] for c in api.state(self.con)["counts"]])
+
+    def test_a_count_still_out_stays_on_books_however_old(self):
+        """Only the latest thirty counts came to the screen, so one still out
+        dropped off Books a month later: it could no longer be written off,
+        while the check kept saying a count does not tie."""
+        api.run(self.con, "sales", {"amount": 5000, "on": "2026-09-30"})
+        api.run(self.con, "cash_count", {"on": "2026-09-30", "pots": {"Box": 1000}})   # 4,000 short
+        # ... miscounted: every night after finds all of it there
+        for day in range(1, 32):
+            api.run(self.con, "cash_count", {"on": f"2026-10-{day:02d}", "pots": {"Box": 5000}})
+        shown = {c["on"]: c["diff"] for c in api.state(self.con)["counts"]}
+        self.assertEqual(shown.get("2026-09-30"), -4000)
+        self.assertEqual(len(shown), 31)
 
     def test_closing_up_shows_the_night_s_own_count_after_the_rest_is_moved(self):
         """The Box card set the count against the Box after the rest had gone
