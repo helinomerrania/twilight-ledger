@@ -301,6 +301,34 @@ to make is what it takes at the stock's prices, so it is only as good as
 those settings and prices, and an item that cannot be costed says so instead
 of showing a cost of nothing.
 
+## The screens in Kurdish
+
+The screens are written in English, and Kurdish (Sorani) is laid over them as
+they are drawn (`web/i18n.js`), rather than every card asking for its text by
+name. That keeps the cards readable and means nothing in them had to change.
+A piece of text is one element's own words, with what changes in it taken out
+as `{0}`, `{1}`…: numbers, dates, the elements inside it, anything already in
+Kurdish script, and the names in the books. The names are found in the state
+by the field they sit in, so "Filled Apple Mix: 1,500 g" and "Filled House
+Mix: 300 g" are one piece, and the Kurdish can put `{0}` and `{1}` where its
+grammar wants them. Values go back in wrapped in Unicode isolates, so a minus
+sign or an English name keeps its own direction inside right-to-left text.
+
+The Kurdish is Mohammed's, made with Gemini, and lives in the books
+(`lang_text`); no Kurdish is written in the code, and a test keeps it that
+way. Setup → Language copies the next batch of text with no Kurdish yet as a
+prompt, and takes Gemini's answer back; a line that lost a `{0}` is refused,
+because it would lose a number or a name, and is asked again. The text the app
+ships with is listed in `web/lang/catalog.json` (made by opening every screen
+on invented books), so all of it can be asked for before any screen has shown
+it; text a screen shows that is not on the list is added as it is seen.
+
+A name that is also one of the app's own words — an expense called "Ice"
+beside "Ice cream", one called "Electricity" — is taken as the word, because
+the shipped list says it is one, so the app's sentences keep their words.
+Right to left is the CSS written in logical sides (`margin-inline-start`, not
+`margin-left`), with number boxes kept left to right.
+
 ## Updating from GitHub
 
 The app updates itself from this repository. The download is checked before it

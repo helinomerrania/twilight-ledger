@@ -7,6 +7,7 @@ import {
   S, args, card, cls, empty, esc, field, kindName, money, monthName, monthOf,
   options, pct, potOptions, signed, table, tile, tiles,
 } from './lib.js';
+import { BATCH, texts } from './i18n.js';
 
 const go = c => (c.go ? ` <button class="mini link" data-go="${esc(c.go)}">Open ${esc(c.go)}</button>` : '');
 const amountInput = (id, value = '', extra = '') =>
@@ -638,7 +639,7 @@ export function closeCard() {
       <div><strong>Closed ${esc(String(per.closed_at || '').slice(0, 10))}</strong>
         <p class="sub" style="margin:2px 0 0">Stock counted ${esc(per.count_date || '—')}.
           Nothing in Setup can move these figures now.</p></div>
-      <button class="btn" style="margin-left:auto" data-act="reopen">Reopen</button>
+      <button class="btn" style="margin-inline-start:auto" data-act="reopen">Reopen</button>
     </div>`);
   }
   if (S.data.month === S.data.this_month) return '';
@@ -647,7 +648,7 @@ export function closeCard() {
         <p class="sub" style="margin:2px 0 0">Freezes the result, posts the cost of
           goods, splits the profit between the partners, and carries the stock into
           the next month.</p></div>
-      <button class="btn primary" style="margin-left:auto" data-act="closeAsk">Close the month</button>
+      <button class="btn primary" style="margin-inline-start:auto" data-act="closeAsk">Close the month</button>
     </div>`);
 }
 
@@ -1419,6 +1420,57 @@ export function businessCard() {
       ${field('Smallest note (amounts round to it)', save('business_set', {}, 'note', b.note || S.data.note,
         'type="number" min="1" inputmode="numeric"'))}
     </div>`);
+}
+
+/** English or Kurdish. The Kurdish is made with Gemini: a batch of the text
+    with none yet is copied from here as a prompt, and the answer pasted back.
+    It lives in the books, never in the app's code. */
+export function languageCard() {
+  const L = S.data.lang;
+  const names = L.languages || { en: 'English', ckb: 'Kurdish' };
+  const total = L.done + L.todo;
+  const batches = Math.ceil(L.todo / BATCH);
+  const q = (S.draft.langFind || '').trim();
+  const found = q ? [...texts()].filter(([k, v]) => k.toLowerCase().includes(q.toLowerCase())
+                                                 || v.includes(q)).slice(0, 30) : [];
+  return card(`<h2>Language</h2>
+    <p class="sub">The screens in English, or in Kurdish (Sorani) from right to left. The Kurdish
+      is yours: Gemini writes it from a prompt copied here, and its answer is pasted back. Names,
+      numbers and dates stay as they are.</p>
+    <div class="chips" translate="no">${Object.entries(names).map(([k, label]) =>
+      `<button data-act="langPick" data-lang="${esc(k)}" aria-pressed="${L.language === k}">${esc(label)}</button>`).join('')}</div>
+    <p class="note">${money(L.done)} of ${money(total)} pieces of text have Kurdish.
+      ${L.todo ? `${money(L.todo)} still to do: about ${batches} more ${batches === 1 ? 'batch' : 'batches'}.` : 'Nothing left to do.'}</p>
+    <div class="steps" style="margin-top:14px">
+      <div class="step"><div class="no">1</div><div>
+        <h3>Copy the next batch</h3>
+        <p>Then open gemini.google.com, start a new chat, paste it and send.</p>
+        <button class="btn primary" data-act="langCopy"${L.todo ? '' : ' disabled'}>Copy ${Math.min(BATCH, L.todo)} for Gemini</button>
+        ${S.draft.langPrompt ? `<textarea readonly rows="6" style="margin-top:8px">${esc(S.draft.langPrompt)}</textarea>` : ''}
+      </div></div>
+      <div class="step"><div class="no">2</div><div>
+        <h3>Paste Gemini's answer</h3>
+        <p>All of it. A line that loses a <code>{0}</code> or <code>{1}</code> on the way is left
+          out and asked again next time.</p>
+        <textarea id="langAnswer" rows="4" spellcheck="false" placeholder='{"1": "…", "2": "…"}'></textarea>
+        <div class="row" style="margin-top:8px"><button class="btn" data-act="langSave">Save the Kurdish</button></div>
+      </div></div>
+      <div class="step"><div class="no">3</div><div>
+        <h3>Choose ${esc(names.ckb)} above</h3>
+        <p>Text with no Kurdish yet stays in English. New text is added as the screens show it, so
+          later batches ask for it too.</p>
+      </div></div>
+    </div>
+    <details class="fold"${q ? ' open' : ''}><summary>Change a piece of Kurdish</summary>
+      <div class="row" style="margin-top:8px">
+        <input id="langFind" value="${esc(q)}" placeholder="A word, in English or Kurdish" style="max-width:320px">
+        <button class="btn" data-act="langFind">Find</button></div>
+      ${!q ? '' : found.length ? table('<th>English</th><th>Kurdish</th><th></th>', found.map(([k, v]) => `<tr>
+          <td translate="no">${esc(k)}</td>
+          <td><input value="${esc(v)}" dir="rtl" lang="ckb" style="min-width:260px" aria-label="Kurdish"></td>
+          <td class="actions"><button class="mini" data-act="langFix" data-key="${esc(k)}">Save</button></td></tr>`).join(''))
+        : empty('No Kurdish has that in it.')}
+    </details>`);
 }
 
 export function backupCard() {

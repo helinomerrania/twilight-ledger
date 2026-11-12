@@ -1,6 +1,8 @@
 /* Formatting, markup helpers and the one way this app talks to the server.
    Everything here is pure except the functions that call the server. */
 
+import { localiseNow } from './i18n.js';
+
 export const S = {               // whatever the server last told us
   data: null,
   tab: 'tonight',
@@ -219,13 +221,12 @@ export function pickItem(title, body, items) {
 
 /* -------------------------------------------------------------------- print */
 
-/** Print a till slip. The page is stripped to the slip only while printing,
-    then put back, so the 72mm roll does not feed blank paper first. */
 /** Print a whole page, A4, the way a report is printed or saved as a PDF to
-    send on. */
+    send on. It is in Kurdish before it prints, if the screens are. */
 export function printPage(html) {
   const page = document.getElementById('page');
   page.innerHTML = html;
+  localiseNow(page);
   document.body.classList.add('paging');
   const done = () => {
     document.body.classList.remove('paging');
@@ -236,9 +237,12 @@ export function printPage(html) {
   setTimeout(done, 1500);
 }
 
+/** Print a till slip. The page is stripped to the slip only while printing,
+    then put back, so the 72mm roll does not feed blank paper first. */
 export function printSlip(html) {
   const slip = document.getElementById('slip');
   slip.innerHTML = html;
+  localiseNow(slip);
   document.body.classList.add('slipping');
   const done = () => {
     document.body.classList.remove('slipping');

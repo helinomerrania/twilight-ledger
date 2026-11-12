@@ -78,8 +78,9 @@ Mohammed, not a side effect of a step.
   `VERSION` is bumped, and it is pushed to `main` — the app updates itself
   from `main`.
 - **PC only, minimal.** One column of cards, no phone layouts. The screens
-  are in English for now; Kurdish wording is done by giving Mohammed a prompt
-  to run through Gemini, not by translating in code.
+  are in English, or in Kurdish from right to left (Setup → Language). The
+  Kurdish is made by Mohammed through a Gemini prompt the app hands him, and
+  is never written in the code.
 
 ---
 
@@ -800,7 +801,12 @@ Ideas raised and worth keeping, not yet planned in detail:
   tickets, what they came to and how long people stayed (from opening the
   ticket to paying it). SambaPOS's own reports see one night; this sees the
   month.
-- Kurdish wording on the screens, via a Gemini prompt Mohammed runs himself
+- ✅ the screens in Kurdish, right to left (2026.11.11.26): Setup →
+  **Language** switches between English and Kurdish (Sorani). The Kurdish is
+  his: the card copies the next batch of text as a prompt for Gemini and
+  takes the answer back, about five batches for the whole app, and any piece
+  can be changed there later. Names, numbers and dates stay as they are, and
+  text with no Kurdish yet stays in English until the next batch.
 - ✅ a month-end summary he can print or send to his partner (2026.11.11.24):
   Month → **Summary for my partner** is one A4 page — the month (so far, while
   it runs) beside last month, where the daily expenses went, each partner's

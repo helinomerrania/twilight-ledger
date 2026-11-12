@@ -15,6 +15,9 @@
 
 import * as C from './cards.js';
 import {
+  BATCH, answer, prompt, setCatalog, setDict, setLanguage, setNames, watch,
+} from './i18n.js';
+import {
   S, ask, closeCheck, esc, get, load, money, monthName, pickItem, post, printPage,
   printSlip, say, send, signed,
 } from './lib.js';
@@ -30,7 +33,7 @@ const TABS = [
 ];
 
 const section = (title, note) =>
-  `<div class="sectionhead">${esc(title)}<span>${esc(note)}</span></div>`;
+  `<div class="sectionhead"><div>${esc(title)}</div><span>${esc(note)}</span></div>`;
 
 const VIEWS = {
   tonight: () => C.needsALook() + C.closingUp() + C.nightDrawer() + C.todayFigures()
@@ -64,8 +67,8 @@ const VIEWS = {
     + C.editList('reason', 'Reasons for a cash difference', '')
     + section('SambaPOS', 'Keeping each night before the reset deletes it')
     + C.sambaposCard() + C.sambaposAccounts() + C.sambaposMenu()
-    + section('This app', 'The business, the backups, and updates')
-    + C.businessCard() + C.backupCard() + C.updateCard(),
+    + section('This app', 'The business, the language, the backups, and updates')
+    + C.businessCard() + C.languageCard() + C.backupCard() + C.updateCard(),
 };
 
 const TITLES = {
@@ -104,7 +107,7 @@ const firstValue = sel => {
 const dirty = el => (el.tagName === 'SELECT' ? el.value !== firstValue(el)
                                              : el.value !== el.defaultValue);
 
-const fields = () => [...document.querySelectorAll('#main input, #main select')];
+const fields = () => [...document.querySelectorAll('#main input, #main select, #main textarea')];
 
 /* ------------------------------------------------------------------ render */
 
@@ -123,15 +126,15 @@ function renderRail() {
     b.className = 'tab';
     b.dataset.go = key;
     b.setAttribute('aria-current', String(key === S.tab));
-    b.innerHTML = esc(label)
+    b.innerHTML = `<span>${esc(label)}</span>`
       + (key === 'tonight' && bad ? `<span class="flag" title="${bad} need a look">${bad}</span>` : '');
     rail.insertBefore(b, foot);
   });
   if (!S.data) return;
   document.getElementById('brandsub').textContent =
     (S.data.business.name || '') + ' · ' + S.data.today;
-  foot.innerHTML = `<strong>${money(S.data.cash)}</strong> on hand
-    <br><span>version ${esc(S.data.version)}</span>`;
+  foot.innerHTML = `<div><strong>${money(S.data.cash)}</strong> on hand</div>
+    <span>version ${esc(S.data.version)}</span>`;
 }
 
 /** Redraw the screen. Unless `fresh`, whatever was typed and not saved is put
@@ -147,7 +150,7 @@ function render({ fresh = false, skip = [] } = {}) {
       if (k && dirty(el) && !skip.includes(k)) kept.set(k, el.value);
     }
     const a = document.activeElement;
-    if (a && main.contains(a) && a.matches('input, select')) {
+    if (a && main.contains(a) && a.matches('input, select, textarea')) {
       focus = { key: fieldKey(a), start: null, end: null };
       try { focus.start = a.selectionStart; focus.end = a.selectionEnd; } catch { /* number boxes */ }
     }
@@ -177,6 +180,28 @@ function render({ fresh = false, skip = [] } = {}) {
   }
 }
 
+/** English or Kurdish, and the Kurdish itself when it has changed. The
+    language is also kept in this browser, so the next start opens the right
+    way round before the books arrive. */
+let langVersion = null;
+let shipped = false;
+
+async function useLanguage(state) {
+  const l = state.lang || {};
+  setLanguage(l.language);
+  if (!shipped) {
+    try { setCatalog(await get('/lang/catalog.json')); shipped = true; } catch { /* next time */ }
+  }
+  try { localStorage.setItem('twilight.lang', l.language || 'en'); } catch { /* not kept */ }
+  if (l.version !== langVersion) {
+    try {
+      setDict(await get('/api/lang'));
+      langVersion = l.version;
+    } catch { /* the next state tries again */ }
+  }
+  setNames(state);
+}
+
 /** Take a new state from the server, refresh anything open beside it, and
     redraw. */
 let applied = 0;
@@ -187,6 +212,7 @@ async function apply(state, opts = {}) {
   S.month = state.month;
   S.on = state.day.on;
   S.count = state.stock.count_date;
+  await useLanguage(state);
   try {
     if (S.search) {
       S.search.rows = await get(`/api/entries?q=${encodeURIComponent(S.search.q)}&limit=300`);
@@ -861,6 +887,70 @@ const H = {
     say('The app has not come back. Close its window and start it again.', true);
   },
 
+  /* -------------------------------------------------------------- language */
+
+  async langPick(el) {
+    const out = await act(() => send('language_set', { language: el.dataset.lang }));
+    if (out && el.dataset.lang === 'ckb' && !S.data.lang.done) {
+      say('There is no Kurdish yet: copy the first batch for Gemini, below.');
+    }
+  },
+
+  async langCopy() {
+    let keys;
+    try { keys = await get(`/api/lang/todo?limit=${BATCH}`); } catch (err) { return say(err.message, true); }
+    if (!keys.length) return say('Every piece of text has its Kurdish.');
+    S.draft.langBatch = keys;
+    try { localStorage.setItem('twilight.langBatch', JSON.stringify(keys)); } catch { /* not kept */ }
+    const text = prompt(keys);
+    try {
+      await navigator.clipboard.writeText(text);
+      S.draft.langPrompt = null;
+      say(`Copied ${keys.length} lines for Gemini. Paste them into a new chat there.`);
+    } catch {
+      S.draft.langPrompt = text;
+      say('Copy the prompt from the box below, all of it.');
+    }
+    render();
+  },
+
+  async langSave() {
+    const box = document.getElementById('langAnswer');
+    let batch = S.draft.langBatch;
+    if (!batch) {
+      try { batch = JSON.parse(localStorage.getItem('twilight.langBatch') || 'null'); } catch { /* none */ }
+    }
+    let pairs;
+    try { pairs = answer(box ? box.value : '', batch || []); } catch {
+      return say('That is not Gemini’s answer. Copy all of it, from the first { to the last }.', true);
+    }
+    if (!Object.keys(pairs).length) return say('There is nothing in it to save.', true);
+    const out = await act(() => send('lang_set', { pairs }), { skip: ['#langAnswer'] });
+    if (!out) return;
+    S.draft.langBatch = null;
+    S.draft.langPrompt = null;
+    try { localStorage.removeItem('twilight.langBatch'); } catch { /* not kept */ }
+    render({ skip: ['#langAnswer'] });
+    const n = out.wrong_count;
+    say(n
+      ? `Saved ${out.saved}. ${n === 1 ? 'One line' : `${n} lines`} lost a mark in curly brackets on the way `
+        + `and ${n === 1 ? 'was' : 'were'} left out; the next batch asks again.`
+      : `Saved the Kurdish for ${out.saved} pieces of text.`, Boolean(n));
+  },
+
+  langFind() {
+    S.draft.langFind = (document.getElementById('langFind') || {}).value || '';
+    render();
+  },
+
+  async langFix(el) {
+    const row = el.closest('tr');
+    const box = row && row.querySelector('input');
+    if (!box) return;
+    const out = await act(() => send('lang_set', { pairs: { [el.dataset.key]: box.value } }));
+    if (out) say(out.saved ? 'Saved.' : 'Not saved: the Kurdish has to keep the same marks in curly brackets as the English.', !out.saved);
+  },
+
   async health() {
     try {
       const r = await get('/api/health');
@@ -878,10 +968,10 @@ const H = {
       <div>Owed to suppliers</div><div>${esc(S.data.today)}</div>
       <div class="rule"></div>
       <table>${rows.map(s => `<tr><td>${esc(s.name)}</td>
-        <td style="text-align:right">${money(s.owed_now)}</td></tr>`).join('')}</table>
+        <td style="text-align:end">${money(s.owed_now)}</td></tr>`).join('')}</table>
       <div class="rule"></div>
       <table><tr><td><strong>Total</strong></td>
-        <td style="text-align:right"><strong>${money(S.data.owed)}</strong></td></tr></table>`);
+        <td style="text-align:end"><strong>${money(S.data.owed)}</strong></td></tr></table>`);
   },
 
   printStatement() {
@@ -891,21 +981,21 @@ const H = {
     printSlip(`<h3>${esc(S.data.business.name || 'Twilight')}</h3>
       <div>${esc(st.name)}</div><div>${esc(monthName(st.month))}</div>
       <div class="rule"></div>
-      <table><tr><td>Owed coming in</td><td style="text-align:right">${money(st.opening)}</td></tr>
+      <table><tr><td>Owed coming in</td><td style="text-align:end">${money(st.opening)}</td></tr>
       ${st.lines.map(l => {
         run += l.amount;
         return `<tr><td>${esc(l.on.slice(5))} ${esc(l.what)}</td>
-          <td style="text-align:right">${signed(l.amount)}</td></tr>`;
+          <td style="text-align:end">${signed(l.amount)}</td></tr>`;
       }).join('')}</table>
       <div class="rule"></div>
       <table><tr><td><strong>Owed at the end</strong></td>
-        <td style="text-align:right"><strong>${money(st.closing)}</strong></td></tr></table>`);
+        <td style="text-align:end"><strong>${money(st.closing)}</strong></td></tr></table>`);
   },
 
   printMonth() {
     const r = S.data.result;
     const line = (k, v) => `<tr><td>${esc(k)}</td>
-      <td style="text-align:right">${money(v)}</td></tr>`;
+      <td style="text-align:end">${money(v)}</td></tr>`;
     printSlip(`<h3>${esc(S.data.business.name || 'Twilight')}</h3>
       <div>${esc(monthName(S.data.month))}${S.data.so_far ? ' (in progress)' : ''}</div>
       <div class="rule"></div>
@@ -990,7 +1080,7 @@ const H = {
       <h2>Where the money is</h2>
       <table>
         <tr><td>Cash, in every pot</td><td class="n">${money(d.cash)}</td></tr>
-        ${(d.pots || []).filter(x => x.balance).map(x => `<tr><td style="padding-left:5mm">${esc(x.name)}</td>
+        ${(d.pots || []).filter(x => x.balance).map(x => `<tr><td style="padding-inline-start:5mm">${esc(x.name)}</td>
           <td class="n">${money(x.balance)}</td></tr>`).join('')}
         <tr><td>Owed to suppliers</td><td class="n">${money(d.owed)}</td></tr>
         ${stock && stock.date ? `<tr><td>Stock on the shelves, counted ${esc(stock.date)}</td>
@@ -1272,7 +1362,7 @@ document.addEventListener('keydown', e => {
   if (e.key !== 'Enter' || e.isComposing || !el.matches('input, select')) return;
 
   const submit = { nSales: 'sales', nAmt: 'nAdd', eAmt: 'addEntry', rAmt: 'receipt', q: 'search',
-                   rlItem: 'addRLine', fillItem: 'fillAdd' };
+                   rlItem: 'addRLine', fillItem: 'fillAdd', langFind: 'langFind' };
   if (submit[el.id]) {
     e.preventDefault();
     H[submit[el.id]](el);
@@ -1328,6 +1418,8 @@ document.addEventListener('wheel', e => {
 (async function start() {
   const tab = location.hash.slice(1);
   if (VIEWS[tab]) S.tab = tab;
+  try { setLanguage(localStorage.getItem('twilight.lang')); } catch { /* English */ }
+  watch();
   try {
     await apply(await load(), { fresh: true });
     const bad = S.data.checks.filter(c => !c.ok).length;

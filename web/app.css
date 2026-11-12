@@ -1,6 +1,10 @@
 /* Twilight Ledger — desktop first, because it is only ever opened on the PC.
    A fixed rail on the left for the five jobs, one column of cards on the right.
-   No shadows, no gradients, one accent. Hairlines do the separating. */
+   No shadows, no gradients, one accent. Hairlines do the separating.
+
+   In Kurdish the page runs right to left: the rail moves to the right and
+   everything mirrors. That is why sides are written as start and end
+   (margin-inline-start, not margin-left) everywhere below. */
 
 :root {
   --paper:  #fcfcfd;
@@ -21,6 +25,11 @@
   --sans: system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
   color-scheme: light;
 }
+/* Windows' own fonts draw Kurdish well; letter spacing would pull its joined
+   letters apart, and capitals mean nothing in it */
+html[lang="ckb"] { --sans: "Segoe UI", Tahoma, "Noto Sans Arabic", system-ui, sans-serif; }
+html[lang="ckb"] body { font-size: 15.5px; }
+html[lang="ckb"] * { letter-spacing: 0 !important; }
 
 @media (prefers-color-scheme: dark) {
   :root:not([data-theme="light"]) {
@@ -62,9 +71,10 @@ body {
 
 #rail {
   position: fixed;
-  inset: 0 auto 0 0;
+  inset-block: 0;
+  inset-inline-start: 0;
   width: var(--rail);
-  border-right: 1px solid var(--line);
+  border-inline-end: 1px solid var(--line);
   background: var(--paper);
   display: flex;
   flex-direction: column;
@@ -97,7 +107,7 @@ body {
   color: var(--muted);
   font: inherit;
   font-weight: 500;
-  text-align: left;
+  text-align: start;
   cursor: pointer;
 }
 #rail button.tab:hover { color: var(--ink); background: var(--accent-soft); }
@@ -107,7 +117,7 @@ body {
   font-weight: 600;
 }
 #rail button.tab .flag {
-  margin-left: auto;
+  margin-inline-start: auto;
   min-width: 18px;
   padding: 1px 6px;
   border-radius: 9px;
@@ -127,8 +137,9 @@ body {
 }
 
 main {
-  margin-left: var(--rail);
-  padding: 26px max(20px, env(safe-area-inset-right, 0px)) 72px 26px;
+  margin-inline-start: var(--rail);
+  padding-block: 26px 72px;
+  padding-inline: 26px max(20px, env(safe-area-inset-right, 0px));
   max-width: 1120px;
 }
 
@@ -158,7 +169,7 @@ h1 + .sub { margin: 0 0 22px; color: var(--muted); }
 
 .cardhead { display: flex; align-items: baseline; gap: 10px; margin-bottom: 12px; }
 .cardhead h2 { margin: 0; font-size: 15px; }
-.cardhead .right { margin-left: auto; }
+.cardhead .right { margin-inline-start: auto; }
 
 .sectionhead {
   margin: 28px 0 12px;
@@ -206,7 +217,7 @@ h1 + .sub { margin: 0 0 22px; color: var(--muted); }
 table { width: 100%; border-collapse: collapse; font-size: 14px; }
 th, td {
   padding: 8px 10px;
-  text-align: left;
+  text-align: start;
   border-bottom: 1px solid var(--line);
   vertical-align: middle;
 }
@@ -218,7 +229,7 @@ th {
   color: var(--faint);
   white-space: nowrap;
 }
-td.num, th.num { text-align: right; font-variant-numeric: tabular-nums; }
+td.num, th.num { text-align: end; font-variant-numeric: tabular-nums; }
 tbody tr:last-child td { border-bottom: 0; }
 tr.tot td { font-weight: 600; border-top: 1px solid var(--ink); border-bottom: 0; }
 .scroll { overflow-x: auto; }
@@ -291,13 +302,13 @@ button.mini.link {
   border: 0;
   color: var(--accent);
   font-size: inherit;
-  text-align: left;
+  text-align: start;
   text-decoration: underline;
   text-decoration-color: color-mix(in srgb, var(--accent) 35%, transparent);
   text-underline-offset: 3px;
 }
 button.mini.link:hover { color: var(--ink); }
-.check button.mini.link, .banner button.mini.link { margin-left: 6px; font-size: 13px; }
+.check button.mini.link, .banner button.mini.link { margin-inline-start: 6px; font-size: 13px; }
 
 .chips { display: flex; flex-wrap: wrap; gap: 6px; margin: 8px 0; }
 .chips button {
@@ -386,7 +397,7 @@ button.mini.link:hover { color: var(--ink); }
 }
 .banner.bad { border-color: var(--bad); }
 .banner h2 { margin: 0 0 6px; font-size: 14px; }
-.banner ul { margin: 0; padding-left: 20px; }
+.banner ul { margin: 0; padding-inline-start: 20px; }
 
 .pill {
   display: inline-block;
@@ -411,28 +422,28 @@ button.mini.link:hover { color: var(--ink); }
 input[type="number"]::-webkit-inner-spin-button,
 input[type="number"]::-webkit-outer-spin-button { -webkit-appearance: none; margin: 0; }
 input[type="number"] { -moz-appearance: textfield; appearance: textfield; }
-td.num input { text-align: right; max-width: 130px; margin-left: auto; display: block; }
+td.num input { text-align: end; max-width: 130px; margin-inline-start: auto; display: block; }
 td input, td select { padding: 6px 8px; }
-.pot input { text-align: right; }
+.pot input { text-align: end; }
 
-td.actions { white-space: nowrap; text-align: right; width: 1%; }
-td.actions button + button { margin-left: 4px; }
+td.actions { white-space: nowrap; text-align: end; width: 1%; }
+td.actions button + button { margin-inline-start: 4px; }
 tr.editing > td { background: var(--accent-soft); padding: 14px; }
 tr.editing .grid-form { grid-template-columns: repeat(auto-fit, minmax(140px, 1fr)); }
 tr.drill > td { background: var(--paper); padding: 14px 16px; }
 tr.typeh > td { background: var(--paper); padding: 8px 12px; font-size: 13px; }
 select.link { max-width: 300px; margin-top: 4px; }
 tr.brandh > td { background: var(--paper); padding: 8px 10px; font-size: 13px; }
-tr.flavour > td:first-child { padding-left: 26px; }
+tr.flavour > td:first-child { padding-inline-start: 26px; }
 tr.found > td { background: var(--accent-soft); }
 label.tick { display: flex; align-items: center; gap: 8px; margin: 12px 0 0;
              font-size: 14px; color: var(--ink); cursor: pointer; }
 label.tick input { width: auto; margin: 0; }
 .sizes { display: flex; flex-wrap: wrap; gap: 8px; }
 label.sizebox { display: block; margin: 0; }
-label.sizebox input { width: 86px; text-align: right; }
+label.sizebox input { width: 86px; text-align: end; }
 td .size { display: block; margin-top: 2px; font-size: 11px; color: var(--faint);
-           text-align: right; white-space: nowrap; }
+           text-align: end; white-space: nowrap; }
 .codes { display: flex; flex-wrap: wrap; gap: 4px; align-items: center; min-width: 130px; }
 .codes input { max-width: 140px; }
 tr.drill .cardhead { margin-bottom: 8px; }
@@ -458,6 +469,7 @@ details.fold > summary {
 details.fold > summary::-webkit-details-marker { display: none; }
 details.fold > summary::before { content: "▸"; display: inline-block; width: 14px; color: var(--faint); }
 details.fold[open] > summary::before { content: "▾"; }
+html[dir="rtl"] details.fold:not([open]) > summary::before { content: "◂"; }
 details.fold > summary:hover { color: var(--accent); }
 .card > details.fold:first-child { margin-top: 0; }
 .card > details.fold:first-child > summary { color: var(--ink); font-weight: 600; font-size: 15px; }
@@ -475,8 +487,8 @@ details.flow > summary {
 }
 details.flow > summary::-webkit-details-marker { display: none; }
 details.flow > summary:hover { color: var(--accent); }
-details.flow > summary .num { text-align: right; font-variant-numeric: tabular-nums; }
-details.flow > .scroll { margin: 0 0 10px 18px; }
+details.flow > summary .num { text-align: end; font-variant-numeric: tabular-nums; }
+details.flow > .scroll { margin-block: 0 10px; margin-inline: 18px 0; }
 .track { height: 6px; border-radius: 3px; background: var(--line); overflow: hidden; }
 .track .fill { display: block; height: 100%; background: var(--accent); }
 
@@ -490,7 +502,7 @@ details.flow > .scroll { margin: 0 0 10px 18px; }
 
 #toast {
   position: fixed;
-  right: 20px;
+  inset-inline-end: 20px;
   bottom: 20px;
   z-index: 50;
   display: grid;
@@ -541,12 +553,12 @@ details.flow > .scroll { margin: 0 0 10px 18px; }
     width: auto;
     flex-direction: row;
     overflow-x: auto;
-    border-right: 0;
+    border-inline-end: 0;
     border-bottom: 1px solid var(--line);
     padding: 10px;
   }
   #rail .brand, #rail .foot { display: none; }
-  main { margin-left: 0; padding: 18px max(16px, env(safe-area-inset-right, 0px))
+  main { margin-inline-start: 0; padding: 18px max(16px, env(safe-area-inset-right, 0px))
                               60px max(16px, env(safe-area-inset-left, 0px)); }
 }
 
@@ -603,11 +615,11 @@ details.flow > .scroll { margin: 0 0 10px 18px; }
   body.paging .page .meta { color: #444; margin-top: 1mm; }
   body.paging .page table { width: 100%; border-collapse: collapse; }
   body.paging .page th, body.paging .page td {
-    padding: 1.4mm 0; border-bottom: .3mm solid #ccc; text-align: left;
+    padding: 1.4mm 0; border-bottom: .3mm solid #ccc; text-align: start;
     font-size: 12px; text-transform: none; letter-spacing: 0; color: #000;
   }
   body.paging .page th { font-weight: 600; border-bottom: .4mm solid #000; }
-  body.paging .page .n { text-align: right; font-variant-numeric: tabular-nums; }
+  body.paging .page .n { text-align: end; font-variant-numeric: tabular-nums; }
   body.paging .page tr.total td { font-weight: 700; border-bottom: .5mm solid #000; }
   body.paging .page .foot { margin-top: 8mm; color: #555; font-size: 10.5px; }
   body:not(.slipping) #rail, body:not(.slipping) #toast { display: none; }
@@ -647,3 +659,13 @@ code { font: 12px var(--mono); }
 .dday .good, .dday .bad { display: block; width: 100%; }
 .dday .good { background: var(--good); }
 .dday .bad { background: var(--bad); }
+
+/* ----------------------------------------------------------- right to left
+   A number box stays left to right, so a minus sign or a decimal point is
+   where it is typed. Kurdish typed into a plain box runs right to left by
+   itself, because the page does. */
+
+html[dir="rtl"] input[type="number"] { direction: ltr; text-align: right; }
+html[dir="rtl"] td.num input, html[dir="rtl"] .pot input,
+html[dir="rtl"] label.sizebox input { text-align: left; }
+html[dir="rtl"] textarea#langAnswer { direction: ltr; }

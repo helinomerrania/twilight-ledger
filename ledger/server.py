@@ -26,7 +26,7 @@ from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
 from urllib.parse import parse_qs, urlparse
 
-from . import api, backup, db, queries, update
+from . import api, backup, db, lang, queries, update
 from .close import ready
 from .pos import auto
 
@@ -140,6 +140,12 @@ class Handler(BaseHTTPRequestHandler):
                 return self.send_json(out)
             if url.path == "/api/update":
                 return self.send_json(update.check())
+            if url.path == "/api/lang":                # the Kurdish, for the screens
+                return self.send_json(lang.texts(self.con))
+            if url.path == "/api/lang/todo":           # what Gemini is asked next
+                limit = q.get("limit") or ""
+                return self.send_json(lang.todo(self.con, min(int(limit) if limit.isdigit()
+                                                              else 150, 400)))
             if url.path.startswith("/api/"):
                 return self.send_json({"error": "no such endpoint"}, 404)
         except (api.ApiError, db.LedgerError) as exc:
@@ -173,6 +179,10 @@ class Handler(BaseHTTPRequestHandler):
                 Handler.restart = True
                 threading.Timer(1.0, self.server.shutdown).start()
                 return self.send_json(out)
+            if url.path == "/api/lang/seen":           # text the screens showed
+                with db.tx(self.con):
+                    new = lang.seen(self.con, body.get("keys"))
+                return self.send_json({"new": new})
             if not url.path.startswith("/api/do/"):
                 return self.send_json({"error": "no such endpoint"}, 404)
             name = url.path[len("/api/do/"):]

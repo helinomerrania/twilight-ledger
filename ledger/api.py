@@ -12,7 +12,7 @@ what registers their actions.
 import json
 
 from . import (accruals, actions, backup, buckets, cash, checks as _checks, db, expected,
-               kinds, money, ratios, stock, post, queries, setup, update)
+               kinds, lang, money, ratios, stock, post, queries, setup, update)
 from .dates import month_of, prev_month, today
 from .pos import actions as pos
 from .registry import ACTIONS, ApiError, run            # noqa: F401  (re-exported)
@@ -78,6 +78,7 @@ def state(con, *, month=None, on=None, count_date=None):
         "pos": pos.view(con, on, month),
         "result": queries.result(con, month),
         "prev": queries.result(con, prev_month(month)),
+        "lang": lang.view(con),
         "so_far": queries.so_far(con, month),
         "drawings": queries.drawings(con, month),
         "pots": queries.pots(con),
