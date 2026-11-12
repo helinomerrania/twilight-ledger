@@ -9,7 +9,8 @@ import {
 } from './lib.js';
 import { BATCH, texts } from './i18n.js';
 
-const go = c => (c.go ? ` <button class="mini link" data-go="${esc(c.go)}">Open ${esc(c.go)}</button>` : '');
+// c.go is a screen, or a page of one ('books/cash'); the button names the screen
+const go = c => (c.go ? ` <button class="mini link" data-go="${esc(c.go)}">Open ${esc(c.go.split('/')[0])}</button>` : '');
 const amountInput = (id, value = '', extra = '') =>
   `<input type="number" step="${S.data.note}" min="0" id="${id}" value="${esc(value)}"
      placeholder="0" inputmode="numeric" ${extra}>`;
@@ -20,14 +21,15 @@ export function needsALook() {
   const bad = S.data.checks.filter(c => !c.ok);
   if (!bad.length) return '';
   const show = bad.slice(0, 4);
-  return `<div class="banner${bad.some(b => b.label === 'The books balance') ? ' bad' : ''}">
-    <h2>Needs a look</h2>
+  // one line until it is opened, so it does not push tonight's job down the page
+  return `<details class="banner${bad.some(b => b.label === 'The books balance') ? ' bad' : ''}"${S.draft.lookOpen ? ' open' : ''}>
+    <summary data-act="lookToggle">${bad.length === 1 ? '1 thing needs a look.' : `${bad.length} things need a look.`}</summary>
     <ul>${show.map(c => `<li><strong>${esc(c.label)}</strong>${c.detail ? ' — ' + esc(c.detail) : ''}
       <br><span class="quiet">${esc(c.fix || '')}</span>${go(c)}</li>`).join('')}</ul>
     ${bad.length > show.length
-      ? `<p style="margin:8px 0 0"><button class="btn" data-go="month">See all
+      ? `<p style="margin:8px 0 0"><button class="btn" data-go="month/close">See all
            ${bad.length}</button></p>` : ''}
-  </div>`;
+  </details>`;
 }
 
 export function allChecks() {
@@ -254,7 +256,7 @@ function posLine() {
     }
     if (live) return `<p class="note">SambaPOS has not been kept for ${esc(on)}.${live}</p>`;
     return `<p class="note quiet">Tell the app where SambaPOS puts its backups, and each
-      night comes in by itself. <button class="mini link" data-go="setup">Open setup</button></p>`;
+      night comes in by itself. <button class="mini link" data-go="setup/sambapos">Open setup</button></p>`;
   }
   const same = night.takings === S.data.day.sales;
   return `<p class="note">SambaPOS kept <strong>${money(night.takings)}</strong> paid over

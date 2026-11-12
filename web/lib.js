@@ -6,6 +6,7 @@ import { localiseNow } from './i18n.js';
 export const S = {               // whatever the server last told us
   data: null,
   tab: 'tonight',
+  page: {},                      // which page of each screen is open: {month: 'settle'}
   month: null,
   on: null,
   count: null,                   // which stock count is on screen

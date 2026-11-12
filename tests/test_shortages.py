@@ -52,7 +52,7 @@ class Low(unittest.TestCase):
         [c] = [c for c in api.state(self.con)["checks"] if c["label"] == "Nothing is running low"]
         self.assertFalse(c["ok"])
         self.assertIn("Apple Mix: 1.45 kg left", c["detail"])
-        self.assertEqual(c["go"], "stock")
+        self.assertEqual(c["go"], "stock/shelf")
 
     def test_a_stopped_item_is_not_warned_about(self):
         self.minimum("2")

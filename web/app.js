@@ -18,7 +18,7 @@ import {
   BATCH, answer, prompt, setCatalog, setDict, setLanguage, setNames, watch,
 } from './i18n.js';
 import {
-  S, ask, closeCheck, esc, get, load, money, monthName, pickItem, post, printPage,
+  S, ask, closeCheck, empty, esc, get, load, money, monthName, pickItem, post, printPage,
   printSlip, say, send, signed,
 } from './lib.js';
 
@@ -32,44 +32,66 @@ const TABS = [
   ['setup', 'Setup'],
 ];
 
-const section = (title, note) =>
-  `<div class="sectionhead"><div>${esc(title)}</div><span>${esc(note)}</span></div>`;
-
-const VIEWS = {
-  tonight: () => C.needsALook() + C.closingUp() + C.nightDrawer() + C.todayFigures()
-               + C.todayEntries() + C.nightSold(),
-
-  stock: () => C.stockFigures() + C.fillCard() + C.countPicker() + C.countSheet() + C.expectedCard()
-             + C.ratiosCard()
-             + C.receiptForm() + C.receiptList() + C.countHistory(),
-
-  month: () => C.periodPicker() + C.monthFigures() + C.soFarCard() + C.resultCard()
-             + C.settleCard() + C.electricityCard() + C.payrollCard() + C.partnersCard()
-             + C.suppliersCard() + C.moneyFlow() + C.salesByDay() + C.cashDifferences()
-             + C.monthSold() + C.monthWhen() + C.monthMakes() + C.allChecks()
-             + C.closeCard() + C.everyMonth(),
-
-  books: () => C.newEntryCard() + C.entryList() + C.recentChanges()
-             + C.whereMoneyIs() + C.cashCountsCard(),
-
-  setup: () => section('People and money', 'Who is paid, who is owed, and where the cash sits')
-    + C.editAccounts('staff', 'Staff', 'A salary change applies from the month on screen if it is open, never to a closed one.')
-    + C.editAccounts('supplier', 'Suppliers', 'A positive balance is what you owe them.')
-    + C.editAccounts('partner', 'Partners', 'Shares decide how a closed month’s profit is split.')
-    + C.editAccounts('cash', 'Cash pots', 'Where the business keeps its money. The first one is the main pot, used unless another is picked.')
-    + C.floatsCard() + C.cashCountingCard()
-    + C.editFixed() + C.editElecFactors()
-    + section('Stock', 'What is counted and what it is worth')
-    + C.editItems() + C.menuUses() + C.editTares() + C.editConversions()
-    + section('Lists', 'What the pickers offer')
-    + C.editList('expense', 'Daily expenses', 'The first twelve show as buttons on Tonight.')
-    + C.editList('income', 'Other income', '')
-    + C.editList('reason', 'Reasons for a cash difference', '')
-    + section('SambaPOS', 'Keeping each night before the reset deletes it')
-    + C.sambaposCard() + C.sambaposAccounts() + C.sambaposMenu()
-    + section('This app', 'The business, the language, the backups, and updates')
-    + C.businessCard() + C.languageCard() + C.backupCard() + C.updateCard(),
+/* Each screen is a few pages, so nothing has to be scrolled through to find
+   it: [key, label, cards, a line under the tabs]. The first page is the one
+   a screen opens on, until another is picked; HEADS go above every page. */
+const PAGES = {
+  tonight: [
+    ['close', 'Closing up', () => C.needsALook() + C.closingUp() + C.nightDrawer()],
+    ['today', 'Today', () => C.todayFigures() + C.todayEntries()],
+    ['sold', 'Sold tonight', () => C.nightSold()],
+  ],
+  stock: [
+    ['count', 'Count', () => C.stockFigures() + C.countPicker() + C.countSheet()],
+    ['fill', 'Fill a bucket', () => C.fillCard()],
+    ['receipts', 'Receipts', () => C.receiptForm() + C.receiptList()],
+    ['shelf', 'Should be there', () => C.countPicker() + C.expectedCard() + C.ratiosCard()],
+    ['counts', 'Past counts', () => C.countHistory()],
+  ],
+  month: [
+    ['profit', 'Profit', () => C.monthFigures() + C.soFarCard() + C.resultCard()],
+    ['settle', 'Settle up', () => C.settleCard() + C.electricityCard() + C.payrollCard()
+                                  + C.partnersCard() + C.suppliersCard()],
+    ['cash', 'Cash', () => C.moneyFlow() + C.cashDifferences()],
+    ['sales', 'Sales', () => C.salesByDay() + C.monthSold() + C.monthWhen() + C.monthMakes()],
+    ['close', 'Checks and closing', () => C.allChecks() + C.closeCard() + C.everyMonth()],
+  ],
+  books: [
+    ['entries', 'Entries', () => C.newEntryCard() + C.entryList()],
+    ['cash', 'Cash counts', () => C.whereMoneyIs() + C.cashCountsCard()],
+    ['changes', 'Recent changes', () => C.recentChanges()],
+  ],
+  setup: [
+    ['people', 'People', () =>
+      C.editAccounts('staff', 'Staff', 'A salary change applies from the month on screen if it is open, never to a closed one.')
+      + C.editAccounts('supplier', 'Suppliers', 'A positive balance is what you owe them.')
+      + C.editAccounts('partner', 'Partners', 'Shares decide how a closed month’s profit is split.')],
+    ['cash', 'Cash', () =>
+      C.editAccounts('cash', 'Cash pots', 'Where the business keeps its money. The first one is the main pot, used unless another is picked.')
+      + C.floatsCard() + C.cashCountingCard()],
+    ['bills', 'Rent and bills', () => C.editFixed() + C.editElecFactors()],
+    ['stock', 'Stock', () => C.editItems() + C.menuUses() + C.editTares() + C.editConversions(),
+     'What is counted and what it is worth'],
+    ['lists', 'Lists', () =>
+      C.editList('expense', 'Daily expenses', 'The first twelve show as buttons on Tonight.')
+      + C.editList('income', 'Other income', '')
+      + C.editList('reason', 'Reasons for a cash difference', ''),
+     'What the pickers offer'],
+    ['sambapos', 'SambaPOS', () => C.sambaposCard() + C.sambaposAccounts() + C.sambaposMenu(),
+     'Keeping each night before the reset deletes it'],
+    ['app', 'This app', () => C.businessCard() + C.languageCard() + C.backupCard() + C.updateCard(),
+     'The business, the language, the backups, and updates'],
+  ],
 };
+
+const HEADS = { month: () => C.periodPicker() };
+
+/** The page of `tab` that is open. */
+const pageOf = tab => {
+  const pages = PAGES[tab];
+  return pages.find(p => p[0] === S.page[tab]) || pages[0];
+};
+const onPage = (tab, key) => S.tab === tab && pageOf(tab)[0] === key;
 
 const TITLES = {
   tonight: ['Tonight', 'The nightly job, in the order you do it.'],
@@ -157,8 +179,15 @@ function render({ fresh = false, skip = [] } = {}) {
   }
   renderRail();
   const [title, sub] = TITLES[S.tab];
-  main.innerHTML = `<h1>${esc(title)}</h1><p class="sub">${esc(sub)}</p>` + VIEWS[S.tab]();
-  if (S.tab === 'stock' && S.draft.fill) fillFigures();
+  const [key, , cards, note] = pageOf(S.tab);
+  const tabs = PAGES[S.tab].map(([k, label]) =>
+    `<button data-go="${S.tab}/${k}" aria-current="${k === key}">${esc(label)}</button>`).join('');
+  main.innerHTML = `<h1>${esc(title)}</h1><p class="sub">${esc(sub)}</p>`
+    + `<nav class="pages" aria-label="${esc(title)}">${tabs}</nav>`
+    + (HEADS[S.tab] ? HEADS[S.tab]() : '')
+    + (note ? `<p class="pagenote">${esc(note)}</p>` : '')
+    + (cards() || `<div class="card">${empty('Nothing here yet.')}</div>`);
+  if (onPage('stock', 'fill') && S.draft.fill) fillFigures();
   if (!kept.size && !focus) return;
   const byKey = new Map();
   for (const el of fields()) {
@@ -257,10 +286,13 @@ function watchBackups() {
   if (++watchTries <= 40) watchTimer = setTimeout(refreshQuietly, 2500);
 }
 
-function setTab(tab) {
-  if (!VIEWS[tab]) return;
+/** Open a screen, or one page of it: 'month' or 'month/settle'. */
+function setTab(where) {
+  const [tab, page] = String(where || '').split('/');
+  if (!PAGES[tab]) return;
+  if (page && PAGES[tab].some(p => p[0] === page)) S.page[tab] = page;
   S.tab = tab;
-  try { history.replaceState(null, '', '#' + tab); } catch { /* not important */ }
+  try { history.replaceState(null, '', `#${tab}/${pageOf(tab)[0]}`); } catch { /* not important */ }
   render({ fresh: true });
   window.scrollTo(0, 0);
   // opening Tonight looks for a new SambaPOS backup
@@ -371,6 +403,11 @@ async function keepPos(el, action) {
 
 const H = {
   go(el) { setTab(el.dataset.go); },
+
+  lookToggle(el) {
+    S.draft.lookOpen = !S.draft.lookOpen;
+    el.closest('details').open = S.draft.lookOpen;
+  },
 
   /* ---------------------------------------------------------- moving around */
 
@@ -1307,15 +1344,15 @@ async function scanned(raw) {
     if (!out) return;
     say(`${code} is now ${it.name}.`);
   }
-  if (S.tab === 'stock' && S.draft.fill && S.draft.fill.mix) {
+  if (onPage('stock', 'fill') && S.draft.fill && S.draft.fill.mix) {
     if (it.letter !== 'B') return say(`Only sealed tobacco goes into a mix, not ${it.name}.`, true);
     return fillItem(it, 1);
   }
-  if (S.tab === 'stock' && S.draft.rlines && document.getElementById('rlItem')) {
+  if (onPage('stock', 'receipts') && S.draft.rlines && document.getElementById('rlItem')) {
     if (it.letter === 'A') return say(`${it.name} is a mix, made here, not bought.`, true);
     return receiptItem(it);
   }
-  const sheet = S.tab === 'stock' && S.data.stock.count.date;
+  const sheet = onPage('stock', 'count') && S.data.stock.count.date;
   if (sheet) {
     const row = document.querySelector(`#main tr[data-item="${it.id}"]:not([data-receipt])`);
     if (!row) return say(`${it.name} is not on this count.`, true);
@@ -1414,8 +1451,9 @@ document.addEventListener('wheel', e => {
 /* -------------------------------------------------------------------- boot */
 
 (async function start() {
-  const tab = location.hash.slice(1);
-  if (VIEWS[tab]) S.tab = tab;
+  const [tab, page] = location.hash.slice(1).split('/');
+  if (PAGES[tab]) S.tab = tab;
+  if (PAGES[tab] && page && PAGES[tab].some(p => p[0] === page)) S.page[tab] = page;
   try { setLanguage(localStorage.getItem('twilight.lang')); } catch { /* English */ }
   watch();
   try {

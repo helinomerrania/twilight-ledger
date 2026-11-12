@@ -148,7 +148,32 @@ h1 {
   font-size: 21px;
   letter-spacing: -0.015em;
 }
-h1 + .sub { margin: 0 0 22px; color: var(--muted); }
+h1 + .sub { margin: 0 0 14px; color: var(--muted); }
+
+/* the pages of a screen, in a row under its title */
+nav.pages {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 2px;
+  margin: 0 0 20px;
+  border-bottom: 1px solid var(--line);
+}
+nav.pages button {
+  appearance: none;
+  background: none;
+  border: 0;
+  border-bottom: 2px solid transparent;
+  margin-bottom: -1px;
+  padding: 8px 12px;
+  font: inherit;
+  font-size: 14px;
+  font-weight: 500;
+  color: var(--muted);
+  cursor: pointer;
+}
+nav.pages button:hover { color: var(--ink); }
+nav.pages button[aria-current="true"] { color: var(--accent); border-bottom-color: var(--accent); }
+.pagenote { margin: -8px 0 16px; font-size: 13px; color: var(--muted); }
 
 /* ------------------------------------------------------------------- cards */
 
@@ -397,6 +422,12 @@ button.mini.link:hover { color: var(--ink); }
 }
 .banner.bad { border-color: var(--bad); }
 .banner h2 { margin: 0 0 6px; font-size: 14px; }
+details.banner > summary { cursor: pointer; font-weight: 600; list-style: none; }
+details.banner > summary::-webkit-details-marker { display: none; }
+details.banner > summary::before { content: "▸"; display: inline-block; width: 1.2em; color: var(--warn); }
+details.banner[open] > summary::before { content: "▾"; }
+html[dir="rtl"] details.banner:not([open]) > summary::before { content: "◂"; }
+details.banner[open] > summary { margin-bottom: 8px; }
 .banner ul { margin: 0; padding-inline-start: 20px; }
 
 .pill {

@@ -101,13 +101,16 @@ used as a night's sales.
 
 ## The five screens
 
-| | what it is for |
-| --- | --- |
-| **Tonight** | the nightly job: the till figure, what went out, count the box |
-| **Stock** | what arrived, what is left, what each supplier is owed |
-| **Month** | the result, settling up, closing the month |
-| **Books** | the record: correcting, searching, the cash counts |
-| **Setup** | the lists and accounts everything else is built from |
+Each screen is a few pages, picked from a row under its title, so nothing has
+to be scrolled through to find it.
+
+| | what it is for | its pages |
+| --- | --- | --- |
+| **Tonight** | the nightly job | Closing up · Today · Sold tonight |
+| **Stock** | what arrived, what is left, what it is worth | Count · Fill a bucket · Receipts · Should be there · Past counts |
+| **Month** | the result, settling up, closing the month | Profit · Settle up · Cash · Sales · Checks and closing |
+| **Books** | the record: correcting, searching, the cash counts | Entries · Cash counts · Recent changes |
+| **Setup** | the lists and accounts everything else is built from | People · Cash · Rent and bills · Stock · Lists · SambaPOS · This app |
 
 ## The idea in one paragraph
 

@@ -183,7 +183,7 @@ class Folder(unittest.TestCase):
         self.assertFalse(c["ok"])
         self.assertIn("Mon 9 Nov 03:00, more than a day ago", c["detail"])
         self.assertIn("was the reset run?", c["fix"])
-        self.assertEqual(c["go"], "setup")
+        self.assertEqual(c["go"], "setup/sambapos")
 
     def test_a_late_reset_is_not_a_missing_one(self):
         self.backup(datetime(2026, 11, 10, 15, 0), night("2026-11-09"))
