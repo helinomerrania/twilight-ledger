@@ -19,7 +19,7 @@ import {
 } from './i18n.js';
 import {
   S, ask, askDate, closeCheck, empty, esc, get, load, money, monthName, pickItem, post,
-  printPage, printSlip, say, send, signed,
+  printPage, printSlip, say, send, signed, withName,
 } from './lib.js';
 
 /* ------------------------------------------------------------- the screens */
@@ -442,6 +442,10 @@ const focusOn = id => {
   const el = document.getElementById(id);
   if (el) el.focus();
 };
+
+/* What the box asking the day someone started says. */
+const START_BODY = 'Their first day of work. The month they start in is charged a thirtieth '
+  + 'of the salary for each day of it they work.';
 
 /** Run one change. Returns the server's reply, or null if it failed or the
     person decided against it. */
@@ -1006,10 +1010,10 @@ const H = {
     const name = el.dataset.name || 'They';
     const body = { pos_id: Number(el.dataset.pos) };
     if (el.dataset.staff) {
-      body.left_on = await askDate(`When did ${name} leave?`,
+      body.left_on = await askDate(withName('When did ', name, ' leave?'),
         'SambaPOS no longer has an account for them. Their last day of work: the month '
-        + 'they leave in is charged for the days they worked of it, and the months after '
-        + 'it are not charged at all.', S.data.tonight, S.data.today, 'Mark as left');
+        + 'they leave in is charged a thirtieth of the salary for each day of it they '
+        + 'worked, and the months after it nothing.', S.data.tonight, S.data.today, 'Mark as left');
       if (!body.left_on) return;
     } else if (!await ask(`Mark ${name} as left?`,
       'SambaPOS no longer has an account for them. Their history in the books stays; '
@@ -1042,9 +1046,9 @@ const H = {
      month: it is charged for the days they worked of it. */
   async hasLeft(el) {
     const name = el.dataset.name;
-    const on = await askDate(`When did ${name} leave?`,
-      'Their last day of work. The month they leave in is charged for the days they '
-      + 'worked of it, and the months after it are not charged at all.',
+    const on = await askDate(withName('When did ', name, ' leave?'),
+      'Their last day of work. The month they leave in is charged a thirtieth of the '
+      + 'salary for each day of it they worked, and the months after it nothing.',
       el.dataset.on || S.data.tonight, S.data.today, el.dataset.on ? 'Save the day' : 'They have left');
     if (!on || on === el.dataset.on) return;
     const out = await act(() => send('account_active',
@@ -1052,6 +1056,15 @@ const H = {
     if (!out) return;
     if (out.note) say(out.note, true);
     else say(el.dataset.on ? 'Saved.' : `${name} has left. Their history stays in the books.`);
+  },
+
+  /* The day someone on the staff started, put right. */
+  async started(el) {
+    const on = await askDate(withName('When did ', el.dataset.name, ' start?'), START_BODY,
+      el.dataset.on, S.data.today, 'Save the day');
+    if (!on || on === el.dataset.on) return;
+    const out = await act(() => send('staff_started', { id: Number(el.dataset.id), on }));
+    if (out) say(out.note || 'Saved.', Boolean(out.note));
   },
 
   async backupNow() {
@@ -1336,8 +1349,15 @@ document.addEventListener('click', async e => {
         body[el.dataset.f] = plain(el);
         if (el.dataset.keep === undefined) keys.push(fieldKey(el));     // kept for the next one
       });
+      // someone new on the staff: the day they started decides their first month
+      const who = String(body.name || '').trim();
+      if (adder.dataset.add === 'account_add' && body.kind === 'staff' && who) {
+        body.started_on = await askDate(withName('When did ', who, ' start?'), START_BODY,
+          S.data.tonight, S.data.today, 'Add');
+        if (!body.started_on) return;
+      }
       const out = await act(() => send(adder.dataset.add, body), { skip: keys });
-      if (out) say('Added.');
+      if (out) say(out.note || 'Added.', Boolean(out.note));
     });
     return;
   }

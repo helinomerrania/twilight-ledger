@@ -19,6 +19,7 @@ _WORDS = {
     "account_active": "{verb} {who}",
     "set_share": "Changed {who}'s share to {share}%",
     "set_salary": "Changed {who}'s salary to {amount}",
+    "staff_started": "{who} started on {on}",
     "fixed_set": "Set {name} to {amount} a month",
     "fixed_remove": "Stopped charging {name}",
     "list_add": "Added {value} to a list", "list_remove": "Removed {value} from a list",
@@ -42,6 +43,8 @@ def _line(name):
         ctx["verb"] = "Brought back" if body.get("active") else "Retired"
         if name == "account_active" and body.get("left_on") and not body.get("active"):
             return f"{ctx['who']} left on {body['left_on']}"
+        if name == "account_add" and body.get("kind") == "staff" and body.get("started_on"):
+            return f"Added {body.get('name')}, who started on {body['started_on']}"
         try:
             return _WORDS.get(name, name).format(**ctx)
         except (KeyError, IndexError, ValueError):
@@ -81,12 +84,24 @@ def _account_add(con, body):
     while db.one(con, "SELECT 1 FROM account WHERE code = ?", (code,)):
         code, n = f"{prefix}:{post.slug(name)}-{n}", n + 1
     meta = {"share": _share(body.get("share"))} if kind == "partner" else {}
+    started = None
+    if kind == "staff" and body.get("started_on"):
+        started = meta["started_on"] = _a_day(body["started_on"], "the day they started",
+                                              "Add them on their first day of work.")
     sort = db.scalar(con, "SELECT COALESCE(MAX(sort), 0) + 1 FROM account "
                           "WHERE kind = ? AND sort < 90", (kind,))
     aid = post.ensure_account(con, code, name, kind, normal, meta=meta, sort=sort)
+    note = None
     if kind == "staff" and to_int(body.get("salary")):
-        _save_salary(con, aid, to_int(body.get("salary")), body.get("view_month"))
-    return {"id": aid}
+        if started:
+            # paid from the month they started, even one closed since: it
+            # stays as it was closed until it is reopened (`_closed_note`)
+            con.execute("INSERT INTO salary(account_id, amount, from_month) VALUES (?,?,?)",
+                        (aid, to_int(body.get("salary")), month_of(started)))
+            note = _closed_note(accruals.closed_off(con, aid, month_of(started)))
+        else:
+            _save_salary(con, aid, to_int(body.get("salary")), body.get("view_month"))
+    return {"id": aid, "note": note}
 
 
 @action("account_rename", guard_pots=False, summary=_line("account_rename"))
@@ -117,7 +132,11 @@ def _account_active(con, body):
                 meta.pop(k, None)
         elif body.get("left_on"):
             # their last day of work: that month is charged for the days worked
-            on = _left_on(body["left_on"])
+            on = _a_day(body["left_on"], "the day they left",
+                        "Mark them as left once they have gone.")
+            if meta.get("started_on") and on < meta["started_on"]:
+                raise ApiError(f"they started on {meta['started_on']}, so they cannot "
+                               "have left before it")
             meta["left_on"], meta["left_after"] = on, month_of(on)
         else:
             meta["left_after"] = month_of(today())
@@ -133,15 +152,42 @@ def _account_active(con, body):
     return {"id": a["id"], "note": note}
 
 
-def _left_on(value):
-    """The last day someone worked: a real day, and one that has come."""
+@action("staff_started", guard_pots=False, summary=_line("staff_started"))
+def _staff_started(con, body):
+    """The day someone on the staff started, given or put right. The month
+    they started in is charged for the days of it they worked."""
+    a = _account(con, body)
+    if a["kind"] != "staff":
+        raise ApiError("only staff have a first day of work")
+    on = _a_day(body.get("on"), "the day they started", "Add them on their first day of work.")
+    meta = json.loads(a["meta"] or "{}")
+    if not a["active"] and meta.get("left_on") and on > meta["left_on"]:
+        raise ApiError(f"they left on {meta['left_on']}, so they cannot have started after it")
+    was = meta.get("started_on")
+    meta["started_on"] = on
+    con.execute("UPDATE account SET meta = ? WHERE id = ?",
+                (json.dumps(meta, ensure_ascii=False), a["id"]))
+    # a salary that only begins later begins in the month they started
+    first = db.one(con, "SELECT from_month FROM salary WHERE account_id = ? "
+                        "ORDER BY from_month LIMIT 1", (a["id"],))
+    if first and month_of(on) < first["from_month"]:
+        con.execute("UPDATE salary SET from_month = ? WHERE account_id = ? AND from_month = ?",
+                    (month_of(on), a["id"], first["from_month"]))
+    since = min(month_of(on), month_of(was)) if was else month_of(on)
+    return {"id": a["id"], "note": _closed_note(accruals.closed_off(con, a["id"], since))}
+
+
+def _a_day(value, what, wait):
+    """The day someone started or left: a real day, and one that has come."""
     try:
         on = ymd(value)
     except ValueError:
-        raise ApiError("the day they left is not a date") from None
+        raise ApiError(f"{what} is not a date") from None
+    if not on:
+        raise ApiError(f"{what} is needed")
     if on > today():
-        raise ApiError(f"{on} has not come yet. Mark them as left once they have gone.")
-    return clean_date(on, what="the day they left")
+        raise ApiError(f"{on} has not come yet. {wait}")
+    return clean_date(on, what=what)
 
 
 def _closed_note(months):
@@ -202,8 +248,11 @@ def _set_salary(con, body):
     amount = to_int(body.get("amount"), "salary")
     if amount < 0:
         raise ApiError("a salary cannot be negative")
-    return {"id": a["id"], "from": _save_salary(con, a["id"], amount,
-                                                 body.get("view_month"))}
+    month = body.get("view_month")
+    started = json.loads(a["meta"] or "{}").get("started_on")
+    if started and not db.one(con, "SELECT 1 FROM salary WHERE account_id = ?", (a["id"],)):
+        month = month_of(started)          # their first salary: paid from their first day
+    return {"id": a["id"], "from": _save_salary(con, a["id"], amount, month)}
 
 
 def _effective_month(con, body):

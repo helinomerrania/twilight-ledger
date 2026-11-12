@@ -537,13 +537,15 @@ export function payrollCard() {
   if (!pay.length) return '';
   const T = k => pay.reduce((a, p) => a + (p[k] || 0), 0);
   return card(`<h2>Staff</h2>
-    <p class="sub">The salary is charged to the month in full, or for someone who left
-      in it, for the days they worked. Advances come off it; what is left is handed over.</p>
+    <p class="sub">The salary is charged to the month in full, or for someone who started
+      or left in it, a thirtieth of it for each day they worked. Advances come off it; what
+      is left is handed over.</p>
     ${table(`<th>Who</th><th class="num">Salary</th><th class="num">Advances</th>
              <th class="num">Paid</th><th class="num">Still to pay</th>`,
       pay.map(p => `<tr>
-        <td>${esc(p.name)}${p.active ? '' : p.left_on
-          ? ` <span class="pill">left ${esc(p.left_on)}</span>` : ' <span class="pill">no longer here</span>'}</td>
+        <td>${esc(p.name)}${p.started_on ? ` <span class="pill">started ${esc(p.started_on)}</span>` : ''}${
+          p.active ? '' : p.left_on
+            ? ` <span class="pill">left ${esc(p.left_on)}</span>` : ' <span class="pill">no longer here</span>'}</td>
         <td class="num">${money(p.gross)}${p.part
           ? `<br><span class="quiet">${p.part.days} of ${p.part.of} days</span>` : ''}</td>
         <td class="num">${money(p.advances)}</td>
@@ -1266,11 +1268,15 @@ export function editAccounts(kind, title, note) {
     if (kind === 'supplier' && a.balance < 0) return `<span class="warnc">${money(-a.balance)} in credit</span>`;
     return `<span class="${a.balance < 0 ? 'neg' : ''}">${money(a.balance)}</span>`;
   };
-  // the day someone on the staff left decides their last month; it can be put right
-  const leftDay = a => (kind === 'staff' && !a.active && !a.meta.former
-    ? `<br><button class="mini link" data-act="hasLeft" data-id="${a.id}" data-name="${esc(a.name)}"
-         data-on="${esc(a.meta.left_on || '')}">${a.meta.left_on
-           ? `left ${esc(a.meta.left_on)}` : 'Which day did they leave?'}</button>` : '');
+  // the days someone on the staff started and left decide their first and last
+  // months; each can be put right while it still changes something
+  const leftDay = a => (kind !== 'staff' ? '' : (a.start_open
+    ? `<br><button class="mini link" data-act="started" data-id="${a.id}" data-name="${esc(a.name)}"
+         data-on="${esc(a.meta.started_on)}">started ${esc(a.meta.started_on)}</button>` : '')
+    + (!a.active && !a.meta.former
+      ? `<br><button class="mini link" data-act="hasLeft" data-id="${a.id}" data-name="${esc(a.name)}"
+           data-on="${esc(a.meta.left_on || '')}">${a.meta.left_on
+             ? `left ${esc(a.meta.left_on)}` : 'Which day did they leave?'}</button>` : ''));
   const row = a => `<tr>
       <td>${save('account_rename', { id: a.id }, 'name', a.name)}${leftDay(a)}</td>
       ${kind === 'staff' ? `<td class="num">${save('set_salary', { id: a.id }, 'amount', commas(sal[a.id] || ''),

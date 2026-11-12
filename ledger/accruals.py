@@ -15,7 +15,7 @@ import json
 from fractions import Fraction
 
 from . import db, post, queries
-from .dates import days_in, month_of, next_month, today
+from .dates import month_of, next_month, today
 from .money import mround_fraction, to_int
 
 
@@ -75,29 +75,21 @@ def _staff(con):
 
 
 def salary_target(con, a, month):
-    """What someone's salary for `month` is charged at. Someone who has left is
-    charged for the months before the one they left in, and for that one only
-    the days they worked of it: their last day, over the days in that month.
-    Someone marked as left before the day was asked is charged that whole
-    month, as they always were."""
-    meta = json.loads(a["meta"] or "{}")
+    """What someone's salary for `month` is charged at: the whole of it, or
+    in the month they started or left in a thirtieth of it for each day they
+    worked (`queries.salary_days`), to the note."""
     full = queries.salary_for(con, a["id"], month)
-    if a["active"]:
+    days = queries.salary_days(a, month)
+    if days >= queries.MONTH_DAYS:
         return full
-    left = meta.get("left_after")
-    if not left or month > left:
-        return 0
-    on = meta.get("left_on")
-    if not on or month < left:
-        return full
-    worked, days = int(on[8:10]), len(days_in(month))
-    return full if worked >= days else mround_fraction(Fraction(full) * worked / days)
+    return mround_fraction(Fraction(full) * days / queries.MONTH_DAYS) if days else 0
 
 
 def closed_off(con, account_id, since):
     """Closed months from `since` to now whose salary charge for someone is no
-    longer what it should be, as when the day they left is given after the
-    month closed. A closed month is never changed, so this is said instead."""
+    longer what it should be, as when the day they started or left is given
+    after the month closed. A closed month is never changed, so this is said
+    instead."""
     a = db.one(con, "SELECT id, name, meta, active FROM account WHERE id = ?", (account_id,))
     out, m, now = [], since, month_of(today())
     while a and m <= now:

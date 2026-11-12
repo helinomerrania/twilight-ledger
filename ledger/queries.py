@@ -341,6 +341,38 @@ def salary_for(con, account_id, month):
                      (account_id, month))
 
 
+# A month's salary is thirty days' pay, whatever the month's length.
+MONTH_DAYS = 30
+
+
+def day_of_30(on):
+    """A day as the salary counts it: every month has thirty days, and a
+    month's last day is its thirtieth, so a 31st or a 28 February is the 30th."""
+    d = int(on[8:10])
+    return MONTH_DAYS if d >= len(days_in(on[:7])) else min(d, MONTH_DAYS)
+
+
+def salary_days(a, month):
+    """How many of `month`'s thirty days someone is paid for: all of them,
+    unless they started or left in it, and none before they started or after
+    they left. `a` is their account row (id, meta, active).
+
+    Someone marked as left before the day was asked has `left_after` and no
+    `left_on`: the whole of that month counts, as it always did."""
+    meta = json.loads(a["meta"] or "{}")
+    start, left_on = meta.get("started_on"), None
+    if start and month < start[:7]:
+        return 0
+    if not a["active"]:
+        left = meta.get("left_after")
+        if not left or month > left:
+            return 0
+        left_on = meta.get("left_on")
+    first = day_of_30(start) if start and start[:7] == month else 1
+    last = day_of_30(left_on) if left_on and left_on[:7] == month else MONTH_DAYS
+    return max(0, min(MONTH_DAYS, last - first + 1))
+
+
 def payroll(con, month):
     """What each member of staff was charged this month, what they have had,
     and what is still owed to them for everything up to the end of it.
@@ -367,16 +399,17 @@ def payroll(con, month):
         earlier = outstanding(con, a["id"], prev_month(month), charge)
         if not (gross or adv or paid or owed or at_end):
             continue
-        # the day they left, and in that month the days it was paid for
-        left_on = None if a["active"] else json.loads(a["meta"] or "{}").get("left_on")
-        part = None
-        if left_on and left_on[:7] == month and int(left_on[8:10]) < len(days_in(month)):
-            part = {"days": int(left_on[8:10]), "of": len(days_in(month))}
+        # the days they started and left, and the days of this month paid for
+        meta = json.loads(a["meta"] or "{}")
+        started = meta.get("started_on")
+        days = salary_days(a, month)
         out.append({"id": a["id"], "name": a["name"], "active": a["active"],
                     "gross": gross, "advances": adv, "paid": paid,
                     "from_earlier": max(min(earlier, owed), 0),
                     "still_to_pay": max(owed, 0), "overpaid": max(-at_end, 0),
-                    "left_on": left_on, "part": part})
+                    "started_on": started if started and started[:7] == month else None,
+                    "left_on": None if a["active"] else meta.get("left_on"),
+                    "part": {"days": days, "of": MONTH_DAYS} if 0 < days < MONTH_DAYS else None})
     return out
 
 

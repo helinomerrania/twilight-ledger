@@ -172,6 +172,12 @@ export function ask(title, body, yes = 'Yes', no = 'Cancel') {
   });
 }
 
+/** A question's title with someone's name in it. The name is kept as typed
+    in either language, even one not in the books yet, as when it is being
+    added. */
+export const withName = (before, name, after) =>
+  ({ html: `${esc(before)}<bdi>${esc(name)}</bdi>${esc(after)}` });
+
 /** The same question box, asking for a day as well. Resolves the day
     chosen, or null if nothing was. */
 export function askDate(title, body, value, max, yes = 'Yes', no = 'Cancel') {
@@ -179,7 +185,7 @@ export function askDate(title, body, value, max, yes = 'Yes', no = 'Cancel') {
     const host = document.getElementById('toast');
     const box = document.createElement('div');
     box.className = 'ask';
-    box.innerHTML = `<strong>${esc(title)}</strong>
+    box.innerHTML = `<strong>${title.html ?? esc(title)}</strong>
       <p style="margin:6px 0 10px;white-space:pre-line">${esc(body)}</p>
       <input type="date" value="${esc(value)}" max="${esc(max)}" style="width:auto;margin-bottom:10px">
       <div class="row"><button class="btn primary" data-yes>${esc(yes)}</button>

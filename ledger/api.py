@@ -266,6 +266,10 @@ def people(con):
                       "last_used": a["last_used"],
                       "meta": json.loads(a["meta"] or "{}")}
                      for a in rows]
+    # the day someone started can still change something while its month is open
+    for a in out["staff"]:
+        on = a["meta"].get("started_on")
+        a["start_open"] = bool(on) and not queries.is_closed(con, on[:7])
     return out
 
 

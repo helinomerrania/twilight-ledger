@@ -99,12 +99,15 @@ separate transactions:
 This is why re-dating those five payments to their real dates does not change
 October's profit by a dinar, and the acceptance gate proves it.
 
-Someone who leaves is asked the day they left. Every month before it carries
-their whole salary; the month they left in carries the days of it they worked
-(their last day over the days in that month, to the note), and the months after
-it carry nothing. Giving the day again, or bringing them back, sets the open
-months right, and a closed month that would now be charged differently is named
-rather than touched: reopening it is what puts it right.
+A salary is thirty days' pay, whatever the month's length: a month's last day
+counts as its 30th, so a 31st or the end of February is the 30th
+(`queries.day_of_30`). Someone added to the staff is asked the day they
+started, and someone who leaves the day they left. The month they started in
+and the month they left in carry a thirtieth of the salary for each day of it
+they worked, to the note; the months between carry the whole of it, and the
+months before and after nothing. Putting either day right, or bringing someone
+back, sets the open months right, and a closed month that would now be charged
+differently is named rather than touched: reopening it is what puts it right.
 
 The old app got the right answer here by a different route: it summed the
 *current* Setup lists every time a screen rendered. That is also why editing a
