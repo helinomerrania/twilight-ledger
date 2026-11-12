@@ -86,6 +86,22 @@ const PAGES = {
 
 const HEADS = { month: () => C.periodPicker() };
 
+/** How many checks that are not right point at each page ('books/cash'),
+    and at each screen; Checks and closing has all of them. */
+function pageMarks() {
+  const out = {};
+  if (!S.data) return out;
+  const bad = S.data.checks.filter(c => !c.ok);
+  for (const c of bad) {
+    if (!c.go) continue;
+    out[c.go] = (out[c.go] || 0) + 1;
+    const screen = c.go.split('/')[0];
+    out[screen] = (out[screen] || 0) + 1;
+  }
+  if (bad.length) out['month/close'] = bad.length;
+  return out;
+}
+
 /** The page of `tab` that is open. */
 const pageOf = tab => {
   const pages = PAGES[tab];
@@ -93,13 +109,7 @@ const pageOf = tab => {
 };
 const onPage = (tab, key) => S.tab === tab && pageOf(tab)[0] === key;
 
-const TITLES = {
-  tonight: ['Tonight', 'The nightly job, in the order you do it.'],
-  stock: ['Stock', 'What arrived, what is left, and what it is worth.'],
-  month: ['Month', 'What the month came to, and settling it.'],
-  books: ['Books', 'The record: correcting it, searching it, and the cash counts.'],
-  setup: ['Setup', 'The lists and accounts everything else is built from.'],
-};
+const TITLES = { tonight: 'Tonight', stock: 'Stock', month: 'Month', books: 'Books', setup: 'Setup' };
 
 /* ----------------------------------------------- what is typed, and where */
 
@@ -143,13 +153,16 @@ function renderRail() {
     foot.className = 'foot';
     rail.append(foot);
   }
+  const marks = pageMarks();
   TABS.forEach(([key, label]) => {
     const b = document.createElement('button');
     b.className = 'tab';
     b.dataset.go = key;
     b.setAttribute('aria-current', String(key === S.tab));
+    // Tonight counts everything that needs a look; a screen with a page that needs one shows a dot
     b.innerHTML = `<span>${esc(label)}</span>`
-      + (key === 'tonight' && bad ? `<span class="flag" title="${bad} need a look">${bad}</span>` : '');
+      + (key === 'tonight' && bad ? `<span class="flag" title="${bad} need a look">${bad}</span>`
+        : key !== 'tonight' && marks[key] ? `<span class="dot" title="${marks[key]} need a look"></span>` : '');
     rail.insertBefore(b, foot);
   });
   if (!S.data) return;
@@ -178,11 +191,17 @@ function render({ fresh = false, skip = [] } = {}) {
     }
   }
   renderRail();
-  const [title, sub] = TITLES[S.tab];
+  const title = TITLES[S.tab];
   const [key, , cards, note] = pageOf(S.tab);
-  const tabs = PAGES[S.tab].map(([k, label]) =>
-    `<button data-go="${S.tab}/${k}" aria-current="${k === key}">${esc(label)}</button>`).join('');
-  main.innerHTML = `<h1>${esc(title)}</h1><p class="sub">${esc(sub)}</p>`
+  const marks = pageMarks();
+  const tabs = PAGES[S.tab].map(([k, label]) => {
+    const n = marks[`${S.tab}/${k}`];
+    // Checks and closing says how many are not right; any other page just shows it needs a look
+    const count = S.tab === 'month' && k === 'close';
+    return `<button data-go="${S.tab}/${k}" aria-current="${k === key}"><span>${esc(label)}</span>${n
+      ? `<span class="dot${count ? ' n' : ''}" title="${n} need a look">${count ? n : ''}</span>` : ''}</button>`;
+  }).join('');
+  main.innerHTML = `<h1>${esc(title)}</h1>`
     + `<div class="pagebar"><nav class="pages" aria-label="${esc(title)}">${tabs}</nav>`
     + `${HEADS[S.tab] ? HEADS[S.tab]() : ''}</div>`
     + (note ? `<p class="pagenote">${esc(note)}</p>` : '')
@@ -398,6 +417,19 @@ async function act(fn, { skip = [], onError = null } = {}) {
   }
 }
 
+/** The message after a change that wrote an entry, with Undo: the entry is
+    taken back, and whatever it corrected or replaced stands again. Only for
+    a change whose answer is the one entry it wrote. */
+function done(text, out) {
+  if (!out || typeof out.id !== 'number') return say(text);
+  say(text, false, { label: 'Undo', run: () => undoChange(out.id) });
+}
+
+async function undoChange(id) {
+  const out = await act(() => send('undo', { id }));
+  if (out) say(out.put_back && out.put_back.length ? 'Taken back. What it replaced is back.' : 'Taken back.');
+}
+
 /** Send a change that moves money. If it would take a pot below zero the
     server refuses with 409 and says by how much; the person is asked, and
     the change is sent again only if they say so. */
@@ -515,14 +547,14 @@ const H = {
     if (!amount) return say('Type tonight’s figure first.', true);
     const out = await act(() => sendGuarded('sales', { amount, on: S.on }, 'Save it anyway'),
                           { skip: ['#nSales'] });
-    if (out) say(`Sales for ${S.on}: ${money(amount)}.`);
+    if (out) done(`Sales for ${S.on}: ${money(amount)}.`, out);
   },
 
   async usePos(el) {
     const amount = Number(el.dataset.amount);
     const out = await act(() => sendGuarded('sales', { amount, on: S.on }, 'Save it anyway'),
                           { skip: ['#nSales'] });
-    if (out) say(`Sales for ${S.on}: ${money(amount)}, from SambaPOS.`);
+    if (out) done(`Sales for ${S.on}: ${money(amount)}, from SambaPOS.`, out);
   },
 
   async nAdd() {
@@ -538,7 +570,7 @@ const H = {
                                             kind === 'staff_repay' ? 'Save it anyway' : 'Pay anyway'),
                           { skip: ['#nAmt'] });
     if (!out) return;
-    say(`${nightLabel(kind)}: ${who}, ${money(amount)}.`);
+    done(`${nightLabel(kind)}: ${who}, ${money(amount)}.`, out);
     focusOn('nAmt');
   },
 
@@ -581,7 +613,7 @@ const H = {
     }
     const yes = ['income', 'staff_repay', 'partner_in'].includes(kind) ? 'Save it anyway' : 'Pay anyway';
     const out = await act(() => sendGuarded(kind, body, yes), { skip: ['#eAmt', '#ePeriod'] });
-    if (out) say('Added.');
+    if (out) done('Added.', out);
   },
 
   edit(el) {
@@ -613,7 +645,7 @@ const H = {
     S.draft.editing = null;
     const out = await act(() => sendGuarded('edit_entry', body, 'Save it anyway'),
                           { onError: () => { S.draft.editing = id; } });
-    if (out) say('Corrected. The original is kept in the record, marked as corrected.');
+    if (out) done('Corrected. The original is kept in the record, marked as corrected.', out);
     else if (S.draft.editing === null) S.draft.editing = id;     // said no: keep the row open
   },
 
@@ -704,7 +736,7 @@ const H = {
     S.draft.rlines = out.receipt || null;            // what came in, while the receipt is in hand
     render();
     document.getElementById('rlItem')?.focus();
-    say('Receipt added. List what came in now, or later.');
+    done('Receipt added. List what came in now, or later.', out);
   },
 
   receiptLines(el) {
@@ -820,7 +852,7 @@ const H = {
     const out = await act(() => sendGuarded(line.action, body),
                           { skip: [`settle:${row.dataset.line}:amount`] });
     if (out) {
-      say(`Paid ${line.who} ${money(amount)}, counted for ${monthName(S.month)}.`);
+      done(`Paid ${line.who} ${money(amount)}, counted for ${monthName(S.month)}.`, out);
     }
   },
 
@@ -905,7 +937,7 @@ const H = {
     if (!to) return say('Pick where the rest goes.', true);
     const out = await act(() => sendGuarded('move_rest', {
       amount: Number(el.dataset.amount), to, on: S.on }));
-    if (out) say(`Moved ${money(Number(el.dataset.amount))} to ${to}.`);
+    if (out) done(`Moved ${money(Number(el.dataset.amount))} to ${to}.`, out);
   },
 
   async posAddNight(el) {
@@ -1483,10 +1515,21 @@ document.addEventListener('keydown', e => {
   const item = el.closest('[data-item]');
   if (item) {                                   // down a line, like a spreadsheet
     e.preventDefault();
-    let next = item.nextElementSibling;
-    while (next && !next.querySelector(`[data-k="${el.dataset.k}"]`)) next = next.nextElementSibling;
-    if (next) next.querySelector(`[data-k="${el.dataset.k}"]`).focus();
-    else el.blur();
+    // the same column if the next line has it, else that line's first box, on into
+    // the next group; lines a find box hides are passed over
+    const rows = [...item.closest('.card').querySelectorAll('tr[data-item]')]
+      .filter(r => !r.hidden && (r.dataset.receipt || '') === (item.dataset.receipt || ''));
+    const open = 'input:not([disabled]):not([type="checkbox"])';
+    let target = null;
+    for (const r of rows.slice(rows.indexOf(item) + 1)) {
+      target = r.querySelector(`[data-k="${el.dataset.k}"]:not([disabled])`) || r.querySelector(open);
+      if (target) break;
+    }
+    if (target) {
+      target.focus();
+      target.scrollIntoView({ block: 'nearest' });
+      try { target.select(); } catch { /* not a text box */ }
+    } else el.blur();
     return;
   }
   const line = el.closest('[data-line]');

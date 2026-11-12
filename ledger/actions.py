@@ -23,10 +23,15 @@ def _sales(con, body):
     the day, rather than adding to it, because the till total is one number."""
     on = clean_date(body.get("on"))
     value = amount(body)
-    for e in queries.entries(con, on=on, kind="daily_sales"):
-        if e["source"] in ("manual", "pos"):
-            post.void(con, e["id"], why="replaced by a newer till figure")
-    return {"id": post.sales(con, value, on=on, into=pot(con, body))}
+    replaced = [e["id"] for e in queries.entries(con, on=on, kind="daily_sales")
+                if e["source"] in ("manual", "pos")]
+    for rid in replaced:
+        post.void(con, rid, why="replaced by a newer till figure")
+    new_id = post.sales(con, value, on=on, into=pot(con, body))
+    # the figure it replaced stands again if this one is taken back
+    for rid in replaced:
+        con.execute("UPDATE entry SET replaced_by = ? WHERE id = ?", (new_id, rid))
+    return {"id": new_id}
 
 
 @action("expense", summary=_entry_line)
@@ -213,6 +218,33 @@ def _void(con, body):
     was = describe_entry(con, e["id"])
     post.void(con, e["id"], why=body.get("why"))
     return {"id": e["id"], "_was": was}
+
+
+def _undo_line(con, body, out):
+    return "Taken back: " + out.pop("_was", "an entry")
+
+
+@action("undo", summary=_undo_line)
+def _undo(con, body):
+    """Take back a change just made. The entry it wrote is deleted, and an
+    entry it corrected or replaced stands again, as it was — with what came
+    in on a corrected receipt listed on it again."""
+    e = _entry(con, body["id"])
+    if e.get("voided_at"):
+        raise ApiError("That has already been taken back.")
+    if not e["deletable"]:
+        raise ApiError(_why_not(con, e, "taken back"))
+    was = describe_entry(con, e["id"])
+    post.void(con, e["id"], why="taken back")
+    back = []
+    for old in db.all_(con, "SELECT id FROM entry WHERE replaced_by = ?", (e["id"],)):
+        con.execute("UPDATE entry SET replaced_by = NULL WHERE id = ?", (old["id"],))
+        post.unvoid(con, old["id"])
+        con.execute("UPDATE receipt_line SET receipt_id = (SELECT id FROM receipt WHERE entry_id = ?) "
+                    "WHERE receipt_id = (SELECT id FROM receipt WHERE entry_id = ?)",
+                    (old["id"], e["id"]))
+        back.append(old["id"])
+    return {"id": e["id"], "put_back": back, "_was": was}
 
 
 @action("put_back", summary=lambda con, body, out: "Put back: " + describe_entry(con, out["id"]))
