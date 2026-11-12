@@ -173,6 +173,43 @@ class FloatAndBlind(Base):
         self.assertEqual(queries.balance(self.con, "cash:safe"), 64000)
         self.assertEqual(cash.drawer(self.con, NIGHT)["moved"], 64000)
 
+    def test_a_count_says_how_far_out_it_is_whatever_the_night(self):
+        """The screen keeps only the latest thirty counts, so an older night
+        counted again must say its own difference, not "ties"."""
+        for day in range(1, 32):
+            api.run(self.con, "cash_count", {"on": f"2026-10-{day:02d}", "pots": {"Box": 0}})
+        api.run(self.con, "sales", {"amount": 5000, "on": "2026-09-30"})
+        out = api.run(self.con, "cash_count", {"on": "2026-09-30", "pots": {"Box": 1000}})
+        self.assertEqual(out["diff"], -4000)
+        self.assertNotIn("2026-09-30", [c["on"] for c in api.state(self.con)["counts"]])
+
+    def test_closing_up_shows_the_night_s_own_count_after_the_rest_is_moved(self):
+        """The Box card set the count against the Box after the rest had gone
+        to the Safe: 89,000 counted against 26,000 read as 63,000 over, when
+        the night was 1,000 short."""
+        api.run(self.con, "cash_settings", {"float": "25000"})
+        api.run(self.con, "sales", {"amount": 90000, "on": NIGHT})
+        api.run(self.con, "cash_count", {"on": NIGHT, "pots": {"Box": 89000}})
+        api.run(self.con, "move_rest", {"on": NIGHT, "to": "Safe", "amount": 64000})
+        box = next(p for p in api.state(self.con, on=NIGHT)["day"]["count"]["pots"]
+                   if p["name"] == "Box")
+        self.assertEqual((box["counted"], box["diff"]), (89000, -1000))
+
+    def test_an_old_night_s_count_is_on_its_night(self):
+        api.run(self.con, "cash_count", {"on": "2026-09-30", "pots": {"Box": 1000, "Safe": 0}})
+        for day in range(1, 32):
+            api.run(self.con, "cash_count", {"on": f"2026-10-{day:02d}", "pots": {"Box": 0}})
+        st = api.state(self.con, on="2026-09-30")
+        self.assertEqual(sorted(p["name"] for p in st["day"]["count"]["pots"]), ["Box", "Safe"])
+
+    def test_the_rest_goes_only_to_a_pot_in_use(self):
+        api.run(self.con, "sales", {"amount": 90000, "on": NIGHT})
+        api.run(self.con, "cash_count", {"on": NIGHT, "pots": {"Box": 90000}})
+        safe = db.scalar(self.con, "SELECT id FROM account WHERE name = 'Safe'")
+        api.run(self.con, "account_active", {"id": safe, "active": 0})
+        with self.assertRaises(api.ApiError):
+            api.run(self.con, "move_rest", {"on": NIGHT, "to": "Safe", "amount": 1000})
+
     def test_and_the_next_night_s_count_starts_from_the_float(self):
         api.run(self.con, "sales", {"amount": 90000, "on": NIGHT})
         api.run(self.con, "cash_count", {"on": NIGHT, "pots": {"Box": 90000}})

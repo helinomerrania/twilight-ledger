@@ -13,7 +13,7 @@ import json
 
 from . import (accruals, actions, backup, buckets, cash, checks as _checks, db, expected,
                kinds, lang, money, ratios, stock, post, queries, setup, update)
-from .dates import month_of, prev_month, today
+from .dates import NIGHT_ENDS, month_of, prev_month, today, tonight
 from .pos import actions as pos
 from .registry import ACTIONS, ApiError, run            # noqa: F401  (re-exported)
 
@@ -54,13 +54,16 @@ def load_settings(con):
 def state(con, *, month=None, on=None, count_date=None):
     now = month_of(today())
     month = month or now
-    on = on or today()
+    # a night is closed up after midnight: until six it is still last night
+    on = on or tonight()
     # Every month up to today is charged its rent and salaries the first time
     # it is needed, and an open one is put right if Setup has changed since.
     accruals.ensure_all(con)
     per = queries.period(con, month)
     return {
         "today": today(),
+        "tonight": tonight(),
+        "night_ends": NIGHT_ENDS,
         "version": update.current(),
         "month": month,
         "this_month": now,
@@ -269,6 +272,8 @@ def stock_view(con, month, count_date=None):
     lines = receipt_lines(con)
     for e in receipts:
         e["lines"] = lines.get((e["receipt"] or {}).get("id"), [])
+    if chosen and chosen not in dates:
+        dates = sorted([*dates, chosen])
     return {**buckets.view(con), "expected": expected.view(con, chosen),
             "ratios": ratios.view(con), "cogs": c, "count_dates": dates, "count_date": chosen,
             "count": count_sheet(con, chosen),

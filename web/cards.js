@@ -91,8 +91,9 @@ export function closingUp() {
   const names = nightNames(kind);
   const pick = names.includes(S.draft.nWho) ? S.draft.nWho : (names[0] || '');
   const counted = {};
-  const lastCount = S.data.counts.find(c => c.on === d.on);
-  if (lastCount) lastCount.pots.forEach(p => { counted[p.name] = p.counted; });
+  const left = {};                     // what each counted pot is still out by
+  const lastCount = d.count;
+  if (lastCount) lastCount.pots.forEach(p => { counted[p.name] = p.counted; left[p.name] = p.diff; });
   const pots = d.pots.filter(p => p.active && (p.in_use || p.name in counted));
   const chips = kind === 'expense' ? names.slice(0, 12) : names;
 
@@ -101,12 +102,15 @@ export function closingUp() {
   const blind = dr.blind && !lastCount;
   const potCards = pots.map(p => {
     const got = counted[p.name];
-    const diff = got === undefined ? null : got - p.balance;
+    // the count's own difference, and the books as they stood at the count:
+    // the rest moved out of the drawer afterwards is not part of either
+    const diff = got === undefined ? null : left[p.name];
+    const books = got === undefined ? p.balance : got - diff;
     const pos = p.name === dr.pot && dr.pos && !blind ? dr.pos : null;
     return `<div class="pot">
       <div class="nm">${esc(p.name)}</div>
       ${blind ? '<div class="bal quiet">?</div><div class="sub">count it first</div>'
-        : `<div class="bal">${money(p.balance)}</div><div class="sub">the books say</div>`}
+        : `<div class="bal">${money(books)}</div><div class="sub">the books say</div>`}
       <input ${MONEY} placeholder="count it"
              data-pot="${esc(p.name)}" value="${got === undefined ? '' : esc(commas(got))}">
       ${diff === null ? '' : `<div class="sub ${cls(diff)}" style="margin-top:6px">
@@ -265,7 +269,7 @@ function posLine() {
       return '<p class="note quiet">Reading SambaPOS’s backups…</p>';
     }
     if (auto.on) {
-      return on >= S.data.today
+      return on >= S.data.tonight
         ? `<p class="note quiet">SambaPOS backs the night up when it is reset, and it
              comes in here by itself after that.${live}</p>`
         : `<p class="note">No SambaPOS backup has the night of ${esc(on)}.${live}</p>`;
@@ -756,7 +760,7 @@ export function fillCard() {
     </div>
     <datalist id="sealedNames">${sealed.map(i => `<option value="${esc(i.name)}">`).join('')}</datalist>
     <div class="grid-form" style="margin-top:12px">
-      ${field('Filled on', `<input type="date" id="fillOn" value="${esc(f.on || S.data.today)}" max="${esc(S.data.today)}">`)}
+      ${field('Filled on', `<input type="date" id="fillOn" value="${esc(f.on || S.data.tonight)}" max="${esc(S.data.today)}">`)}
       ${field('Full bucket on the scales (g), if weighed', `<input type="number" min="0" id="fillGross"
           placeholder="not weighed" inputmode="numeric">`)}
       ${field('Bucket', `<select id="fillTare"><option value="">no bucket</option>
@@ -799,7 +803,7 @@ export function countPicker() {
         <select data-act="setCount" style="width:auto">
           ${options(s.count_dates.slice().reverse(), s.count_date)}
         </select>
-        <input type="date" id="newCount" value="${esc(S.data.today)}" max="${esc(S.data.today)}" style="width:auto">
+        <input type="date" id="newCount" value="${esc(S.data.tonight)}" max="${esc(S.data.today)}" style="width:auto">
         <button class="btn" data-act="openCount">Start a count</button>
         ${c.locked || !c.date ? '' : `<button class="mini danger" data-act="deleteCount">Delete this count</button>`}
       </div>

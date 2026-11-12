@@ -8,7 +8,8 @@ export const S = {               // whatever the server last told us
   tab: 'tonight',
   page: {},                      // which page of each screen is open: {month: 'settle'}
   month: null,
-  on: null,
+  on: null,                      // the night on screen
+  picked: false,                 // ... picked by hand, rather than tonight's
   count: null,                   // which stock count is on screen
   draft: {},                     // what is half-typed or half-chosen on screen
   search: null,                  // {q, rows} while Books is showing a search
@@ -112,7 +113,7 @@ export const load = (month, on, countDate) => {
 export const send = (action, body = {}) => call('/api/do/' + action, {
   method: 'POST',
   headers: { 'Content-Type': 'application/json' },
-  body: JSON.stringify({ ...body, view_month: S.month, view_on: S.on,
+  body: JSON.stringify({ ...body, view_month: S.month, view_on: S.picked ? S.on : null,
                          view_count: S.count }),
 });
 

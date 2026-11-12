@@ -151,6 +151,41 @@ class CountSheet(unittest.TestCase):
                     {"on": "2026-11-09", "item": self.item, "blocks": 1})
 
 
+class CountsAndClosedMonths(unittest.TestCase):
+    """A count just started values nothing, and a closed month takes no new
+    count: either would quietly move a month's opening or closing stock."""
+
+    def setUp(self):
+        self.con = fresh_books()
+        self.leaf = api.run(self.con, "item_add", {"name": "Hill Leaf", "letter": "B",
+                                                   "price": 30000})["id"]
+        api.run(self.con, "item_supplier", {"id": self.leaf, "supplier_id": db.scalar(
+            self.con, "SELECT id FROM account WHERE name = 'Acme Tobacco'")})
+        api.run(self.con, "receipt", {"amount": 600000, "on": "2026-10-05",
+                                      "who": "Acme Tobacco"})
+        api.run(self.con, "count_line", {"on": "2026-10-28", "item": self.leaf, "blocks": "20"})
+
+    def test_a_count_with_nothing_on_it_yet_is_not_the_month_s_count(self):
+        before = queries.cogs(self.con, "2026-10")
+        api.run(self.con, "open_count", {"on": "2026-10-30"})
+        self.assertEqual(queries.cogs(self.con, "2026-10"), before)
+        self.assertEqual(api.settle(self.con, "2026-10")[-1]["amount"], 300000)
+        # but the screen still shows it, ready to be counted into
+        st = api.stock_view(self.con, "2026-10", "2026-10-30")
+        self.assertIn("2026-10-30", st["count_dates"])
+
+    def test_no_count_goes_into_a_closed_month(self):
+        api.run(self.con, "close_month", {"month": "2026-10"})
+        opening = queries.cogs(self.con, "2026-11")["opening"]
+        for name, body in (("count_line", {"on": "2026-10-30", "item": self.leaf, "blocks": "2"}),
+                           ("open_count", {"on": "2026-10-30"}),
+                           ("count_line", {"on": "2026-10-10", "item": self.leaf, "blocks": "2"})):
+            with self.assertRaises(api.ApiError, msg=body["on"]):
+                api.run(self.con, name, body)
+        self.assertEqual(queries.cogs(self.con, "2026-11")["opening"], opening)
+        self.assertEqual(queries.count_for(self.con, "2026-10"), "2026-10-28")
+
+
 class CostOfGoods(unittest.TestCase):
     def setUp(self):
         self.con = fresh_books()

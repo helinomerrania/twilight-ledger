@@ -73,6 +73,17 @@ class Accounts(unittest.TestCase):
         with self.assertRaises(api.ApiError):
             api.run(self.con, "account_add", {"kind": "supplier", "name": "Star Store"})
 
+    def test_nor_a_float_and_a_pot(self):
+        """Money is moved by a pot's name, so a float called Bank beside the
+        Bank pot could never be paid into: it would all go to the pot."""
+        with self.assertRaises(api.ApiError):
+            api.run(self.con, "account_add", {"kind": "float", "name": "Bank"})
+        f = api.run(self.con, "account_add", {"kind": "float", "name": "Alice holds"})["id"]
+        with self.assertRaises(api.ApiError):
+            api.run(self.con, "account_rename", {"id": f, "name": "Safe"})
+        # a member of staff may still have a pot's name: they are never mixed up
+        api.run(self.con, "account_add", {"kind": "staff", "name": "Bank"})
+
     def test_a_pot_with_money_in_it_cannot_be_retired(self):
         with db.tx(self.con):
             post.sales(self.con, 5000, on=today())
@@ -127,6 +138,15 @@ class Electricity(unittest.TestCase):
         api.run(self.con, "set_electricity", {"month": NOW, "private_price": 7000})
         self.assertEqual(queries.live_result(self.con, NOW)["elec"], 175000)
 
+    def test_a_month_without_a_meter_reading_does_not_reset_the_meter(self):
+        """Saved with only the generator's price, a month stored the meter as
+        0, so the next month offered 0 as the last reading and charged every
+        unit the meter had ever counted."""
+        api.run(self.con, "set_electricity", {"month": "2026-09", "private_price": 8000,
+                                              "last_reading": 1000, "now_reading": 1200})
+        api.run(self.con, "set_electricity", {"month": "2026-10", "private_price": 8000})
+        self.assertEqual(accruals.electricity_view(self.con, "2026-11")["last_reading"], 1200)
+
 
 class StockItems(unittest.TestCase):
     def test_a_new_item_can_be_added_and_repriced(self):
@@ -135,3 +155,18 @@ class StockItems(unittest.TestCase):
         api.run(con, "item_update", {"id": out["id"], "price": 22000})
         self.assertEqual(db.one(con, "SELECT price FROM stock_item WHERE id=?",
                                 (out["id"],))["price"], 22000)
+
+    def test_a_name_already_in_the_category_is_said_plainly(self):
+        con = fresh_books()
+        api.run(con, "item_add", {"name": "Hill Leaf", "letter": "B", "price": 30000})
+        sea = api.run(con, "item_add", {"name": "Sea Leaf", "letter": "B", "price": 30000})["id"]
+        api.run(con, "item_add", {"brand": sea, "name": "Mint"})
+        with self.assertRaises(api.ApiError) as cm:
+            api.run(con, "item_update", {"id": sea, "name": "Hill Leaf"})
+        self.assertEqual(str(cm.exception), "Hill Leaf is already in that category")
+        # nor may a brand's new name clash through one of its flavours
+        api.run(con, "item_add", {"name": "Bay Leaf · Mint", "letter": "B", "price": 1})
+        with self.assertRaises(api.ApiError):
+            api.run(con, "item_update", {"id": sea, "name": "Bay Leaf"})
+        self.assertEqual(db.scalar(con, "SELECT name FROM stock_item WHERE id = ?", (sea,)),
+                         "Sea Leaf")

@@ -11,8 +11,7 @@ from collections import defaultdict
 from datetime import date, datetime, timedelta
 from decimal import Decimal
 
-from .. import db
-from ..money import NOTE
+from .. import db, money
 
 # which SambaPOS table each kind comes from
 KINDS = {
@@ -110,7 +109,8 @@ def menu(con, nights=30):
                 # a price below the smallest note is a price per gram or per
                 # piece, paid in multiples; only a whole price can need change
                 # nobody has
-                if price and price >= NOTE and price % NOTE:
+                # (the note as Setup has it now, not as it was when the app started)
+                if price and price >= money.NOTE and price % money.NOTE:
                     odd.append({"item": name, "portion": p.get("Name"), "price": price})
         groups[it.get("GroupCode") or ""].append(
             {"id": it["Id"], "name": name, "barcode": it.get("Barcode") or None,

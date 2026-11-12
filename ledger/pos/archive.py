@@ -22,9 +22,8 @@ from datetime import timedelta
 from decimal import ROUND_HALF_UP, Decimal
 
 from .. import db
+from ..dates import NIGHT_ENDS
 from . import catalog, links
-
-NIGHT_ENDS = 6
 
 
 def whole(v):

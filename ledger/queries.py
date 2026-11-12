@@ -102,9 +102,13 @@ def _day_before(d):
 # -------------------------------------------------------------------- stock
 
 def count_dates(con, *, valued_only=True):
-    sql = "SELECT count_date, closing, source FROM stock_count"
+    """The days the stock was counted, oldest first. A count values the
+    stock once something is on it: one just started, with nothing typed into
+    it yet, is not a count of anything."""
+    sql = "SELECT count_date FROM stock_count"
     if valued_only:
-        sql += " WHERE closing <> 0 OR source = 'counted'"
+        sql += (" WHERE closing <> 0 OR EXISTS (SELECT 1 FROM stock_count_line l "
+                "WHERE l.count_id = stock_count.id)")
     return [r["count_date"] for r in db.all_(con, sql + " ORDER BY count_date")]
 
 
@@ -643,9 +647,12 @@ def day(con, on=None):
            WHERE m.kind IN ('cash', 'float') AND m.happened_on = ?
              AND m.entry_kind <> 'transfer'
            GROUP BY m.entry_id) t WHERE t.delta < 0""", (on,))
+    # the night's own cash count, however long ago: the screen's list holds
+    # only the latest ones
+    count = next((c for c in cash_counts(con) if c["on"] == on), None)
     return {"on": on, "sales": sales, "spent": spent, "paid_out": paid_out,
             "cash": cash_on_hand(con, on), "floats": in_hands(con, on),
-            "pots": pots(con, as_of=on), "entries": entries(con, on=on)}
+            "pots": pots(con, as_of=on), "entries": entries(con, on=on), "count": count}
 
 
 def entries(con, *, on=None, month=None, limit=None, q=None, detail=None,

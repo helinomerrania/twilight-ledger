@@ -4,7 +4,7 @@ lists — payment types, the menu, inventory items, recipes. Everything here is
 invented."""
 import unittest
 
-from ledger import api, db
+from ledger import api, db, money
 from ledger.pos import archive, catalog, sources
 from tests.helpers import fresh_books
 from tests.test_pos import night_of_ten
@@ -107,6 +107,18 @@ class KeptEarly(unittest.TestCase):
         self.keep(snap)
         self.assertEqual(catalog.menu(self.con)["odd"],
                          [{"item": "Tea", "portion": "Normal", "price": 4100}])
+
+    def test_odd_change_follows_the_note_set_in_setup_at_once(self):
+        snap = with_more(night_of_ten(ended=True))
+        snap["tables"]["MenuItemPrices"][1]["Price"] = sources.coerce("dec", "4500")
+        self.keep(snap)
+        self.assertEqual(catalog.menu(self.con)["odd"], [])
+        try:
+            api.run(self.con, "business_set", {"note": 1000})
+            self.assertEqual(catalog.menu(self.con)["odd"],
+                             [{"item": "Tea", "portion": "Normal", "price": 4500}])
+        finally:
+            money.set_note(money.DEFAULT_NOTE)
 
     def test_a_price_per_gram_is_not_odd_change(self):
         snap = with_more(night_of_ten(ended=True))

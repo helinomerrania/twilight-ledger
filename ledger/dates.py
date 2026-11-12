@@ -9,9 +9,18 @@ from datetime import date, datetime, timedelta
 
 ISO = "%Y-%m-%d"
 
+# The lounge closes after midnight: until six in the morning it is still the
+# night before, for the screens as for SambaPOS's work periods.
+NIGHT_ENDS = 6
+
 
 def today():
     return date.today().isoformat()
+
+
+def tonight(now=None):
+    """The night the lounge is in: until six in the morning, the one before."""
+    return ((now or datetime.now()) - timedelta(hours=NIGHT_ENDS)).date().isoformat()
 
 
 def ymd(value):

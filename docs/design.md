@@ -78,6 +78,13 @@ re-dated it to 31 October. The change log shows the add and the edit in the same
 minute. That is bug 4 — not something Mohammed did wrong, something the app did
 to him.
 
+A night is not a calendar day either. The lounge closes after midnight, so
+until six in the morning it is still the night before: the screens open on
+that night, a count taken at one in the morning after the last night of the
+month is that month's count, and a page left open moves on to the next night
+by itself. A day picked by hand is let go when the night changes, so tonight's
+takings are never typed over last night's.
+
 ## Accruals, not payments
 
 Rent is owed for a month whether or not it has been paid this month, and a
@@ -275,7 +282,14 @@ count, a shortage would disappear into them and no pattern could be seen.
 the drawer, points out a night whose sales are not SambaPOS's, leaves a fixed
 float in the drawer and moves the rest out in a transfer tied to the count,
 and keeps each night's own difference over the month. A difference accepted
-as real is still written off, as a cost of its month.
+as real is still written off, as a cost of its month. Closing up shows each
+pot against the books as they stood at the count, so moving the rest out
+afterwards never reads as cash found.
+
+A stock count values the stock once something is entered on it: a count just
+started is not the month's count. No count is started, changed or deleted in
+a closed month, since a later one would become the next month's opening stock
+without the closed month knowing.
 
 ## Stock items as they come
 

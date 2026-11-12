@@ -406,7 +406,10 @@ def _cash_count(con, body):
     if not db.scalar(con, "SELECT count(*) FROM cash_count_line WHERE count_id = ?", (cid,)):
         con.execute("DELETE FROM cash_count WHERE id = ?", (cid,))
         raise ApiError("count at least one pot")
-    return {"id": cid}
+    # how far out it is, said by the count itself: the screen keeps only the
+    # latest counts, and an older night's would not be among them
+    c = next((x for x in queries.cash_counts(con) if x["id"] == cid), None)
+    return {"id": cid, "diff": c["diff"] if c else 0}
 
 
 @action("delete_cash_count", guard_pots=False,
@@ -466,6 +469,8 @@ def _open_count(con, body):
     """Start a count on a date. Opening one does not value the stock — an
     empty count is ignored until something is typed into it."""
     on = clean_date(body.get("on"))
+    if locked(con, on):
+        raise ApiError("that month is closed, so no count can be started in it")
     con.execute("INSERT INTO stock_count(count_date, closing, source) "
                 "VALUES (?,0,'counted') ON CONFLICT(count_date) DO NOTHING", (on,))
     return {"count_date": on}
@@ -507,11 +512,13 @@ def _quantity(con, item, brand, packages, blocks, loose, gross=None, tare_grams=
 
 
 def locked(con, count_date):
-    """A count a closed month was built on cannot be edited."""
+    """A count in a closed month cannot be started, changed or deleted: the
+    month was built on its counts, and a later one would become the next
+    month's opening stock without the closed month knowing."""
     if not count_date:
         return False
-    return bool(db.one(con, "SELECT 1 FROM period WHERE count_date = ? "
-                            "AND status = 'closed'", (count_date,)))
+    return queries.is_closed(con, str(count_date)[:7]) or bool(db.one(
+        con, "SELECT 1 FROM period WHERE count_date = ? AND status = 'closed'", (count_date,)))
 
 
 @action("count_line", guard_pots=False)

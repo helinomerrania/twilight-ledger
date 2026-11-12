@@ -199,10 +199,20 @@ def set_electricity(con, month, *, private_price=0, elevator_price=0,
     return bill
 
 
+def _read(r):
+    """Did this month's saving include a reading of the meter?"""
+    if not r["note"]:
+        return bool(r["units"])                  # brought in from the old app
+    return json.loads(r["note"]).get("now") not in (None, "")
+
+
 def electricity_view(con, month):
     row = db.one(con, "SELECT * FROM meter_reading WHERE read_on = ?", (f"{month}-01",))
-    prev = db.one(con, "SELECT * FROM meter_reading WHERE read_on < ? "
-                       "ORDER BY read_on DESC LIMIT 1", (f"{month}-01",))
+    # the meter as it last read: a month saved without a reading (only the
+    # generator's price, say) has nothing to carry over, so it is passed by
+    prev = next((r for r in db.all_(con, "SELECT * FROM meter_reading WHERE read_on < ? "
+                                         "ORDER BY read_on DESC", (f"{month}-01",))
+                 if _read(r)), None)
     saved = json.loads(row["note"]) if row and row["note"] else {}
     last = saved.get("last")
     if last in (None, "") and prev:

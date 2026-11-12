@@ -672,5 +672,7 @@
 "{0} already has its takings in the books ({1}). Correct those instead.",
 "That has since been corrected, so there is nothing to take back.",
 "That has already been taken back.",
-"Part of this page could not be drawn"
+"Part of this page could not be drawn",
+"that month is closed, so no count can be started in it",
+"that would put the same thing in the books twice, so nothing was changed"
 ]

@@ -15,6 +15,7 @@ came in and was never recorded. The old app let it through silently and showed
 a pot below zero.
 """
 import re
+import sqlite3
 
 from . import db, kinds, post, queries
 from .dates import month_of, today, ymd
@@ -226,3 +227,7 @@ def run(con, name, body):
         raise ApiError(f"{exc.args[0]} is needed") from exc
     except (ValueError, db.LedgerError) as exc:
         raise ApiError(str(exc)) from exc
+    except sqlite3.IntegrityError as exc:
+        # whatever the action forgot to check, the database did not
+        raise ApiError("that would put the same thing in the books twice, so nothing "
+                       "was changed") from exc

@@ -1,6 +1,9 @@
 """Money is whole dinar and rounding is predictable."""
 import unittest
 
+from datetime import datetime
+
+from ledger.dates import tonight
 from ledger.money import mround, pct, split_shares, to_int
 
 
@@ -76,6 +79,24 @@ class Pct(unittest.TestCase):
     def test_no_division_by_zero(self):
         self.assertIsNone(pct(5, 0))
         self.assertEqual(pct(1260000, 10000000), 12.6)
+
+
+class TheNight(unittest.TestCase):
+    """The lounge closes after midnight: until six in the morning it is still
+    the night before, so a till figure typed at one in the morning belongs to
+    the night it was taken."""
+
+    def test_after_midnight_is_still_last_night(self):
+        self.assertEqual(tonight(datetime(2026, 11, 13, 1, 30)), "2026-11-12")
+        self.assertEqual(tonight(datetime(2026, 11, 13, 5, 59)), "2026-11-12")
+
+    def test_from_six_it_is_the_new_day(self):
+        self.assertEqual(tonight(datetime(2026, 11, 13, 6, 0)), "2026-11-13")
+        self.assertEqual(tonight(datetime(2026, 11, 13, 23, 0)), "2026-11-13")
+
+    def test_the_first_of_the_month_at_one_is_still_the_month_before(self):
+        # a count taken after the last night of October is October's count
+        self.assertEqual(tonight(datetime(2026, 11, 1, 1, 0)), "2026-10-31")
 
 
 if __name__ == "__main__":

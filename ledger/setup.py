@@ -51,6 +51,14 @@ _KIND = {"cash": ("cash", 1), "float": ("float", 1), "supplier": ("sup", -1),
          "staff": ("staff", -1), "partner": ("prt", -1)}
 
 
+def _taken(con, kind, name, but=None):
+    """Is the name already in use? Pots and floats are both picked by name
+    wherever money moves, so one name may only belong to one of them."""
+    kinds = ("cash", "float") if kind in ("cash", "float") else (kind,)
+    return bool(db.one(con, f"SELECT 1 FROM account WHERE kind IN ({','.join('?' * len(kinds))}) "
+                            "AND name = ? AND id IS NOT ?", (*kinds, name, but)))
+
+
 def _account(con, body):
     a = db.one(con, "SELECT * FROM account WHERE id = ?", (int(body["id"]),))
     if not a or a["kind"] not in _KIND or a["code"].startswith("eq:"):
@@ -64,7 +72,7 @@ def _account_add(con, body):
     if kind not in _KIND:
         raise ApiError("that is not something Setup can add")
     name = name_of(body)
-    if db.one(con, "SELECT 1 FROM account WHERE kind = ? AND name = ?", (kind, name)):
+    if _taken(con, kind, name):
         raise ApiError(f"there is already a {name}")
     prefix, normal = _KIND[kind]
     code, n = f"{prefix}:{post.slug(name)}", 2
@@ -83,8 +91,7 @@ def _account_add(con, body):
 def _account_rename(con, body):
     a = _account(con, body)
     name = name_of(body)
-    if db.one(con, "SELECT 1 FROM account WHERE kind = ? AND name = ? AND id <> ?",
-              (a["kind"], name, a["id"])):
+    if _taken(con, a["kind"], name, but=a["id"]):
         raise ApiError(f"there is already a {name}")
     con.execute("UPDATE account SET name = ? WHERE id = ?", (name, a["id"]))
     return {"id": a["id"]}
@@ -318,11 +325,16 @@ def _rename(con, item, name):
         brand = db.scalar(con, "SELECT name FROM stock_item WHERE id = ?", (item["parent_id"],))
         if not name.startswith(brand + FLAVOUR):
             name = brand + FLAVOUR + name
-    con.execute("UPDATE stock_item SET name = ? WHERE id = ?", (name, item["id"]))
-    for f in db.all_(con, "SELECT id, name FROM stock_item WHERE parent_id = ?", (item["id"],)):
-        if f["name"].startswith(item["name"] + FLAVOUR):
-            con.execute("UPDATE stock_item SET name = ? WHERE id = ?",
-                        (name + f["name"][len(item["name"]):], f["id"]))
+    renamed = [(item["id"], name)] + [
+        (f["id"], name + f["name"][len(item["name"]):]) for f in db.all_(
+            con, "SELECT id, name FROM stock_item WHERE parent_id = ?", (item["id"],))
+        if f["name"].startswith(item["name"] + FLAVOUR)]
+    for item_id, new in renamed:
+        if db.one(con, "SELECT 1 FROM stock_item WHERE name = ? AND id <> ? AND category_id = "
+                       "(SELECT category_id FROM stock_item WHERE id = ?)", (new, item_id, item_id)):
+            raise ApiError(f"{new} is already in that category")
+    for item_id, new in renamed:
+        con.execute("UPDATE stock_item SET name = ? WHERE id = ?", (new, item_id))
 
 
 # A scanner types through the keyboard layout in use, so with a Kurdish or

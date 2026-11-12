@@ -300,13 +300,33 @@ async function refreshQuietly() {
   if (document.querySelector('.ask')) return watchBackups();
   const gen = applied;
   try {
-    const state = await load(S.month, S.on, S.count);
+    const state = await load(S.month, picked(), S.count);
     if (applied === gen && !document.querySelector('.ask')) await apply(state);
   } catch {
     /* the next change will bring the state anyway */
   }
   return undefined;
 }
+
+/* The night on screen is the night the lounge is in, which runs until six in
+   the morning, unless another day was picked. A page left open goes on to
+   the next night by itself, so tonight's figure is never typed into last
+   night's books; a day picked by hand is let go when the night changes. */
+const picked = () => (S.picked ? S.on : null);
+
+function nightNow() {
+  const ends = (S.data && S.data.night_ends) || 6;
+  const d = new Date(Date.now() - ends * 3600 * 1000);
+  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
+}
+
+function followTheNight() {
+  if (!S.data || nightNow() === S.data.tonight) return;
+  S.picked = false;
+  refreshQuietly();
+}
+setInterval(followTheNight, 60 * 1000);
+window.addEventListener('focus', followTheNight);
 
 function watchBackups() {
   clearTimeout(watchTimer);
@@ -321,7 +341,7 @@ function watchBackups() {
 /* Amounts of money show their commas as they are typed: 1250000 is shown as
    1,250,000, with the cursor still after the same digit. */
 function moneyBox(el) {
-  const raw = westernDigits(el.value);
+  const raw = westernDigits(el.value).replace(NO_FILS, '');
   const at = el.selectionStart ?? raw.length;
   const before = raw.slice(0, at).replace(/[^\d]/g, '').length;
   const digits = raw.replace(/[^\d]/g, '').replace(/^0+(?=\d)/, '');
@@ -389,8 +409,12 @@ function setTab(where) {
 /* ----------------------------------------------------------------- helpers */
 
 /** What a box holds: an amount of money without its commas. */
+/* A dinar has nothing after the point: a figure pasted as 250,000.00 is
+   250,000, not 25,000,000. */
+const NO_FILS = /\.0{1,2}$/;
+
 const plain = el => (el.dataset.money !== undefined
-  ? westernDigits(el.value).replace(/[^\d]/g, '') : el.value.trim());
+  ? westernDigits(el.value).replace(NO_FILS, '').replace(/[^\d]/g, '') : el.value.trim());
 
 const val = id => {
   const el = document.getElementById(id);
@@ -522,7 +546,8 @@ const H = {
   async setDay(el) {
     const on = el.dataset.on || el.value;
     if (!on) return;
-    try { await apply(await load(S.month, on, S.count), { fresh: true }); }
+    S.picked = on !== S.data.tonight;
+    try { await apply(await load(S.month, S.picked ? on : null, S.count), { fresh: true }); }
     catch (err) { say(err.message, true); }
   },
 
@@ -530,13 +555,13 @@ const H = {
     const m = el.dataset.m || el.value;
     if (!m) return;
     try {
-      await apply(await load(m, S.on), { fresh: true });
+      await apply(await load(m, picked()), { fresh: true });
       if (el.dataset.m) window.scrollTo(0, 0);
     } catch (err) { say(err.message, true); }
   },
 
   async setCount(el) {
-    try { await apply(await load(S.month, S.on, el.value), { fresh: true }); }
+    try { await apply(await load(S.month, picked(), el.value), { fresh: true }); }
     catch (err) { say(err.message, true); }
   },
 
@@ -602,9 +627,8 @@ const H = {
     const out = await act(() => send('cash_count', { on: S.on, reason: val('nReason'), pots }),
                           { skip: [...keys, '#nReason'] });
     if (!out) return;
-    const c = S.data.counts.find(x => x.on === S.on);
-    if (!c || c.diff === 0) return say('Counted, and it ties exactly.');
-    say(`Counted. Out by ${signed(c.diff)} — find the missing entry, or write it off on Books.`);
+    if (!out.diff) return say('Counted, and it ties exactly.');
+    say(`Counted. Out by ${signed(out.diff)} — find the missing entry, or write it off on Books.`);
   },
 
   /* ------------------------------------------------------------------ books */
@@ -1334,7 +1358,7 @@ const westernDigits = s => s.replace(/[\u0660-\u0669]/g, d => d.charCodeAt(0) - 
 function usualOf(mix) {
   const packs = {};
   mix.usual.forEach(u => { packs[u.item] = String(u.packs); });
-  return { mix: mix.id, order: mix.usual.map(u => u.item), packs, on: S.data.today };
+  return { mix: mix.id, order: mix.usual.map(u => u.item), packs, on: S.data.tonight };
 }
 
 /** The packs typed on the fill so far, into the draft, so a redraw keeps them. */
