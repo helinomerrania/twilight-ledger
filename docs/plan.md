@@ -797,7 +797,11 @@ Ideas raised and worth keeping, not yet planned in detail:
 - sales by hour and by day of the week, and table turnover — SambaPOS
   already has custom reports for these; the archive can do them over months
 - Kurdish wording on the screens, via a Gemini prompt Mohammed runs himself
-- a month-end summary he can print or send to his partner
+- ✅ a month-end summary he can print or send to his partner (2026.11.11.24):
+  Month → **Summary for my partner** is one A4 page — the month (so far, while
+  it runs) beside last month, where the daily expenses went, each partner's
+  part of the profit and what they took, and where the money is. It prints,
+  or saves as a PDF to send.
 
 ---
 

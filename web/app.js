@@ -15,8 +15,8 @@
 
 import * as C from './cards.js';
 import {
-  S, ask, closeCheck, esc, get, load, money, monthName, pickItem, post, printSlip,
-  say, send, signed,
+  S, ask, closeCheck, esc, get, load, money, monthName, pickItem, post, printPage,
+  printSlip, say, send, signed,
 } from './lib.js';
 
 /* ------------------------------------------------------------- the screens */
@@ -925,6 +925,78 @@ const H = {
       <div class="rule"></div>
       <div>Cash on hand ${money(S.data.cash)}</div>
       <div>Owed to suppliers ${money(S.data.owed)}</div>`);
+  },
+
+  /* One A4 page for the partner: the month, each partner's part of it, and
+     where the money is. A month in progress is shown so far, rent and
+     salaries counted for the days gone, as the Month screen does. */
+  printSummary() {
+    const d = S.data;
+    const sf = d.so_far;
+    const r = d.result || {};
+    const now = sf ? {
+      rev: sf.rev, cogs: sf.cogs, daily: sf.daily, elec: sf.elec, fixed: sf.fixed,
+      salaries: sf.salaries, differences: sf.differences, net: sf.net,
+    } : {
+      rev: r.rev, cogs: (r.cogs || {}).value || 0, daily: r.daily, elec: r.elec, fixed: r.fixed,
+      salaries: r.salaries, differences: r.differences, net: r.net,
+    };
+    const p = d.prev && d.prev.rev ? {
+      rev: d.prev.rev, cogs: (d.prev.cogs || {}).value || 0, daily: d.prev.daily,
+      elec: d.prev.elec, fixed: d.prev.fixed, salaries: d.prev.salaries,
+      differences: d.prev.differences, net: d.prev.net,
+    } : null;
+    const gross = x => (x.rev || 0) - (x.cogs || 0);
+    const pct = (a, b) => (b ? ` <span style="color:#555">(${Math.round(a / b * 100)}%)</span>` : '');
+    const row = (label, k, sign = -1, cls = '') => {
+      const v = x => (k === 'gross' ? gross(x) : (x[k] || 0) * (k === 'rev' || k === 'net' ? 1 : sign));
+      if (!v(now) && !(p && v(p)) && !['rev', 'gross', 'net'].includes(k)) return '';
+      return `<tr class="${cls}"><td>${esc(label)}</td>
+        <td class="n">${money(v(now))}${k === 'gross' || k === 'net' ? pct(v(now), now.rev) : ''}</td>
+        ${p ? `<td class="n">${money(v(p))}</td>` : ''}</tr>`;
+    };
+    const out = (d.flow.out || []).find(g => g.kind === 'daily_expense');
+    const spent = out ? out.rows.slice().sort((a, b) => b[1] - a[1]).slice(0, 8) : [];
+    const partners = (d.partners || []).filter(x => x.share || x.taken || x.put_in);
+    const stock = d.stock && d.stock.cogs ? d.stock.cogs : null;
+    const title = monthName(d.month);
+    printPage(`<h1>${esc(d.business.name || 'Twilight')} — ${esc(title)}</h1>
+      <div class="meta">${sf ? `In progress: ${sf.days} of ${sf.days_in_month || 30} days, with rent and
+        salaries counted for the days gone.` : d.period.status === 'closed' ? 'The month is closed.'
+        : 'The month is over but not closed yet.'} Printed ${esc(d.today)}.</div>
+      <h2>The month</h2>
+      <table><tr><th></th><th class="n">${esc(title)}${sf ? ' so far' : ''}</th>
+        ${p ? `<th class="n">${esc(monthName(d.prev.month))}</th>` : ''}</tr>
+        ${row('Sales', 'rev')}
+        ${row('Stock used', 'cogs')}
+        ${row('Gross profit', 'gross', 1, 'total')}
+        ${row('Daily expenses and bills', 'daily')}
+        ${row('Electricity', 'elec')}
+        ${row('Rent and fixed costs', 'fixed')}
+        ${row('Salaries', 'salaries')}
+        ${row('Cash written off', 'differences')}
+        ${row('Net profit', 'net', 1, 'total')}
+      </table>
+      ${spent.length ? `<h2>Where the daily expenses went</h2>
+        <table>${spent.map(([n, v]) => `<tr><td>${esc(n)}</td><td class="n">${money(v)}</td></tr>`).join('')}
+        </table>` : ''}
+      ${partners.length ? `<h2>Partners</h2>
+        <table><tr><th>Partner</th><th class="n">Share</th><th class="n">Their part of the profit</th>
+          <th class="n">Taken out</th><th class="n">Put in</th><th class="n">This month</th></tr>
+        ${partners.map(x => `<tr><td>${esc(x.name)}</td><td class="n">${Math.round(x.share * 100)}%</td>
+          <td class="n">${money(x.profit)}</td><td class="n">${money(x.taken)}</td>
+          <td class="n">${money(x.put_in)}</td><td class="n">${money(x.this_month)}</td></tr>`).join('')}
+        </table>` : ''}
+      <h2>Where the money is</h2>
+      <table>
+        <tr><td>Cash, in every pot</td><td class="n">${money(d.cash)}</td></tr>
+        ${(d.pots || []).filter(x => x.balance).map(x => `<tr><td style="padding-left:5mm">${esc(x.name)}</td>
+          <td class="n">${money(x.balance)}</td></tr>`).join('')}
+        <tr><td>Owed to suppliers</td><td class="n">${money(d.owed)}</td></tr>
+        ${stock && stock.date ? `<tr><td>Stock on the shelves, counted ${esc(stock.date)}</td>
+          <td class="n">${money(stock.closing)}</td></tr>` : ''}
+      </table>
+      <div class="foot">Twilight Ledger ${esc(d.version)}</div>`);
   },
 };
 

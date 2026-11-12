@@ -221,6 +221,21 @@ export function pickItem(title, body, items) {
 
 /** Print a till slip. The page is stripped to the slip only while printing,
     then put back, so the 72mm roll does not feed blank paper first. */
+/** Print a whole page, A4, the way a report is printed or saved as a PDF to
+    send on. */
+export function printPage(html) {
+  const page = document.getElementById('page');
+  page.innerHTML = html;
+  document.body.classList.add('paging');
+  const done = () => {
+    document.body.classList.remove('paging');
+    window.removeEventListener('afterprint', done);
+  };
+  window.addEventListener('afterprint', done);
+  window.print();
+  setTimeout(done, 1500);
+}
+
 export function printSlip(html) {
   const slip = document.getElementById('slip');
   slip.innerHTML = html;

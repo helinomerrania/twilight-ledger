@@ -559,7 +559,7 @@ details.flow > .scroll { margin: 0 0 10px 18px; }
    except the slip is removed from the page rather than hidden, so the roll
    does not feed through blank paper first. */
 
-.slip { display: none; }
+.slip, .page { display: none; }
 
 @media print {
   @page { size: 72mm auto; margin: 3mm; }
@@ -586,6 +586,30 @@ details.flow > .scroll { margin: 0 0 10px 18px; }
     font-size: 11px;
   }
   body.slipping .slip .rule { border-top: 1px dashed #000; margin: 1.5mm 0; }
+  /* a whole page: the month's summary, A4 */
+  @page summary { size: A4; margin: 16mm 15mm; }
+  body.paging { background: #fff !important; }
+  body.paging > * { display: none !important; }
+  body.paging .page {
+    display: block !important;
+    page: summary;
+    font: 12.5px/1.45 var(--sans);
+    color: #000;
+    background: #fff;
+  }
+  body.paging .page h1 { font-size: 20px; margin: 0; }
+  body.paging .page h2 { font-size: 13px; margin: 7mm 0 2mm; text-transform: uppercase;
+                         letter-spacing: .04em; }
+  body.paging .page .meta { color: #444; margin-top: 1mm; }
+  body.paging .page table { width: 100%; border-collapse: collapse; }
+  body.paging .page th, body.paging .page td {
+    padding: 1.4mm 0; border-bottom: .3mm solid #ccc; text-align: left;
+    font-size: 12px; text-transform: none; letter-spacing: 0; color: #000;
+  }
+  body.paging .page th { font-weight: 600; border-bottom: .4mm solid #000; }
+  body.paging .page .n { text-align: right; font-variant-numeric: tabular-nums; }
+  body.paging .page tr.total td { font-weight: 700; border-bottom: .5mm solid #000; }
+  body.paging .page .foot { margin-top: 8mm; color: #555; font-size: 10.5px; }
   body:not(.slipping) #rail, body:not(.slipping) #toast { display: none; }
   body:not(.slipping) main { margin: 0; padding: 0; max-width: none; }
   body:not(.slipping) .card { break-inside: avoid; border-color: #bbb; }

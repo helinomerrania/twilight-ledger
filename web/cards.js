@@ -384,6 +384,8 @@ export function periodPicker() {
           ${options(S.data.months.slice().reverse().map(m => ({ value: m, label: monthName(m) })), S.data.month)}
         </select>
         <button class="btn" data-act="printMonth">Print</button>
+        <button class="btn" data-act="printSummary"
+          title="One A4 page for your partner: print it, or save it as a PDF to send">Summary for my partner</button>
       </div>
     </div>`);
 }
