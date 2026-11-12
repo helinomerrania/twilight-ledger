@@ -15,7 +15,7 @@ import json
 from fractions import Fraction
 
 from . import db, post, queries
-from .dates import month_of, next_month, today
+from .dates import days_in, month_of, next_month, today
 from .money import mround_fraction, to_int
 
 
@@ -74,18 +74,49 @@ def _staff(con):
                         "ORDER BY active DESC, sort, name")
 
 
+def salary_target(con, a, month):
+    """What someone's salary for `month` is charged at. Someone who has left is
+    charged for the months before the one they left in, and for that one only
+    the days they worked of it: their last day, over the days in that month.
+    Someone marked as left before the day was asked is charged that whole
+    month, as they always were."""
+    meta = json.loads(a["meta"] or "{}")
+    full = queries.salary_for(con, a["id"], month)
+    if a["active"]:
+        return full
+    left = meta.get("left_after")
+    if not left or month > left:
+        return 0
+    on = meta.get("left_on")
+    if not on or month < left:
+        return full
+    worked, days = int(on[8:10]), len(days_in(month))
+    return full if worked >= days else mround_fraction(Fraction(full) * worked / days)
+
+
+def closed_off(con, account_id, since):
+    """Closed months from `since` to now whose salary charge for someone is no
+    longer what it should be, as when the day they left is given after the
+    month closed. A closed month is never changed, so this is said instead."""
+    a = db.one(con, "SELECT id, name, meta, active FROM account WHERE id = ?", (account_id,))
+    out, m, now = [], since, month_of(today())
+    while a and m <= now:
+        if queries.is_closed(con, m) \
+                and salary_target(con, a, m) != _salary_charged(con, account_id, m):
+            out.append(m)
+        m = next_month(m)
+    return out
+
+
 def reconcile_salaries(con, month):
-    """Each member of staff is charged their salary for the month. Someone who
-    has left is still charged for the months up to and including the one they
-    left in, because they worked it."""
+    """Each member of staff is charged their salary for the month; someone who
+    has left, up to the day they left (`salary_target`)."""
     n = 0
     for a in _staff(con):
         meta = json.loads(a["meta"] or "{}")
         if meta.get("former"):
             continue
-        left = meta.get("left_after")
-        works = bool(a["active"]) or (left and month <= left)
-        target = queries.salary_for(con, a["id"], month) if works else 0
+        target = salary_target(con, a, month)
         have = _salary_charged(con, a["id"], month)
         if target != have:
             post.charge_salary(con, target - have, staff=a["name"], period=month)
@@ -107,10 +138,7 @@ def ensure_needed(con, month):
         meta = json.loads(a["meta"] or "{}")
         if meta.get("former"):
             continue
-        left = meta.get("left_after")
-        works = bool(a["active"]) or (left and month <= left)
-        target = queries.salary_for(con, a["id"], month) if works else 0
-        if target != _salary_charged(con, a["id"], month):
+        if salary_target(con, a, month) != _salary_charged(con, a["id"], month):
             return True
     return False
 

@@ -125,7 +125,8 @@ def _pos_link(con, body):
 
 
 def _left_line(con, body, out):
-    return f"Marked {out.get('name', 'someone')} as left, as SambaPOS no longer has them"
+    on = f" on {body['left_on']}" if body.get("left_on") else ""
+    return f"Marked {out.get('name', 'someone')} as left{on}, as SambaPOS no longer has them"
 
 
 @action("pos_left", guard_pots=False, summary=_left_line)
@@ -135,9 +136,10 @@ def _pos_left(con, body):
     link = db.one(con, "SELECT * FROM pos_link WHERE pos_id = ?", (_pos_id(body),))
     if not link or link["as_what"] not in ("staff", "partner", "supplier"):
         raise ApiError("that SambaPOS account is not linked to anyone")
-    _account_active(con, {"id": link["account_id"], "active": 0})
+    out = _account_active(con, {"id": link["account_id"], "active": 0,
+                                "left_on": body.get("left_on")})
     name = db.scalar(con, "SELECT name FROM account WHERE id = ?", (link["account_id"],))
-    return {"name": name}
+    return {"name": name, "note": out["note"]}
 
 
 @action("pos_told", guard_pots=False,

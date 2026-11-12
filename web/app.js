@@ -18,8 +18,8 @@ import {
   BATCH, answer, prompt, setCatalog, setDict, setLanguage, setNames, watch,
 } from './i18n.js';
 import {
-  S, ask, closeCheck, empty, esc, get, load, money, monthName, pickItem, post, printPage,
-  printSlip, say, send, signed,
+  S, ask, askDate, closeCheck, empty, esc, get, load, money, monthName, pickItem, post,
+  printPage, printSlip, say, send, signed,
 } from './lib.js';
 
 /* ------------------------------------------------------------- the screens */
@@ -1004,12 +1004,20 @@ const H = {
 
   async posLeft(el) {
     const name = el.dataset.name || 'They';
-    const ok = await ask(`Mark ${name} as left?`,
+    const body = { pos_id: Number(el.dataset.pos) };
+    if (el.dataset.staff) {
+      body.left_on = await askDate(`When did ${name} leave?`,
+        'SambaPOS no longer has an account for them. Their last day of work: the month '
+        + 'they leave in is charged for the days they worked of it, and the months after '
+        + 'it are not charged at all.', S.data.tonight, S.data.today, 'Mark as left');
+      if (!body.left_on) return;
+    } else if (!await ask(`Mark ${name} as left?`,
       'SambaPOS no longer has an account for them. Their history in the books stays; '
-      + 'they stop being offered for new entries.', 'Mark as left');
-    if (!ok) return;
-    const out = await act(() => send('pos_left', { pos_id: Number(el.dataset.pos) }));
-    if (out) say(`${out.name} is marked as left.`);
+      + 'they stop being offered for new entries.', 'Mark as left')) {
+      return;
+    }
+    const out = await act(() => send('pos_left', body));
+    if (out) say(out.note || `${out.name} is marked as left.`, Boolean(out.note));
   },
 
   async posTold(el) {
@@ -1029,6 +1037,22 @@ const H = {
   },
 
   /* ------------------------------------------------------------------ setup */
+
+  /* Someone on the staff has left. The day they left decides their last
+     month: it is charged for the days they worked of it. */
+  async hasLeft(el) {
+    const name = el.dataset.name;
+    const on = await askDate(`When did ${name} leave?`,
+      'Their last day of work. The month they leave in is charged for the days they '
+      + 'worked of it, and the months after it are not charged at all.',
+      el.dataset.on || S.data.tonight, S.data.today, el.dataset.on ? 'Save the day' : 'They have left');
+    if (!on || on === el.dataset.on) return;
+    const out = await act(() => send('account_active',
+      { id: Number(el.dataset.id), active: 0, left_on: on }));
+    if (!out) return;
+    if (out.note) say(out.note, true);
+    else say(el.dataset.on ? 'Saved.' : `${name} has left. Their history stays in the books.`);
+  },
 
   async backupNow() {
     const out = await act(() => send('backup_now'));

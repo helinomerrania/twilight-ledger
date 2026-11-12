@@ -367,10 +367,16 @@ def payroll(con, month):
         earlier = outstanding(con, a["id"], prev_month(month), charge)
         if not (gross or adv or paid or owed or at_end):
             continue
+        # the day they left, and in that month the days it was paid for
+        left_on = None if a["active"] else json.loads(a["meta"] or "{}").get("left_on")
+        part = None
+        if left_on and left_on[:7] == month and int(left_on[8:10]) < len(days_in(month)):
+            part = {"days": int(left_on[8:10]), "of": len(days_in(month))}
         out.append({"id": a["id"], "name": a["name"], "active": a["active"],
                     "gross": gross, "advances": adv, "paid": paid,
                     "from_earlier": max(min(earlier, owed), 0),
-                    "still_to_pay": max(owed, 0), "overpaid": max(-at_end, 0)})
+                    "still_to_pay": max(owed, 0), "overpaid": max(-at_end, 0),
+                    "left_on": left_on, "part": part})
     return out
 
 

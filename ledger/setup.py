@@ -9,10 +9,10 @@ the first month that is still open; a new price values the next stock count.
 import json
 import re
 
-from . import backup, db, money, post, queries, stock
-from .dates import month_of, next_month, today
+from . import accruals, backup, db, money, post, queries, stock
+from .dates import month_name, month_of, next_month, today, ymd
 from .money import to_int
-from .registry import ApiError, action, name_of
+from .registry import ApiError, action, clean_date, name_of
 
 _WORDS = {
     "account_add": "Added {name}", "account_rename": "Renamed to {name}",
@@ -40,6 +40,8 @@ def _line(name):
             r = db.one(con, f"SELECT name FROM {table} WHERE id = ?", (int(body["id"]),))
             ctx["who"] = r["name"] if r else "something"
         ctx["verb"] = "Brought back" if body.get("active") else "Retired"
+        if name == "account_active" and body.get("left_on") and not body.get("active"):
+            return f"{ctx['who']} left on {body['left_on']}"
         try:
             return _WORDS.get(name, name).format(**ctx)
         except (KeyError, IndexError, ValueError):
@@ -111,17 +113,47 @@ def _account_active(con, body):
     meta = json.loads(a["meta"] or "{}")
     if a["kind"] == "staff":
         if active:
-            meta.pop("left_after", None)
-            meta.pop("former", None)
+            for k in ("left_after", "left_on", "former"):
+                meta.pop(k, None)
+        elif body.get("left_on"):
+            # their last day of work: that month is charged for the days worked
+            on = _left_on(body["left_on"])
+            meta["left_on"], meta["left_after"] = on, month_of(on)
         else:
             meta["left_after"] = month_of(today())
     if active:
         meta.pop("retired_on", None)
-    else:
-        meta["retired_on"] = today()
+    elif a["active"] or not meta.get("retired_on"):
+        meta["retired_on"] = today()      # kept when only the day they left changes
     con.execute("UPDATE account SET active = ?, meta = ? WHERE id = ?",
                 (active, json.dumps(meta, ensure_ascii=False), a["id"]))
-    return {"id": a["id"]}
+    note = None
+    if a["kind"] == "staff" and not active and not meta.get("former"):
+        note = _closed_note(accruals.closed_off(con, a["id"], meta["left_after"]))
+    return {"id": a["id"], "note": note}
+
+
+def _left_on(value):
+    """The last day someone worked: a real day, and one that has come."""
+    try:
+        on = ymd(value)
+    except ValueError:
+        raise ApiError("the day they left is not a date") from None
+    if on > today():
+        raise ApiError(f"{on} has not come yet. Mark them as left once they have gone.")
+    return clean_date(on, what="the day they left")
+
+
+def _closed_note(months):
+    """What to say when closed months keep a salary that is now wrong."""
+    if not months:
+        return None
+    names = [month_name(m) for m in months]
+    one = len(names) == 1
+    said = names[0] if one else ", ".join(names[:-1]) + " and " + names[-1]
+    return (f"{said} {'is' if one else 'are'} closed, so the salary charged in "
+            f"{'it' if one else 'them'} stands. Reopen {'it' if one else 'them, newest first,'} "
+            "on Month to put it right.")
 
 
 def _share(v):

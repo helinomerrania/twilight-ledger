@@ -161,6 +161,15 @@ class Linking(unittest.TestCase):
                                    (self.alice,)), 0)
         self.assertNotIn("Everyone SambaPOS has dropped is marked as left", self.labels())
 
+    def test_the_day_they_left_is_kept_for_their_salary(self):
+        self.link(ALICE_POS, f"staff:{self.alice}")
+        self.keep(renamed(night_with_documents(), a21=None))
+        out = api.run(self.con, "pos_left", {"pos_id": ALICE_POS, "left_on": "2026-11-10"})
+        meta = json.loads(db.scalar(self.con, "SELECT meta FROM account WHERE id = ?",
+                                    (self.alice,)))
+        self.assertEqual((meta["left_on"], meta["left_after"]), ("2026-11-10", "2026-11"))
+        self.assertIsNone(out["note"])
+
     def test_only_a_person_can_be_marked_as_left(self):
         self.link(ICE, "expense:Ice")
         with self.assertRaises(api.ApiError):

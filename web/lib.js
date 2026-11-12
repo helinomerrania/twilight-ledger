@@ -172,6 +172,41 @@ export function ask(title, body, yes = 'Yes', no = 'Cancel') {
   });
 }
 
+/** The same question box, asking for a day as well. Resolves the day
+    chosen, or null if nothing was. */
+export function askDate(title, body, value, max, yes = 'Yes', no = 'Cancel') {
+  return new Promise(resolve => {
+    const host = document.getElementById('toast');
+    const box = document.createElement('div');
+    box.className = 'ask';
+    box.innerHTML = `<strong>${esc(title)}</strong>
+      <p style="margin:6px 0 10px;white-space:pre-line">${esc(body)}</p>
+      <input type="date" value="${esc(value)}" max="${esc(max)}" style="width:auto;margin-bottom:10px">
+      <div class="row"><button class="btn primary" data-yes>${esc(yes)}</button>
+        <button class="btn" data-no>${esc(no)}</button></div>`;
+    const input = box.querySelector('input');
+    const opener = document.activeElement;
+    const done = answer => {
+      box.remove();
+      if (opener && document.contains(opener)) opener.focus({ preventScroll: true });
+      resolve(answer);
+    };
+    const chosen = () => {
+      if (input.value) done(input.value);
+      else input.focus();
+    };
+    box.setAttribute('role', 'alertdialog');
+    box.querySelector('[data-yes]').onclick = chosen;
+    box.querySelector('[data-no]').onclick = () => done(null);
+    box.addEventListener('keydown', e => {
+      if (e.key === 'Escape') { e.preventDefault(); done(null); }
+      if (e.key === 'Enter' && e.target === input) { e.preventDefault(); chosen(); }
+    });
+    host.append(box);
+    input.focus();
+  });
+}
+
 /** Ask which stock item something is, from a box offering every item's
     name. Resolves the item, or null. */
 export function pickItem(title, body, items) {

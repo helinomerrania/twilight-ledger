@@ -99,6 +99,13 @@ separate transactions:
 This is why re-dating those five payments to their real dates does not change
 October's profit by a dinar, and the acceptance gate proves it.
 
+Someone who leaves is asked the day they left. Every month before it carries
+their whole salary; the month they left in carries the days of it they worked
+(their last day over the days in that month, to the note), and the months after
+it carry nothing. Giving the day again, or bringing them back, sets the open
+months right, and a closed month that would now be charged differently is named
+rather than touched: reopening it is what puts it right.
+
 The old app got the right answer here by a different route: it summed the
 *current* Setup lists every time a screen rendered. That is also why editing a
 salary moved a month that had already been closed. Here a closed month's result

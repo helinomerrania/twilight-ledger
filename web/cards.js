@@ -537,13 +537,15 @@ export function payrollCard() {
   if (!pay.length) return '';
   const T = k => pay.reduce((a, p) => a + (p[k] || 0), 0);
   return card(`<h2>Staff</h2>
-    <p class="sub">The salary is charged to the month in full. Advances come off
-      it; what is left is handed over.</p>
+    <p class="sub">The salary is charged to the month in full, or for someone who left
+      in it, for the days they worked. Advances come off it; what is left is handed over.</p>
     ${table(`<th>Who</th><th class="num">Salary</th><th class="num">Advances</th>
              <th class="num">Paid</th><th class="num">Still to pay</th>`,
       pay.map(p => `<tr>
-        <td>${esc(p.name)}${p.active ? '' : ' <span class="pill">no longer here</span>'}</td>
-        <td class="num">${money(p.gross)}</td>
+        <td>${esc(p.name)}${p.active ? '' : p.left_on
+          ? ` <span class="pill">left ${esc(p.left_on)}</span>` : ' <span class="pill">no longer here</span>'}</td>
+        <td class="num">${money(p.gross)}${p.part
+          ? `<br><span class="quiet">${p.part.days} of ${p.part.of} days</span>` : ''}</td>
         <td class="num">${money(p.advances)}</td>
         <td class="num">${money(p.paid)}</td>
         <td class="num">${p.overpaid
@@ -1264,16 +1266,22 @@ export function editAccounts(kind, title, note) {
     if (kind === 'supplier' && a.balance < 0) return `<span class="warnc">${money(-a.balance)} in credit</span>`;
     return `<span class="${a.balance < 0 ? 'neg' : ''}">${money(a.balance)}</span>`;
   };
+  // the day someone on the staff left decides their last month; it can be put right
+  const leftDay = a => (kind === 'staff' && !a.active && !a.meta.former
+    ? `<br><button class="mini link" data-act="hasLeft" data-id="${a.id}" data-name="${esc(a.name)}"
+         data-on="${esc(a.meta.left_on || '')}">${a.meta.left_on
+           ? `left ${esc(a.meta.left_on)}` : 'Which day did they leave?'}</button>` : '');
   const row = a => `<tr>
-      <td>${save('account_rename', { id: a.id }, 'name', a.name)}</td>
+      <td>${save('account_rename', { id: a.id }, 'name', a.name)}${leftDay(a)}</td>
       ${kind === 'staff' ? `<td class="num">${save('set_salary', { id: a.id }, 'amount', commas(sal[a.id] || ''),
           `${MONEY} style="max-width:140px"`)}</td>` : ''}
       ${kind === 'partner' ? `<td class="num">${save('set_share', { id: a.id }, 'share',
           Math.round((a.meta.share || 0) * 1000) / 10, 'type="number" step="1" min="0" max="100" style="max-width:90px"')}</td>` : ''}
       <td class="num">${bal(a)}</td>
       <td>${a.active
-        ? `<button class="mini" data-do="account_active" data-args="${args({ id: a.id, active: 0 })}">
-             ${kind === 'staff' ? 'Has left' : 'Retire'}</button>`
+        ? (kind === 'staff'
+          ? `<button class="mini" data-act="hasLeft" data-id="${a.id}" data-name="${esc(a.name)}">Has left</button>`
+          : `<button class="mini" data-do="account_active" data-args="${args({ id: a.id, active: 0 })}">Retire</button>`)
         : `<button class="mini" data-do="account_active" data-args="${args({ id: a.id, active: 1 })}">Bring back</button>`}</td>
     </tr>`;
   const fields = [['name', 'Name']];
@@ -1286,7 +1294,7 @@ export function editAccounts(kind, title, note) {
     ${shares !== 100 ? `<p class="note warnc">The shares add up to ${shares}%, not 100%.
       A month closed like this would not hand out all of its profit.</p>` : ''}
     ${live.length ? table(head, live.map(row).join('')) : empty('None yet.')}
-    ${gone.length ? `<details class="fold"><summary>Retired (${gone.length})</summary>
+    ${gone.length ? `<details class="fold"><summary>${kind === 'staff' ? 'Have left' : 'Retired'} (${gone.length})</summary>
       ${table(head, gone.map(row).join(''))}</details>` : ''}
     ${addRow('account_add', { kind }, fields)}`);
 }
@@ -1957,7 +1965,7 @@ export function sambaposAccounts() {
       ? (person && !r.link.left
         ? ` <span class="pill warn">gone from SambaPOS</span><br>Has ${esc(r.link.name)} left?
             <button class="mini link" data-act="posLeft" data-pos="${r.pos_id}"
-              data-name="${esc(r.link.name)}">Mark as left</button>`
+              data-name="${esc(r.link.name)}"${r.link.as === 'staff' ? ' data-staff="1"' : ''}>Mark as left</button>`
         : ' <span class="pill">gone from SambaPOS</span>') : '';
     return `${head}<tr>
       <td><bdi>${esc(r.name)}</bdi>${r.drawer ? ' <span class="pill">drawer</span>' : ''}${gone}

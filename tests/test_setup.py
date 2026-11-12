@@ -1,4 +1,5 @@
 """Changing Setup, and what a change is and is not allowed to reach."""
+import json
 import unittest
 
 from ledger import accruals, api, db, post, queries
@@ -63,6 +64,95 @@ class Salaries(unittest.TestCase):
         api.run(self.con, "account_add", {"kind": "staff", "name": "Grace",
                                           "salary": 300000, "view_month": NOW})
         self.assertEqual(queries.live_result(self.con, NOW)["salaries"], SALARIES + 300000)
+
+
+class Leaving(unittest.TestCase):
+    """Someone who leaves part of the way through a month is charged for the
+    days of it they worked, and nothing after it."""
+
+    def setUp(self):
+        self.con = fresh_books()
+        with db.tx(self.con):
+            for m in ("2026-09", "2026-10", NOW):
+                accruals.ensure(self.con, m)
+        self.bob = acct(self.con, "staff", "Bob")["id"]          # 200,000 a month
+
+    def charged(self, month):
+        return accruals._salary_charged(self.con, self.bob, month)
+
+    def leave(self, on, active=0):
+        out = api.run(self.con, "account_active", {"id": self.bob, "active": active,
+                                                   "left_on": on})
+        accruals.ensure_all(self.con)            # as the screens' next look does
+        return out
+
+    def close(self, *months):
+        for m in months:
+            self.con.execute("UPDATE period SET status='closed', closed_at='x' WHERE month=?", (m,))
+
+    def test_the_month_they_left_in_is_charged_for_the_days_they_worked(self):
+        self.leave("2026-09-10")
+        self.assertEqual(self.charged("2026-09"), 66750)    # 200,000 x 10 / 30, to the note
+        self.assertEqual(self.charged("2026-10"), 0)
+        self.assertEqual(self.charged(NOW), 0)
+        p = next(r for r in queries.payroll(self.con, "2026-09") if r["id"] == self.bob)
+        self.assertEqual((p["gross"], p["left_on"], p["part"]),
+                         (66750, "2026-09-10", {"days": 10, "of": 30}))
+
+    def test_leaving_on_the_last_day_is_the_whole_month(self):
+        self.leave("2026-09-30")
+        self.assertEqual(self.charged("2026-09"), 200000)
+        self.assertEqual(self.charged("2026-10"), 0)
+        p = next(r for r in queries.payroll(self.con, "2026-09") if r["id"] == self.bob)
+        self.assertIsNone(p["part"])
+
+    def test_the_day_can_be_put_right(self):
+        self.leave("2026-09-10")
+        marked = json.loads(acct(self.con, "staff", "Bob")["meta"])["retired_on"]
+        self.leave("2026-09-20")
+        self.assertEqual(self.charged("2026-09"), 133250)   # 20 days of 30
+        meta = json.loads(acct(self.con, "staff", "Bob")["meta"])
+        self.assertEqual((meta["left_on"], meta["retired_on"]), ("2026-09-20", marked))
+
+    def test_bringing_them_back_charges_every_month_again(self):
+        self.leave("2026-09-10")
+        self.leave(None, active=1)
+        for m in ("2026-09", "2026-10", NOW):
+            self.assertEqual(self.charged(m), 200000, m)
+        self.assertNotIn("left_on", json.loads(acct(self.con, "staff", "Bob")["meta"]))
+
+    def test_a_closed_month_keeps_its_salary_and_says_so(self):
+        self.close("2026-09")
+        out = self.leave("2026-09-10")
+        self.assertEqual(self.charged("2026-09"), 200000)
+        self.assertEqual(self.charged("2026-10"), 0)
+        self.assertEqual(out["note"], "September 2026 is closed, so the salary charged in it "
+                                      "stands. Reopen it on Month to put it right.")
+        self.con.execute("UPDATE period SET status='open', closed_at=NULL WHERE month='2026-09'")
+        accruals.ensure_all(self.con)
+        self.assertEqual(self.charged("2026-09"), 66750)
+
+    def test_every_closed_month_it_reaches_is_named(self):
+        self.close("2026-09", "2026-10")
+        out = self.leave("2026-09-10")
+        self.assertEqual(out["note"], "September 2026 and October 2026 are closed, so the "
+                                      "salary charged in them stands. Reopen them, newest "
+                                      "first, on Month to put it right.")
+
+    def test_an_open_month_has_nothing_to_say(self):
+        self.assertIsNone(self.leave("2026-09-10")["note"])
+
+    def test_the_day_must_have_come(self):
+        for bad in ("2099-01-31", "the tenth"):
+            with self.assertRaises(api.ApiError):
+                self.leave(bad)
+        self.assertEqual(acct(self.con, "staff", "Bob")["active"], 1)
+
+    def test_the_record_says_the_day(self):
+        self.leave("2026-09-10")
+        line = db.scalar(self.con, "SELECT detail FROM audit WHERE action = 'account_active' "
+                                   "ORDER BY id DESC LIMIT 1")
+        self.assertIn("Bob left on 2026-09-10", line)
 
 
 class Accounts(unittest.TestCase):
