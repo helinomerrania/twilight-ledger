@@ -1506,6 +1506,37 @@ export function nightSold() {
 }
 
 /** The month as SambaPOS saw it, night by night against the books. */
+/** When the month sold: through the night, the nights of the week, and the
+    tables — from every night kept, which SambaPOS itself cannot keep. */
+export function monthWhen() {
+  const m = S.data.pos && S.data.pos.month;
+  const w = m && m.when;
+  if (!w || !w.hours.length) return '';
+  const max = Math.max(...w.hours.map(h => h[1]));
+  const hours = `<div class="hours">${w.hours.map(([h, c, t]) => `<div class="hour"
+      title="${c} tickets, ${money(t)}"><span class="bar v"><span style="height:${c / max * 100}%"></span></span>
+      <span class="quiet">${String(h).padStart(2, '0')}</span></div>`).join('')}</div>`;
+  const best = Math.max(...w.days.map(d => d.average), 1);
+  const days = table('<th>Night</th><th class="num">Nights</th><th class="num">Takings on average</th><th></th>',
+    w.days.map(d => `<tr><td>${esc(d.day)}</td><td class="num">${d.nights}</td>
+      <td class="num">${money(d.average)}</td><td style="width:38%"><div class="track"><span class="fill"
+      style="width:${d.average / best * 100}%"></span></div></td></tr>`).join(''));
+  const row = t => `<tr><td><bdi>${esc(t.place)}</bdi></td><td class="num">${t.tickets}</td>
+      <td class="num">${money(t.total)}</td>
+      <td class="num quiet">${t.minutes === null ? '' : `${t.minutes} min`}</td></tr>`;
+  const head = '<th>Table</th><th class="num">Tickets</th><th class="num">Came to</th><th class="num">Stayed, on average</th>';
+  const n = m.nights.length;
+  return card(`<h2>When it sells</h2>
+    <p class="sub">${m.tickets} tickets over ${n} night${n === 1 ? '' : 's'} kept: about
+      ${Math.round(m.tickets / n)} a night${w.minutes ? `, staying ${w.minutes} minutes on average
+      from opening the ticket to paying it` : ''}.</p>
+    <h3 class="grouph">Tickets opened, through the night</h3>${hours}
+    <h3 class="grouph">Nights of the week</h3>${days}
+    <h3 class="grouph">Tables</h3>${table(head, w.tables.slice(0, 10).map(row).join(''))}
+    ${w.tables.length > 10 ? `<details class="fold"><summary>${w.tables.length - 10} more</summary>
+      ${table(head, w.tables.slice(10).map(row).join(''))}</details>` : ''}`);
+}
+
 export function monthMakes() {
   const m = S.data.pos && S.data.pos.month;
   if (!m || !m.items.length) return '';

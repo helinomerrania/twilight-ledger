@@ -794,8 +794,12 @@ waits until the stock figures have been trusted for a while.
 
 Ideas raised and worth keeping, not yet planned in detail:
 
-- sales by hour and by day of the week, and table turnover — SambaPOS
-  already has custom reports for these; the archive can do them over months
+- ✅ sales by hour and by day of the week, and table turnover (2026.11.11.25):
+  Month → **When it sells**, from every night kept — tickets opened through
+  the night, takings on average for each night of the week, and each table's
+  tickets, what they came to and how long people stayed (from opening the
+  ticket to paying it). SambaPOS's own reports see one night; this sees the
+  month.
 - Kurdish wording on the screens, via a Gemini prompt Mohammed runs himself
 - ✅ a month-end summary he can print or send to his partner (2026.11.11.24):
   Month → **Summary for my partner** is one A4 page — the month (so far, while

@@ -406,7 +406,55 @@ def month(con, month):
             "nights": [dict(r) for r in rows],
             "tickets": sum(r["tickets"] for r in rows),
             "takings": sum(r["takings"] for r in rows),
-            "items": items(con, month=month)}
+            "items": items(con, month=month),
+            "when": when(con, month)}
+
+
+WEEK = (6, 0, 1, 2, 3, 4, 5)        # strftime('%w'): Saturday first, as the week runs here
+DAYS = ("Sunday", "Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday")
+
+
+def when(con, month):
+    """When a month's nights sold: tickets opened in each hour (in the order a
+    night runs), each day of the week on average, and each table — how many
+    tickets, what they came to and how long they stayed, from opening a
+    ticket to its last payment. SambaPOS starts afresh each night; these
+    come from every night kept."""
+    like = f"{month}%"
+    hrs = db.all_(con, """
+        SELECT CAST(substr(t.opened_at, 12, 2) AS INTEGER) AS h, COUNT(*) AS n,
+               SUM(t.total) AS total
+          FROM pos_ticket t JOIN pos_period p ON p.id = t.period_id
+         WHERE p.night LIKE ? GROUP BY h""", (like,))
+    days = {r["d"]: dict(r) for r in db.all_(con, """
+        SELECT CAST(strftime('%w', night) AS INTEGER) AS d, COUNT(*) AS nights,
+               SUM(takings) AS takings, SUM(tickets) AS tickets
+          FROM (SELECT night, SUM(takings) AS takings, SUM(tickets) AS tickets
+                  FROM pos_period WHERE night LIKE ? AND tickets > 0 GROUP BY night)
+         GROUP BY d""", (like,))}
+    tables = [dict(r) for r in db.all_(con, """
+        SELECT COALESCE(NULLIF(t.tables, ''), '—') AS place, COUNT(*) AS tickets,
+               SUM(t.total) AS total,
+               AVG(CASE WHEN t.paid_at IS NOT NULL AND t.paid_at > t.opened_at
+                        THEN (julianday(t.paid_at) - julianday(t.opened_at)) * 1440 END)
+                   AS minutes
+          FROM pos_ticket t JOIN pos_period p ON p.id = t.period_id
+         WHERE p.night LIKE ? GROUP BY place ORDER BY total DESC""", (like,))]
+    stay = db.scalar(con, """
+        SELECT AVG((julianday(t.paid_at) - julianday(t.opened_at)) * 1440)
+          FROM pos_ticket t JOIN pos_period p ON p.id = t.period_id
+         WHERE p.night LIKE ? AND t.paid_at IS NOT NULL AND t.paid_at > t.opened_at""",
+                      (like,), default=None)
+    for t in tables:
+        t["minutes"] = round(t["minutes"]) if t["minutes"] is not None else None
+    return {"hours": sorted(([r["h"], r["n"], r["total"]] for r in hrs),
+                            key=lambda r: (r[0] - NIGHT_ENDS) % 24),
+            "days": [{"day": DAYS[d], "nights": days[d]["nights"], "takings": days[d]["takings"],
+                      "tickets": days[d]["tickets"],
+                      "average": round(days[d]["takings"] / days[d]["nights"])}
+                     for d in WEEK if d in days],
+            "tables": tables,
+            "minutes": round(stay) if stay is not None else None}
 
 
 def status(con):

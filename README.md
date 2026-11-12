@@ -129,7 +129,7 @@ both at once. Nothing has to be back-dated to make a month come out right.
 python -m unittest discover -s tests -t .
 ```
 
-402 tests, no dependencies. They run against real SQLite with the real
+406 tests, no dependencies. They run against real SQLite with the real
 migrations, because the schema's constraints are part of what is being tested.
 
 The tests in `tests/test_real_books.py` check the import against the actual
