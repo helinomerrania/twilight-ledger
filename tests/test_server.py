@@ -86,6 +86,11 @@ class Server(unittest.TestCase):
         self.assertEqual(self.ask("GET", "/api/nothing")[0], 404)
         self.assertEqual(self.ask("POST", "/api/nothing", {})[0], 404)
 
+    def test_started_again_it_finds_itself_rather_than_run_twice(self):
+        here = server.running_at(self.port, self.con.path)
+        self.assertEqual(here, f"http://127.0.0.1:{self.port}/")
+        self.assertIsNone(server.running_at(self.port, self.con.path + "-other"))
+
     # ------------------------------------------------------------------ saving
     def test_a_save_comes_back_with_the_new_state(self):
         status, out = self.expense()

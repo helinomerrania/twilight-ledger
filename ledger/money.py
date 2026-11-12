@@ -27,12 +27,26 @@ def set_note(note):
     return NOTE
 
 
+# More than the business could hold in a single entry: a figure this long is
+# a slip (a pasted number, a barcode in the wrong box), and past 19 digits the
+# database could not store it at all.
+TOO_LARGE = 10 ** 12
+
+
 def to_int(v, field="amount"):
     """Accept what a form or an old JSON file might hand us; return whole dinar.
 
     Rejects anything that is not a finite number, because a silent 0 in a
-    ledger is worse than a loud error.
+    ledger is worse than a loud error, and anything absurdly large.
     """
+    n = _to_int(v, field)
+    if abs(n) >= TOO_LARGE:
+        said = v.strip() if isinstance(v, str) else f"{n:,}"
+        raise ValueError(f"{field}: {said} is far too large. Check the figure")
+    return n
+
+
+def _to_int(v, field):
     if v is None or v == "":
         return 0
     if isinstance(v, bool):
@@ -52,7 +66,7 @@ def to_int(v, field="amount"):
         if not s:
             return 0
         try:
-            return to_int(float(s), field)
+            return _to_int(float(s), field)
         except ValueError:
             raise ValueError(f"{field}: {v!r} is not an amount") from None
     raise ValueError(f"{field}: {type(v).__name__} is not an amount")

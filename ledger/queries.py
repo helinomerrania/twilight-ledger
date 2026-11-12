@@ -8,6 +8,7 @@ balance is a SUM over `movement`, and there is one function per figure.
 Reading rule: `movement` already excludes voided entries, so no query in this
 file has to remember to.
 """
+from bisect import bisect_right
 import json
 from fractions import Fraction
 
@@ -578,9 +579,12 @@ def cash_counts(con):
     been written off is shown as found-and-dealt-with: `found` is what the
     count turned up, `diff` is what is still unexplained.
     """
+    # A write-off belongs to its count by the count's number and its night: a
+    # deleted count's number is given to the next one, and a write-off of the
+    # old night put back must not land on the new one.
     written = {}
     for r in db.all_(con, """
-            SELECT e.source_ref, p.account_id, p.amount FROM entry e
+            SELECT e.source_ref, e.happened_on, p.account_id, p.amount FROM entry e
               JOIN posting p ON p.entry_id = e.id
               JOIN account a ON a.id = p.account_id
              WHERE e.kind = 'cash_difference' AND e.voided_at IS NULL
@@ -589,7 +593,7 @@ def cash_counts(con):
             count_id = int(r["source_ref"].split(":")[1])
         except (IndexError, ValueError):
             continue
-        key = (count_id, r["account_id"])
+        key = (count_id, r["account_id"], r["happened_on"])
         written[key] = written.get(key, 0) + r["amount"]
     # what was moved out of the drawer after a count, leaving the float: it
     # happened after the counting, so that night's count must not expect it
@@ -606,17 +610,36 @@ def cash_counts(con):
         key = (count_id, r["account_id"], r["happened_on"])
         after[key] = after.get(key, 0) + r["amount"]
 
+    # Each pot's balance at the end of every day it moved, read once: summing
+    # a pot's whole history again for every count grew with the square of
+    # the nights, and the screens slowed down month by month.
+    days, sums = {}, {}
+    for r in db.all_(con, """
+            SELECT account_id, happened_on, SUM(amount * normal) AS d FROM movement
+             WHERE kind IN ('cash', 'float') GROUP BY account_id, happened_on
+             ORDER BY account_id, happened_on"""):
+        days.setdefault(r["account_id"], []).append(r["happened_on"])
+        run = sums.setdefault(r["account_id"], [])
+        run.append((run[-1] if run else 0) + r["d"])
+
+    def held(account_id, on):
+        i = bisect_right(days.get(account_id, []), on)
+        return sums[account_id][i - 1] if i else 0
+
+    lines_of = {}
+    for line in db.all_(con,
+            "SELECT l.count_id, l.counted, a.id AS account_id, a.name FROM cash_count_line l "
+            "JOIN account a ON a.id = l.account_id ORDER BY a.sort, a.id"):
+        lines_of.setdefault(line["count_id"], []).append(line)
+
     out = []
     for c in db.all_(con, "SELECT * FROM cash_count ORDER BY counted_on"):
-        lines = db.all_(con,
-            "SELECT l.counted, a.id AS account_id, a.code, a.name FROM cash_count_line l "
-            "JOIN account a ON a.id = l.account_id WHERE l.count_id = ? "
-            "ORDER BY a.sort", (c["id"],))
+        lines = lines_of.get(c["id"], [])
         per_pot, counted, expected, found, left = [], 0, 0, 0, 0
         for line in lines:
-            now = balance(con, line["code"], as_of=c["counted_on"]) \
+            now = held(line["account_id"], c["counted_on"]) \
                 - after.get((c["id"], line["account_id"], c["counted_on"]), 0)
-            off = written.get((c["id"], line["account_id"]), 0)
+            off = written.get((c["id"], line["account_id"], c["counted_on"]), 0)
             before = now - off                 # what the books said that night
             per_pot.append({"name": line["name"], "counted": line["counted"],
                             "expected": before, "found": line["counted"] - before,

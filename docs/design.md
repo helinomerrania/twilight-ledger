@@ -284,7 +284,10 @@ float in the drawer and moves the rest out in a transfer tied to the count,
 and keeps each night's own difference over the month. A difference accepted
 as real is still written off, as a cost of its month. Closing up shows each
 pot against the books as they stood at the count, so moving the rest out
-afterwards never reads as cash found.
+afterwards never reads as cash found, and a drop to the safe earlier in the
+night is part of the night, not the rest. A write-off belongs to its count by
+the count's number and its night, since a deleted count's number is given to
+the next one.
 
 A stock count values the stock once something is entered on it: a count just
 started is not the month's count. No count is started, changed or deleted in

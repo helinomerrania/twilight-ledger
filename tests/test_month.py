@@ -148,6 +148,17 @@ class BeforeClosing(unittest.TestCase):
     def test_but_they_do_not_stop_it(self):
         self.assertTrue(close.ready(self.con, PREV)["can_close"])
 
+    def test_a_month_is_charged_before_it_is_frozen(self):
+        """Closed before any screen had charged it (from the command line,
+        say), a month was frozen without its rent and salaries."""
+        con = fresh_books()
+        api.run(con, "sales", {"amount": 900000, "on": f"{PREV}-15"})
+        add_count(con, f"{PREV}-28", 1000000)
+        with db.tx(con):
+            close.close_month(con, PREV)
+        r = queries.result(con, PREV)
+        self.assertEqual((r["fixed"], r["salaries"]), (RENT, SALARIES))
+
 
 if __name__ == "__main__":
     unittest.main()

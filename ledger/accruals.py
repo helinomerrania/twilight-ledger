@@ -67,12 +67,19 @@ def reconcile_fixed(con, month):
     return n
 
 
+def _staff(con):
+    """Everyone on the staff list, without summing their accounts: asked for
+    every open month each time a screen is drawn, it only needs who they are."""
+    return db.all_(con, "SELECT id, name, meta, active FROM account WHERE kind = 'staff' "
+                        "ORDER BY active DESC, sort, name")
+
+
 def reconcile_salaries(con, month):
     """Each member of staff is charged their salary for the month. Someone who
     has left is still charged for the months up to and including the one they
     left in, because they worked it."""
     n = 0
-    for a in queries.balances(con, "staff"):
+    for a in _staff(con):
         meta = json.loads(a["meta"] or "{}")
         if meta.get("former"):
             continue
@@ -96,7 +103,7 @@ def ensure_needed(con, month):
         if target is not None and target != _charged(
                 con, "exp:rent", month, "fixed_charge", f["name"]):
             return True
-    for a in queries.balances(con, "staff"):
+    for a in _staff(con):
         meta = json.loads(a["meta"] or "{}")
         if meta.get("former"):
             continue

@@ -81,6 +81,26 @@ class Pct(unittest.TestCase):
         self.assertEqual(pct(1260000, 10000000), 12.6)
 
 
+
+class FarTooLarge(unittest.TestCase):
+    """A 20-digit figure pasted into an amount crashed with "Python int too
+    large to convert to SQLite INTEGER"; one a little shorter was saved."""
+
+    def test_a_figure_no_business_holds_is_refused_plainly(self):
+        for v in ("12345678901234567890", "6281234567890", 10 ** 13):
+            with self.assertRaises(ValueError) as cm:
+                to_int(v)
+            self.assertIn("far too large", str(cm.exception))
+
+    def test_a_large_real_figure_is_still_taken(self):
+        self.assertEqual(to_int("999,999,999,999"), 999999999999)
+
+    def test_through_an_action_it_is_a_refusal_not_a_crash(self):
+        from ledger import api
+        from tests.helpers import fresh_books
+        with self.assertRaises(api.ApiError):
+            api.run(fresh_books(), "sales", {"amount": "12345678901234567890", "on": "2026-11-09"})
+
 class TheNight(unittest.TestCase):
     """The lounge closes after midnight: until six in the morning it is still
     the night before, so a till figure typed at one in the morning belongs to

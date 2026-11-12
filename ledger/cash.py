@@ -56,11 +56,14 @@ def drawer(con, on):
         if books_sales and books_sales != night["takings"]:
             out["sales_differ"] = {"books": books_sales, "pos": night["takings"],
                                    "gap": night["takings"] - books_sales}
-    # moved out of the drawer's pot that day already, after the count
+    # the rest already moved out of the drawer's pot after the night's count,
+    # the same transfer the count itself leaves out. A drop to the safe
+    # earlier in the night is part of the night, and must not hide the step.
     out["moved"] = db.scalar(con, """
-        SELECT COALESCE(SUM(-m.amount), 0) FROM movement m
-         WHERE m.entry_kind = 'transfer' AND m.happened_on = ? AND m.amount < 0
-           AND m.account_id = (SELECT id FROM account WHERE name = ?
+        SELECT COALESCE(SUM(-p.amount), 0) FROM posting p JOIN entry e ON e.id = p.entry_id
+         WHERE e.kind = 'transfer' AND e.voided_at IS NULL AND e.happened_on = ?
+           AND e.source_ref LIKE 'count:%:rest' AND p.amount < 0
+           AND p.account_id = (SELECT id FROM account WHERE name = ?
                                 AND kind IN ('cash', 'float'))""", (on, out["pot"]))
     return out
 

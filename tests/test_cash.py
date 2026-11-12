@@ -202,6 +202,37 @@ class FloatAndBlind(Base):
         st = api.state(self.con, on="2026-09-30")
         self.assertEqual(sorted(p["name"] for p in st["day"]["count"]["pots"]), ["Box", "Safe"])
 
+    def test_a_drop_to_the_safe_earlier_in_the_night_is_not_the_rest(self):
+        """Money taken from the Box to the Safe during a busy night made
+        Closing up think the rest had been moved, and the step went away."""
+        api.run(self.con, "cash_settings", {"float": "25000"})
+        api.run(self.con, "sales", {"amount": 400000, "on": NIGHT})
+        api.run(self.con, "transfer", {"amount": 200000, "from": "Box", "to": "Safe", "on": NIGHT})
+        api.run(self.con, "cash_count", {"on": NIGHT, "pots": {"Box": 200000}})
+        self.assertEqual(cash.drawer(self.con, NIGHT)["moved"], 0)
+        api.run(self.con, "move_rest", {"on": NIGHT, "to": "Safe", "amount": 175000})
+        self.assertEqual(cash.drawer(self.con, NIGHT)["moved"], 175000)
+
+    def test_a_write_off_put_back_stays_on_its_own_night(self):
+        """A deleted count's number is given to the next count. A write-off
+        of the old night, put back, landed on the new night's count."""
+        a, b = "2026-11-08", "2026-11-09"
+        api.run(self.con, "sales", {"amount": 100000, "on": a})
+        first = api.run(self.con, "cash_count", {"on": a, "pots": {"Box": 90000}})["id"]
+        api.run(self.con, "write_off", {"id": first, "reason": "short"})
+        off = db.scalar(self.con, "SELECT id FROM entry WHERE kind = 'cash_difference'")
+        api.run(self.con, "void", {"id": off})
+        api.run(self.con, "delete_cash_count", {"id": first})
+        api.run(self.con, "sales", {"amount": 50000, "on": b})
+        second = api.run(self.con, "cash_count", {"on": b, "pots": {"Box": 150000}})["id"]
+        api.run(self.con, "put_back", {"id": off})
+        night = next(c for c in queries.cash_counts(self.con) if c["id"] == second)
+        # the books lost 10,000 on the 8th again, so the 9th's count is over by
+        # it, but nothing was written off on the 9th
+        self.assertEqual((night["written_off"], night["found"], night["diff"]), (0, 10000, 10000))
+        # and it does not stop the new night's count being deleted
+        api.run(self.con, "delete_cash_count", {"id": second})
+
     def test_the_rest_goes_only_to_a_pot_in_use(self):
         api.run(self.con, "sales", {"amount": 90000, "on": NIGHT})
         api.run(self.con, "cash_count", {"on": NIGHT, "pots": {"Box": 90000}})
@@ -228,11 +259,13 @@ class FloatAndBlind(Base):
             with self.assertRaises(api.ApiError, msg=str(body)):
                 api.run(self.con, "move_rest", {"on": NIGHT, **body})
 
-    def test_what_was_moved_out_of_the_drawer_that_day(self):
+    def test_what_was_moved_out_of_the_drawer_after_the_count(self):
+        api.run(self.con, "cash_settings", {"float": "25000"})
         api.run(self.con, "sales", {"amount": 90000, "on": NIGHT})
+        api.run(self.con, "cash_count", {"on": NIGHT, "pots": {"Box": 90000}})
         self.assertEqual(cash.drawer(self.con, NIGHT)["moved"], 0)
-        api.run(self.con, "transfer", {"amount": 40000, "from": "Box", "to": "Safe", "on": NIGHT})
-        self.assertEqual(cash.drawer(self.con, NIGHT)["moved"], 40000)
+        api.run(self.con, "move_rest", {"on": NIGHT, "to": "Safe", "amount": 65000})
+        self.assertEqual(cash.drawer(self.con, NIGHT)["moved"], 65000)
 
 
 class OverTime(Base):

@@ -1252,34 +1252,57 @@ const H = {
   },
 };
 
+/* A change is sent once, however fast a button is clicked twice or Enter is
+   pressed twice: while one is on its way, the same one again is let go. A
+   double click on Add would otherwise write the expense twice. */
+const running = new Set();
+async function once(key, fn) {
+  if (running.has(key)) return undefined;
+  running.add(key);
+  try {
+    return await fn();
+  } finally {
+    running.delete(key);
+  }
+}
+
 /* ------------------------------------------------------------------ events */
 
 const ON_CHANGE = new Set(['setDay', 'setMonth', 'setCount', 'pickKind', 'fillMix']);
+
+// choosing a day, a month or a tab is not a change: the latest choice wins
+for (const [name, fn] of Object.entries(H)) {
+  if (!ON_CHANGE.has(name) && name !== 'go') H[name] = (...a) => once(name, () => fn(...a));
+}
 
 document.addEventListener('click', async e => {
   /* Setup: one button does one thing, described entirely by its attributes */
   const doer = e.target.closest('[data-do]');
   if (doer) {
     e.preventDefault();
-    if (doer.dataset.confirm
-        && !await ask(doer.dataset.confirm, doer.dataset.confirmBody || '', doer.dataset.yes || 'Yes')) {
-      return;
-    }
-    const out = await act(() => send(doer.dataset.do, JSON.parse(doer.dataset.args || '{}')));
-    if (out) say('Saved.');
+    await once(`do:${doer.dataset.do}:${doer.dataset.args || ''}`, async () => {
+      if (doer.dataset.confirm
+          && !await ask(doer.dataset.confirm, doer.dataset.confirmBody || '', doer.dataset.yes || 'Yes')) {
+        return;
+      }
+      const out = await act(() => send(doer.dataset.do, JSON.parse(doer.dataset.args || '{}')));
+      if (out) say('Saved.');
+    });
     return;
   }
   const adder = e.target.closest('[data-add]');
   if (adder) {
     e.preventDefault();
-    const body = JSON.parse(adder.dataset.args || '{}');
-    const keys = [];
-    adder.closest('.addrow').querySelectorAll('[data-f]').forEach(el => {
-      body[el.dataset.f] = plain(el);
-      if (el.dataset.keep === undefined) keys.push(fieldKey(el));     // kept for the next one
+    await once(`add:${adder.dataset.add}:${adder.dataset.args || ''}`, async () => {
+      const body = JSON.parse(adder.dataset.args || '{}');
+      const keys = [];
+      adder.closest('.addrow').querySelectorAll('[data-f]').forEach(el => {
+        body[el.dataset.f] = plain(el);
+        if (el.dataset.keep === undefined) keys.push(fieldKey(el));     // kept for the next one
+      });
+      const out = await act(() => send(adder.dataset.add, body), { skip: keys });
+      if (out) say('Added.');
     });
-    const out = await act(() => send(adder.dataset.add, body), { skip: keys });
-    if (out) say('Added.');
     return;
   }
   const el = e.target.closest('[data-act], [data-go]');
@@ -1353,6 +1376,18 @@ async function saveLine(row) {
     code. */
 const westernDigits = s => s.replace(/[\u0660-\u0669]/g, d => d.charCodeAt(0) - 0x0660)
                             .replace(/[\u06F0-\u06F9]/g, d => d.charCodeAt(0) - 0x06F0);
+
+/* A number box throws away the digits a Kurdish keyboard types, so on that
+   keyboard a count could not be typed at all: each is put in as its Western
+   digit instead, and the Arabic decimal point as a point. */
+document.addEventListener('beforeinput', e => {
+  const el = e.target;
+  if (!(el instanceof HTMLInputElement) || el.type !== 'number' || !e.data) return;
+  const put = westernDigits(e.data).replace(/\u066B/g, '.');
+  if (put === e.data) return;
+  e.preventDefault();
+  document.execCommand('insertText', false, put);
+});
 
 /** A fill starting from a mix's usual batch. */
 function usualOf(mix) {

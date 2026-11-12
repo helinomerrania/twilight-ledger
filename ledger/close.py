@@ -8,7 +8,7 @@ someone moved August.
 """
 import json
 
-from . import db, post, queries
+from . import accruals, db, post, queries
 from .dates import month_end, next_month
 from .money import split_shares
 
@@ -65,6 +65,10 @@ def close_month(con, month):
     posted as a stock difference, so shrinkage shows as a line rather than
     hiding inside cost; and the result is stored as a record.
     """
+    # the month's rent and salaries first, whatever was looked at before: a
+    # month closed from the command line, or before any screen had charged
+    # them, would otherwise be frozen without them
+    accruals.ensure(con, month)
     check = ready(con, month)
     if not check["can_close"]:
         raise db.LedgerError(" ".join(check["stops"]))

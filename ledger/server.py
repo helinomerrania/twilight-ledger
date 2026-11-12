@@ -21,6 +21,7 @@ import os
 import socket
 import sys
 import threading
+import urllib.request
 import webbrowser
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
@@ -148,6 +149,7 @@ class Handler(BaseHTTPRequestHandler):
             if url.path == "/api/health":
                 out = db.integrity(self.con)
                 out["version"] = update.current()
+                out["books"] = str(self.con.path)
                 return self.send_json(out)
             if url.path == "/api/update":
                 return self.send_json(update.check())
@@ -243,7 +245,32 @@ def free_port(port):
             return False
 
 
+def running_at(port, books):
+    """Where this app is already serving these books, if it is. Started a
+    second time, it must not run beside itself: two copies would both write
+    to the books, and after an update one of them would go on with the old
+    code against the new books."""
+    direct = urllib.request.build_opener(urllib.request.ProxyHandler({}))
+    for p in range(port, port + 20):
+        if free_port(p):
+            continue
+        try:
+            with direct.open(f"http://{HOST}:{p}/api/health", timeout=2) as r:
+                info = json.loads(r.read())
+        except (OSError, ValueError):
+            continue
+        if info.get("books") == str(books):
+            return f"http://{HOST}:{p}/"
+    return None
+
+
 def serve(db_path=None, port=PORT, *, open_browser=True):
+    already = running_at(port, Path(db_path or db.DEFAULT_DB).resolve())
+    if already:
+        print(f"Twilight Ledger is already open at {already}")
+        if open_browser:
+            webbrowser.open(already)
+        return 0
     con = db.connect(db_path or db.DEFAULT_DB)
     api.bootstrap(con)
     rep = db.integrity(con)

@@ -419,7 +419,8 @@ def _delete_cash_count(con, body):
     if not c:
         raise ApiError("that count is not in the books")
     if db.one(con, "SELECT 1 FROM entry WHERE source_ref LIKE ? AND voided_at IS NULL "
-                   "AND kind = 'cash_difference'", (f"count:{c['id']}:%",)):
+                   "AND kind = 'cash_difference' AND happened_on = ?",
+              (f"count:{c['id']}:%", c["counted_on"])):
         raise ApiError("a difference on that count was written off. Delete the "
                        "write-off on Books first.")
     con.execute("DELETE FROM cash_count WHERE id = ?", (c["id"],))
