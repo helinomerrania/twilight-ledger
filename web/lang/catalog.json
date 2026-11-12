@@ -87,6 +87,7 @@
 "{0} g",
 "Delete",
 "Stock count",
+"Find an item",
 "Start a count",
 "Delete this count",
 "Weigh the bucket and the tare comes off. Sealed tobacco is counted in the boxes it comes in, each size said under its box, and converts to kilos. Everything else is whole packages plus loose pieces. Each box saves as you leave it. Scanning a barcode goes straight to its item. {0}",

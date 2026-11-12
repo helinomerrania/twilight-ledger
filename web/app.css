@@ -150,13 +150,24 @@ h1 {
 }
 h1 + .sub { margin: 0 0 14px; color: var(--muted); }
 
-/* the pages of a screen, in a row under its title */
-nav.pages {
+/* the pages of a screen, in a row under its title, with whatever every page
+   of it is about (Month's month) at the end of the row */
+.pagebar {
   display: flex;
   flex-wrap: wrap;
-  gap: 2px;
+  align-items: center;
+  gap: 6px 16px;
   margin: 0 0 20px;
   border-bottom: 1px solid var(--line);
+}
+nav.pages { display: flex; flex-wrap: wrap; gap: 2px; }
+.pagebar .tools {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+  margin-inline-start: auto;
+  padding-bottom: 6px;
 }
 nav.pages button {
   appearance: none;
@@ -259,6 +270,23 @@ tbody tr:last-child td { border-bottom: 0; }
 tr.tot td { font-weight: 600; border-top: 1px solid var(--ink); border-bottom: 0; }
 .scroll { overflow-x: auto; }
 
+/* on a PC screen every table fits its card, so the page scrolls them and a
+   long table keeps its column names in view */
+@media (min-width: 1200px) {
+  .scroll { overflow-x: visible; }
+  thead th {
+    position: sticky;
+    top: 0;
+    z-index: 2;
+    background: var(--card);
+    border-bottom-color: transparent;
+    box-shadow: inset 0 -1px 0 var(--line);
+  }
+}
+
+/* the find box at the head of a long list */
+input.find { width: 220px; }
+
 .pos { color: var(--good); }
 .neg { color: var(--bad); }
 .warnc { color: var(--warn); }
@@ -283,7 +311,7 @@ input:focus-visible, select:focus-visible, button:focus-visible {
   outline: 2px solid var(--accent);
   outline-offset: 1px;
 }
-input[type="number"] { font-variant-numeric: tabular-nums; }
+input[type="number"], input[data-money] { font-variant-numeric: tabular-nums; }
 input.big { font-size: 19px; font-weight: 600; padding: 10px 12px; }
 
 .row { display: flex; gap: 10px; align-items: flex-end; flex-wrap: wrap; }
@@ -696,7 +724,7 @@ code { font: 12px var(--mono); }
    where it is typed. Kurdish typed into a plain box runs right to left by
    itself, because the page does. */
 
-html[dir="rtl"] input[type="number"] { direction: ltr; text-align: right; }
+html[dir="rtl"] input[type="number"], html[dir="rtl"] input[data-money] { direction: ltr; text-align: right; }
 html[dir="rtl"] td.num input, html[dir="rtl"] .pot input,
 html[dir="rtl"] label.sizebox input { text-align: left; }
 html[dir="rtl"] textarea#langAnswer { direction: ltr; }

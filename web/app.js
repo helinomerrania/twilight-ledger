@@ -183,11 +183,12 @@ function render({ fresh = false, skip = [] } = {}) {
   const tabs = PAGES[S.tab].map(([k, label]) =>
     `<button data-go="${S.tab}/${k}" aria-current="${k === key}">${esc(label)}</button>`).join('');
   main.innerHTML = `<h1>${esc(title)}</h1><p class="sub">${esc(sub)}</p>`
-    + `<nav class="pages" aria-label="${esc(title)}">${tabs}</nav>`
-    + (HEADS[S.tab] ? HEADS[S.tab]() : '')
+    + `<div class="pagebar"><nav class="pages" aria-label="${esc(title)}">${tabs}</nav>`
+    + `${HEADS[S.tab] ? HEADS[S.tab]() : ''}</div>`
     + (note ? `<p class="pagenote">${esc(note)}</p>` : '')
     + (cards() || `<div class="card">${empty('Nothing here yet.')}</div>`);
   if (onPage('stock', 'fill') && S.draft.fill) fillFigures();
+  applyFind();
   if (!kept.size && !focus) return;
   const byKey = new Map();
   for (const el of fields()) {
@@ -286,6 +287,60 @@ function watchBackups() {
   if (++watchTries <= 40) watchTimer = setTimeout(refreshQuietly, 2500);
 }
 
+/* Amounts of money show their commas as they are typed: 601750 is shown as
+   601,750, with the cursor still after the same digit. */
+function moneyBox(el) {
+  const raw = westernDigits(el.value);
+  const at = el.selectionStart ?? raw.length;
+  const before = raw.slice(0, at).replace(/[^\d]/g, '').length;
+  const digits = raw.replace(/[^\d]/g, '').replace(/^0+(?=\d)/, '');
+  const shown = digits.replace(/\B(?=(\d{3})+(?!\d))/g, ',');
+  if (shown === el.value) return;
+  el.value = shown;
+  let pos = 0;
+  for (let seen = 0; pos < shown.length && seen < before; pos++) if (/\d/.test(shown[pos])) seen++;
+  try { el.setSelectionRange(pos, pos); } catch { /* not focused */ }
+}
+
+/* A find box keeps only the rows whose name has what was typed, with their
+   brand or flavours, and hides a group, or a heading, with nothing left
+   under it. What was typed stays when the screen is redrawn. */
+function applyFind() {
+  document.querySelectorAll('#main input.find').forEach(box => {
+    const q = ((S.draft.find || {})[box.dataset.find] || '').trim().toLowerCase();
+    const scope = box.closest('.card');
+    const rows = [...scope.querySelectorAll('tr[data-name]')];
+    const shown = new Set(rows.filter(r => !q || r.dataset.name.includes(q)));
+    if (q) {
+      for (const r of [...shown]) {
+        if (r.dataset.of) scope.querySelectorAll(`tr[data-brand="${r.dataset.of}"]`).forEach(b => shown.add(b));
+        if (r.dataset.brand) scope.querySelectorAll(`tr[data-of="${r.dataset.brand}"]`).forEach(f => shown.add(f));
+      }
+    }
+    rows.forEach(r => { r.hidden = !shown.has(r); });
+    scope.querySelectorAll('tr.typeh').forEach(h => {
+      let n = h.nextElementSibling;
+      let any = false;
+      while (n && !n.classList.contains('typeh')) { if (n.dataset.name && !n.hidden) any = true; n = n.nextElementSibling; }
+      h.hidden = Boolean(q) && !any;
+    });
+    scope.querySelectorAll('.findgroup').forEach(g => {
+      g.hidden = Boolean(q) && !g.querySelector('tr[data-name]:not([hidden])');
+    });
+    if (q) scope.querySelectorAll('details').forEach(d => { if (d.querySelector('tr[data-name]:not([hidden])')) d.open = true; });
+  });
+}
+
+document.addEventListener('input', e => {
+  const el = e.target;
+  if (!(el instanceof HTMLInputElement)) return;
+  if (el.dataset.money !== undefined) moneyBox(el);
+  if (el.dataset.find) {
+    S.draft.find = { ...(S.draft.find || {}), [el.dataset.find]: el.value };
+    applyFind();
+  }
+});
+
 /** Open a screen, or one page of it: 'month' or 'month/settle'. */
 function setTab(where) {
   const [tab, page] = String(where || '').split('/');
@@ -302,9 +357,13 @@ function setTab(where) {
 
 /* ----------------------------------------------------------------- helpers */
 
+/** What a box holds: an amount of money without its commas. */
+const plain = el => (el.dataset.money !== undefined
+  ? westernDigits(el.value).replace(/[^\d]/g, '') : el.value.trim());
+
 const val = id => {
   const el = document.getElementById(id);
-  return el ? el.value.trim() : '';
+  return el ? plain(el) : '';
 };
 
 const num = id => {
@@ -487,7 +546,7 @@ const H = {
     const pots = {};
     const keys = [];
     document.querySelectorAll('#main [data-pot]').forEach(el => {
-      pots[el.dataset.pot] = el.value.trim().replace(/,/g, '');
+      pots[el.dataset.pot] = plain(el);
       keys.push(fieldKey(el));
     });
     if (!Object.values(pots).some(v => v !== '')) return say('Count at least one pot.', true);
@@ -542,7 +601,7 @@ const H = {
     const row = el.closest('[data-edit]');
     const id = Number(row.dataset.edit);
     const f = {};
-    row.querySelectorAll('[data-e]').forEach(x => { f[x.dataset.e] = x.value.trim(); });
+    row.querySelectorAll('[data-e]').forEach(x => { f[x.dataset.e] = plain(x); });
     const body = { id, on: f.on, amount: String(f.amount || '').replace(/,/g, '') };
     for (const k of ['detail', 'pot', 'pot_to', 'what', 'terms']) {
       if (k in f) body[k] = f[k];
@@ -753,7 +812,7 @@ const H = {
     const row = el.closest('[data-line]');
     const line = S.data.settle.find(l => `${l.action}|${l.who}` === row.dataset.line);
     if (!line) return;
-    const amount = Number(String(row.querySelector('[data-s="amount"]').value).replace(/,/g, '')) || 0;
+    const amount = Number(plain(row.querySelector('[data-s="amount"]'))) || 0;
     if (!amount) return say('Type an amount first.', true);
     // whatever is paid from here belongs to the month on screen, whatever today's date is
     const body = { amount, who: line.who, pot: row.querySelector('[data-s="pot"]').value,
@@ -1148,7 +1207,7 @@ document.addEventListener('click', async e => {
     const body = JSON.parse(adder.dataset.args || '{}');
     const keys = [];
     adder.closest('.addrow').querySelectorAll('[data-f]').forEach(el => {
-      body[el.dataset.f] = el.value.trim();
+      body[el.dataset.f] = plain(el);
       if (el.dataset.keep === undefined) keys.push(fieldKey(el));     // kept for the next one
     });
     const out = await act(() => send(adder.dataset.add, body), { skip: keys });
@@ -1168,7 +1227,7 @@ document.addEventListener('change', async e => {
   const box = e.target.closest('[data-save]');
   if (box) {
     const body = JSON.parse(box.dataset.args || '{}');
-    body[box.dataset.field] = box.value.trim();
+    body[box.dataset.field] = plain(box);
     const key = fieldKey(box);
     const out = await act(() => send(box.dataset.save, body),
                           { skip: [key], onError: () => render({ skip: [key] }) });
@@ -1213,7 +1272,7 @@ async function saveLine(row) {
   const body = { on: S.data.stock.count_date, item: Number(row.dataset.item) };
   const keys = [];
   row.querySelectorAll('[data-k]').forEach(el => {
-    body[el.dataset.k] = el.value.trim();
+    body[el.dataset.k] = plain(el);
     keys.push(fieldKey(el));
   });
   const before = S.data.stock.count.closing;
@@ -1354,8 +1413,13 @@ async function scanned(raw) {
   }
   const sheet = onPage('stock', 'count') && S.data.stock.count.date;
   if (sheet) {
-    const row = document.querySelector(`#main tr[data-item="${it.id}"]:not([data-receipt])`);
+    let row = document.querySelector(`#main tr[data-item="${it.id}"]:not([data-receipt])`);
     if (!row) return say(`${it.name} is not on this count.`, true);
+    if (row.hidden) {
+      (S.draft.find || {}).count = '';
+      applyFind();
+      row = document.querySelector(`#main tr[data-item="${it.id}"]:not([data-receipt])`);
+    }
     row.scrollIntoView({ block: 'center' });
     S.draft.found = it.id;                      // lit, even if the screen is redrawn meanwhile
     row.classList.add('found');
@@ -1376,7 +1440,7 @@ async function saveReceiptLine(row) {
   const body = { receipt: rid, item };
   const keys = [];
   row.querySelectorAll('[data-k]').forEach(el => {
-    body[el.dataset.k] = el.value.trim();
+    body[el.dataset.k] = plain(el);
     keys.push(fieldKey(el));
   });
   const out = await act(() => send('receipt_line', body), { skip: keys });

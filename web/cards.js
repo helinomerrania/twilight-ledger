@@ -11,9 +11,21 @@ import { BATCH, texts } from './i18n.js';
 
 // c.go is a screen, or a page of one ('books/cash'); the button names the screen
 const go = c => (c.go ? ` <button class="mini link" data-go="${esc(c.go)}">Open ${esc(c.go.split('/')[0])}</button>` : '');
+/* A box for an amount of money shows its commas as it is typed (601,750);
+   the screens read it without them. */
+const MONEY = 'type="text" inputmode="numeric" autocomplete="off" data-money';
+const commas = v => (v === null || v === undefined || v === '' ? ''
+  : String(v).replace(/[^\d]/g, '').replace(/\B(?=(\d{3})+(?!\d))/g, ','));
 const amountInput = (id, value = '', extra = '') =>
-  `<input type="number" step="${S.data.note}" min="0" id="${id}" value="${esc(value)}"
-     placeholder="0" inputmode="numeric" ${extra}>`;
+  `<input ${MONEY} id="${id}" value="${esc(commas(value))}" placeholder="0" ${extra}>`;
+
+/* A box that keeps only the rows whose name has what is typed in it. A
+   brand stays with its flavours, and a flavour with its brand. */
+const findAttrs = (name, brand, of) => ` data-name="${esc(String(name || '').toLowerCase())}"`
+  + (brand ? ` data-brand="${brand}"` : '') + (of ? ` data-of="${of}"` : '');
+const findBox = key => `<input type="search" class="find" id="find-${key}" data-find="${key}"
+    value="${esc((S.draft.find || {})[key] || '')}" placeholder="Find an item" autocomplete="off"
+    spellcheck="false">`;
 
 /* ============================================================ needs a look */
 
@@ -91,8 +103,8 @@ export function closingUp() {
       <div class="nm">${esc(p.name)}</div>
       ${blind ? '<div class="bal quiet">?</div><div class="sub">count it first</div>'
         : `<div class="bal">${money(p.balance)}</div><div class="sub">the books say</div>`}
-      <input type="number" step="${S.data.note}" min="0" placeholder="count it"
-             data-pot="${esc(p.name)}" value="${got === undefined ? '' : got}" inputmode="numeric">
+      <input ${MONEY} placeholder="count it"
+             data-pot="${esc(p.name)}" value="${got === undefined ? '' : esc(commas(got))}">
       ${diff === null ? '' : `<div class="sub ${cls(diff)}" style="margin-top:6px">
          ${diff === 0 ? 'ties exactly' : signed(diff)}</div>`}
       ${pos ? `<div class="sub" style="margin-top:6px" title="What SambaPOS says went
@@ -184,8 +196,8 @@ export function cashCountingCard() {
       there is change from the first sale. After the count, Tonight offers to move everything
       above it out of ${esc(c.pot || 'the drawer')} in one click.</p>
     <div class="grid-form">
-      ${field('Float left in the drawer (0 for none)', save('cash_settings', {}, 'float', c.float || 0,
-        `type="number" min="0" step="${S.data.note}" inputmode="numeric"`))}
+      ${field('Float left in the drawer (0 for none)', save('cash_settings', {}, 'float', commas(c.float || 0),
+        MONEY))}
       ${field('The rest usually goes to', `<select data-save="cash_settings" data-args="${args({})}"
         data-field="rest_to">${options([{ value: '', label: 'choose each time' }, ...pots],
           c.rest_to || '')}</select>`)}
@@ -355,7 +367,7 @@ function editRow(e, { date }) {
                       + field('Terms', `<select data-e="terms">${options([
                           { value: 'credit', label: 'On credit' }, { value: 'cash', label: 'Paid cash' }],
                           r.terms || (e.kind === 'receipt_cash' ? 'cash' : 'credit'))}</select>`) : ''}
-        ${field('Amount', `<input type="number" data-e="amount" step="${S.data.note}" min="0" value="${e.amount}" inputmode="numeric">`)}
+        ${field('Amount', `<input ${MONEY} data-e="amount" value="${esc(commas(e.amount))}">`)}
         ${field('Counts for', `<select data-e="period" data-was="${esc(e.period)}">${options(
             months.map(m => ({ value: m, label: monthName(m) })), e.period)}</select>`)}
         <div class="row">
@@ -376,21 +388,19 @@ export function entryTable(rows, opts = {}) {
 
 /* =================================================================== month */
 
+/* The month every page of Month is about, on the same row as the pages. */
 export function periodPicker() {
   const per = S.data.period;
-  return card(`<div class="cardhead">
-      <h2>${esc(monthName(S.data.month))}</h2>
+  return `<div class="tools">
       ${per.status === 'closed' ? '<span class="pill">closed</span>' : ''}
       ${S.data.month === S.data.this_month ? '<span class="pill">in progress</span>' : ''}
-      <div class="right row">
-        <select data-act="setMonth" style="width:auto">
-          ${options(S.data.months.slice().reverse().map(m => ({ value: m, label: monthName(m) })), S.data.month)}
-        </select>
-        <button class="btn" data-act="printMonth">Print</button>
-        <button class="btn" data-act="printSummary"
-          title="One A4 page for your partner: print it, or save it as a PDF to send">Summary for my partner</button>
-      </div>
-    </div>`);
+      <select data-act="setMonth" style="width:auto" aria-label="Month">
+        ${options(S.data.months.slice().reverse().map(m => ({ value: m, label: monthName(m) })), S.data.month)}
+      </select>
+      <button class="btn" data-act="printMonth">Print</button>
+      <button class="btn" data-act="printSummary"
+        title="One A4 page for your partner: print it, or save it as a PDF to send">Summary for my partner</button>
+    </div>`;
 }
 
 export function monthFigures() {
@@ -470,9 +480,9 @@ export function electricityCard() {
       ${e.unpaid > 0 ? ` ${money(e.unpaid)} in all is still unpaid.` : ''}</p>
     <div class="grid-form">
       ${field(`Private, price per amp (×${f.privateAmps})`,
-        `<input type="number" id="elPP" value="${esc(e.private_price)}" min="0" inputmode="numeric">`)}
+        `<input ${MONEY} id="elPP" value="${esc(commas(e.private_price))}">`)}
       ${field(`Elevator, price per amp (×${f.elevatorAmps} ÷ ${f.elevatorShare})`,
-        `<input type="number" id="elPE" value="${esc(e.elevator_price)}" min="0" inputmode="numeric">`)}
+        `<input ${MONEY} id="elPE" value="${esc(commas(e.elevator_price))}">`)}
       ${field('Public meter, last reading',
         `<input type="number" id="elLast" value="${esc(e.last_reading)}" min="0" inputmode="numeric">`)}
       ${field(`Public meter, now (×${f.publicRate} ÷ ${f.publicShare})`,
@@ -506,8 +516,7 @@ export function settleCard() {
         <td>${esc(l.what)}</td>
         <td>${esc(l.who)}${l.note ? `<br><span class="quiet">${esc(l.note)}</span>` : ''}</td>
         <td class="num">${money(l.amount)}</td>
-        <td><input type="number" data-s="amount" step="${S.data.note}" min="0" value="${l.amount}"
-              inputmode="numeric"></td>
+        <td><input ${MONEY} data-s="amount" value="${esc(commas(l.amount))}"></td>
         <td><select data-s="pot" style="width:auto">${potOptions()}</select></td>
         <td><button class="btn primary" data-act="settle">Pay</button></td>
       </tr>`).join(''))}`);
@@ -825,13 +834,14 @@ export function countSheet() {
       const under = i.parent_id && i.parent_id === brand;
       if (!i.parent_id) brand = i.id;
       const price = `<span class="quiet">${money(i.counted_at)} / ${esc(i.unit)}</span>`;
+      const find = findAttrs(i.name, i.parent_id ? null : i.id, i.parent_id);
       // a brand counted by flavour is only their heading, unless this count has it
       if (i.flavours && i.qty_milli == null) {
-        return `<tr class="brandh"><td colspan="${cols}"><strong>${esc(i.name)}</strong> ${price}</td></tr>`;
+        return `<tr class="brandh"${find}><td colspan="${cols}"><strong>${esc(i.name)}</strong> ${price}</td></tr>`;
       }
       const q = (i.qty_milli || 0) / 1000;
       const unit = weighed || sealed ? 'kg' : '';
-      return `<tr data-item="${i.id}" class="${[i.active ? '' : 'quiet', under ? 'flavour' : '',
+      return `<tr data-item="${i.id}"${find} class="${[i.active ? '' : 'quiet', under ? 'flavour' : '',
                                                   S.draft.found === i.id ? 'found' : ''].join(' ').trim()}">
         <td>${esc(under ? i.flavour : i.name)}<br>${price}</td>
         ${weighed
@@ -848,11 +858,12 @@ export function countSheet() {
         <td class="num">${i.value ? money(i.value) : ''}</td>
       </tr>`;
     }).join('');
-    return `<h3 class="grouph">${esc(g.name)}</h3>
+    return `<div class="findgroup"><h3 class="grouph">${esc(g.name)}</h3>
       ${table(head, rows, `<tr class="tot"><td>Total</td>
-        <td colspan="${cols - 2}"></td><td class="num">${money(g.value)}</td></tr>`)}`;
+        <td colspan="${cols - 2}"></td><td class="num">${money(g.value)}</td></tr>`)}</div>`;
   }).join('');
-  return card(`<h2>Count for ${esc(c.date)}</h2>
+  return card(`<div class="cardhead"><h2>Count for ${esc(c.date)}</h2>
+      <div class="right">${findBox('count')}</div></div>
     <p class="sub">Quantities only — prices and pack sizes come from Setup.
       A count keeps the prices it was taken at.</p>
     ${body}
@@ -875,7 +886,7 @@ export function expectedCard() {
     return sign + (['A', 'B'].includes(r.letter)
       ? (a < 1 ? `${Math.round(a * 1000)} g` : `${+a.toFixed(3)} kg`) : `${+a.toFixed(2)}`);
   };
-  const row = (r, lit) => `<tr${lit && r.flag ? ' class="found"' : ''}>
+  const row = (r, lit) => `<tr${lit && r.flag ? ' class="found"' : ''}${findAttrs(r.name, r.parent_id ? null : r.item, r.parent_id)}>
       <td>${esc(r.name)}${r.minimum !== null && r.should < r.minimum
         ? `<br><span class="warnc">below its minimum of ${qty(r, r.minimum)}</span>` : ''}</td>
       <td class="num quiet">${qty(r, r.was)}</td>
@@ -912,7 +923,8 @@ export function expectedCard() {
     v.heads_unknown ? `${+v.heads_unknown.toFixed(1)} heads were sold while the grams in a head
       are not set (Setup → What each menu item takes), so no tobacco came off for them.` : '',
   ].filter(Boolean);
-  return card(`<h2>What should be on the shelf</h2>
+  return card(`<div class="cardhead"><h2>What should be on the shelf</h2>
+      <div class="right">${findBox('shelf')}</div></div>
     <p class="sub">From the count on ${esc(v.from)}: what receipts brought in, what went into
       and out of buckets, and what the nights sold, up to ${esc(v.to)}.
       <strong>${says}</strong></p>
@@ -1026,8 +1038,8 @@ function linesRow(e) {
       <td>${sizes(l)}</td>
       <td class="num quiet">${q ? `${+q.toFixed(3)} ${many}` : ''}
         ${q && l.amount ? `<br>${money(Math.round(l.amount / q))} / ${one}` : ''}</td>
-      <td class="num"><input type="number" min="0" data-k="amount" value="${l.amount ?? ''}"
-          placeholder="—" inputmode="numeric"${ro}></td>
+      <td class="num"><input ${MONEY} data-k="amount" value="${esc(commas(l.amount))}"
+          placeholder="—"${ro}></td>
       <td class="actions">${ro ? '' : l.pending
         ? `<button class="mini" data-act="dropRLine" data-id="${l.item}" title="Leave it out">✕</button>`
         : `<button class="mini" data-do="receipt_line" data-args="${args({ receipt: rid, item: l.item })}"
@@ -1221,7 +1233,7 @@ const save = (action, a, fieldName, value, extra = '') =>
 const addRow = (action, fixed, fields, button = 'Add') =>
   `<div class="row addrow" style="margin-top:12px">
      ${fields.map(([f, placeholder, type, width]) =>
-       `<input data-f="${f}" placeholder="${esc(placeholder)}" type="${type || 'text'}"
+       `<input data-f="${f}" placeholder="${esc(placeholder)}" ${type === 'money' ? MONEY : `type="${type || 'text'}"`}
           style="max-width:${width || 200}px" ${type === 'number' ? 'min="0" inputmode="decimal"' : ''}>`).join('')}
      <button class="btn" data-add="${action}" data-args="${args(fixed)}">${button}</button>
    </div>`;
@@ -1242,8 +1254,8 @@ export function editAccounts(kind, title, note) {
   };
   const row = a => `<tr>
       <td>${save('account_rename', { id: a.id }, 'name', a.name)}</td>
-      ${kind === 'staff' ? `<td class="num">${save('set_salary', { id: a.id }, 'amount', sal[a.id] || '',
-          `type="number" step="${S.data.note}" min="0" inputmode="numeric" style="max-width:140px"`)}</td>` : ''}
+      ${kind === 'staff' ? `<td class="num">${save('set_salary', { id: a.id }, 'amount', commas(sal[a.id] || ''),
+          `${MONEY} style="max-width:140px"`)}</td>` : ''}
       ${kind === 'partner' ? `<td class="num">${save('set_share', { id: a.id }, 'share',
           Math.round((a.meta.share || 0) * 1000) / 10, 'type="number" step="1" min="0" max="100" style="max-width:90px"')}</td>` : ''}
       <td class="num">${bal(a)}</td>
@@ -1253,7 +1265,7 @@ export function editAccounts(kind, title, note) {
         : `<button class="mini" data-do="account_active" data-args="${args({ id: a.id, active: 1 })}">Bring back</button>`}</td>
     </tr>`;
   const fields = [['name', 'Name']];
-  if (kind === 'staff') fields.push(['salary', 'Salary', 'number', 140]);
+  if (kind === 'staff') fields.push(['salary', 'Salary', 'money', 140]);
   if (kind === 'partner') fields.push(['share', 'Share %', 'number', 100]);
   const head = `<th>Name</th>${extraHead}<th class="num">${balHead}</th><th></th>`;
   const shares = kind === 'partner'
@@ -1279,8 +1291,8 @@ export function floatsCard() {
 export function editFixed() {
   const rows = S.data.setup.fixed.filter(f => f.active).map(f => `<tr>
       <td>${esc(f.name)}</td>
-      <td class="num">${save('fixed_set', { name: f.name }, 'amount', f.amount,
-        `type="number" step="${S.data.note}" min="0" inputmode="numeric" style="max-width:150px"`)}</td>
+      <td class="num">${save('fixed_set', { name: f.name }, 'amount', commas(f.amount),
+        `${MONEY} style="max-width:150px"`)}</td>
       <td class="quiet">${f.from_month ? 'since ' + esc(monthName(f.from_month)) : ''}</td>
       <td><button class="mini" data-do="fixed_remove" data-args="${args({ name: f.name })}"
             data-confirm="Stop charging ${esc(f.name)}?"
@@ -1292,7 +1304,7 @@ export function editFixed() {
       paid. A change applies from ${esc(monthName(S.data.month))} on; earlier months
       keep what they were charged.</p>
     ${rows ? table('<th>What</th><th class="num">A month</th><th></th><th></th>', rows) : empty('Nothing.')}
-    ${addRow('fixed_set', {}, [['name', 'What'], ['amount', 'Amount a month', 'number', 150]])}`);
+    ${addRow('fixed_set', {}, [['name', 'What'], ['amount', 'Amount a month', 'money', 150]])}`);
 }
 
 export function editList(name, title, note) {
@@ -1329,10 +1341,10 @@ export function editItems() {
         const b = byId[i.parent_id];
         const u = { id: i.id };
         const n = flavours(i.id);
-        return `<tr${under ? ' class="flavour"' : ''}>
+        return `<tr${under ? ' class="flavour"' : ''}${findAttrs(i.name, i.parent_id ? null : i.id, i.parent_id)}>
           <td>${save('item_update', u, 'name', under ? i.flavour : i.name)}</td>
-          <td class="num">${save('item_update', u, 'price', b && !i.price ? '' : i.price,
-            `${whole} style="max-width:110px"${b ? ` placeholder="${esc(b.price)}"` : ''}`)}</td>
+          <td class="num">${save('item_update', u, 'price', b && !i.price ? '' : commas(i.price),
+            `${MONEY} style="max-width:110px"${b ? ` placeholder="${esc(commas(b.price))}"` : ''}`)}</td>
           ${sealed ? `<td>${save('item_update', u, 'packs', i.comes_as,
             `placeholder="${esc(i.comes_as_else)}" style="max-width:130px" spellcheck="false"`)}</td>` : ''}
           ${packs ? `<td class="num">${save('item_update', u, 'pack_size', i.pack_size || '',
@@ -1356,16 +1368,17 @@ export function editItems() {
     const head = `<th>Item</th><th class="num">Price</th>${sealed ? '<th>Comes as</th>' : ''}
       ${packs ? '<th class="num">Pieces a package</th>' : ''}<th class="num">Warn below</th>
       <th>Barcodes</th><th>From</th><th></th>`;
-    return `<h3 class="grouph">${esc(c.name)}</h3>
+    return `<div class="findgroup"><h3 class="grouph">${esc(c.name)}</h3>
       ${live.length ? table(head, rows(live)) : ''}
       ${sealed && brands.length ? `<div class="row addrow">
         <select data-f="brand" data-keep style="max-width:220px">${options(brands)}</select>
         <input data-f="name" placeholder="Flavour" style="max-width:200px">
         <button class="btn" data-add="item_add" data-args="{}">Add a flavour</button></div>` : ''}
       ${gone.length ? `<details class="fold"><summary>No longer stocked (${gone.length})</summary>
-        ${table(head, rows(gone))}</details>` : ''}`;
+        ${table(head, rows(gone))}</details>` : ''}</div>`;
   }).join('');
-  return card(`<h2>Stock items</h2>
+  return card(`<div class="cardhead"><h2>Stock items</h2>
+      <div class="right">${findBox('items')}</div></div>
     <p class="sub">A new price values the next count; counts already taken keep the
       price they were counted at. “From” is the supplier, used on their statement.
       Sealed tobacco “comes as” the box says it: 12×10×50 g, 3×1 kg, 250 g.
@@ -1376,7 +1389,7 @@ export function editItems() {
       <input data-f="name" placeholder="New item" style="max-width:200px">
       <select data-f="letter" style="max-width:220px">
         ${options(s.categories.map(c => ({ value: c.letter, label: c.name })))}</select>
-      <input data-f="price" placeholder="Price" type="number" min="0" inputmode="numeric" style="max-width:120px">
+      <input data-f="price" placeholder="Price" ${MONEY} style="max-width:120px">
       <input data-f="pack_size" placeholder="Pieces a package" type="number" min="0" inputmode="numeric" style="max-width:150px">
       <button class="btn" data-add="item_add" data-args="{}">Add</button>
     </div>`);
