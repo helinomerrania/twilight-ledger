@@ -124,7 +124,7 @@ def _share(v):
     try:
         s = float(str(v if v is not None else 0).strip().rstrip("%") or 0)
     except (TypeError, ValueError):
-        raise ApiError("a share is a percentage")
+        raise ApiError("a share is a percentage") from None
     if not 0 <= s <= 100:
         raise ApiError("a share is between 0 and 100")
     return round(s / 100, 4)

@@ -179,10 +179,10 @@ function put(el, text, nodes) {
 
 /** English left untranslated still reads left to right. */
 function isolate(el) {
-  const texts = [...el.childNodes].filter(n => n.nodeType === 3 && /\S/.test(n.nodeValue));
-  if (!texts.length || !/[A-Za-z0-9]/.test(ownText(el)) || ownText(el).includes(FSI)) return;
-  const first = texts[0];
-  const last = texts[texts.length - 1];
+  const words = [...el.childNodes].filter(n => n.nodeType === 3 && /\S/.test(n.nodeValue));
+  if (!words.length || !/[A-Za-z0-9]/.test(ownText(el)) || ownText(el).includes(FSI)) return;
+  const first = words[0];
+  const last = words[words.length - 1];
   first.nodeValue = first.nodeValue.replace(/^\s*/, s => s + FSI);
   last.nodeValue = last.nodeValue.replace(/\s*$/, s => PDI + s);
 }

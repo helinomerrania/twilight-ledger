@@ -4,7 +4,7 @@ counting, writing off. Setup lives in setup.py.
 Each action cleans what it was sent, calls one recipe in post.py, and returns.
 None of them does arithmetic of its own.
 """
-from . import db, kinds, post, queries, stock
+from . import db, post, queries, stock
 from .dates import month_of, today
 from .money import mround, to_int
 from .registry import (ApiError, action, amount, clean_date, clean_period,
@@ -229,9 +229,12 @@ def _undo(con, body):
     """Take back a change just made. The entry it wrote is deleted, and an
     entry it corrected or replaced stands again, as it was — with what came
     in on a corrected receipt listed on it again."""
+    gone = db.one(con, "SELECT replaced_by FROM entry WHERE id = ? AND voided_at IS NOT NULL",
+                  (int(body["id"]),))
+    if gone:
+        raise ApiError("That has since been corrected, so there is nothing to take back."
+                       if gone["replaced_by"] else "That has already been taken back.")
     e = _entry(con, body["id"])
-    if e.get("voided_at"):
-        raise ApiError("That has already been taken back.")
     if not e["deletable"]:
         raise ApiError(_why_not(con, e, "taken back"))
     was = describe_entry(con, e["id"])
@@ -328,8 +331,16 @@ def _edit_entry(con, body):
         period = e["period"]
     else:
         period = month_of(on)
+    if kind == "daily_sales" and on != e["happened_on"]:
+        there = post.takings(con, on)
+        if there:
+            raise ApiError(f"{on} already has its takings in the books "
+                           f"({sum(t['amount'] for t in there):,}). Correct those instead.")
 
-    detail = e["detail"]
+    # Who it was for is the account it was posted to, under the name it has
+    # now: never the name written on the entry, which may since have been
+    # given to someone else.
+    detail = e["who"] or e["detail"]
     if "detail" in body and body["detail"] not in (None, ""):
         detail = str(body["detail"]).strip()
         if kind in _WHO_KIND:
@@ -376,9 +387,9 @@ def _cash_count(con, body):
     recorded and explained, and nothing is invented to make it disappear.
     Writing a difference off is a separate, deliberate step."""
     on = clean_date(body.get("on"))
-    cur = con.execute("INSERT INTO cash_count(counted_on, reason) VALUES (?,?) "
-                      "ON CONFLICT(counted_on) DO UPDATE SET reason = excluded.reason",
-                      (on, body.get("reason") or None))
+    con.execute("INSERT INTO cash_count(counted_on, reason) VALUES (?,?) "
+                "ON CONFLICT(counted_on) DO UPDATE SET reason = excluded.reason",
+                (on, body.get("reason") or None))
     cid = db.one(con, "SELECT id FROM cash_count WHERE counted_on = ?", (on,))["id"]
     for name, value in (body.get("pots") or {}).items():
         aid = post.account_by_name_any(con, name)

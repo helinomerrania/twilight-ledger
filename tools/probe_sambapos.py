@@ -34,8 +34,6 @@ does not end up in the shell history.
 """
 import argparse
 import getpass
-import json
-import sys
 from datetime import datetime
 
 # Tables worth describing in full. Anything else is listed by name and row
@@ -97,7 +95,7 @@ def rows(cur, sql, args=()):
         raise RuntimeError("this tool only runs SELECT statements")
     cur.execute(sql, args)
     cols = [d[0] for d in cur.description]
-    return [dict(zip(cols, r)) for r in cur.fetchall()]
+    return [dict(zip(cols, r, strict=False)) for r in cur.fetchall()]
 
 
 def main(argv=None):

@@ -95,6 +95,21 @@ class SettleUp(unittest.TestCase):
         self.assertEqual(self.line()["amount"], 300000)
         self.assertEqual(self.row(OCT)["owed_now"], 690000)
 
+    def test_goods_that_came_after_the_count_are_not_due_yet(self):
+        self.count(20, on=f"{OCT}-20")                   # 300,000 still here on the 20th
+        api.run(self.con, "receipt", {"amount": 90000, "on": f"{OCT}-25", "who": SUP})
+        line = self.line()
+        self.assertEqual(line["amount"], 300000)
+        self.assertEqual(line["note"], "600,000 owed − 300,000 of their stock still here; "
+                                       "90,000 came after the count and is not due yet")
+        self.assertEqual(self.row(OCT)["closing"], 690000)
+
+    def test_a_payment_goes_to_the_oldest_goods_first(self):
+        self.count(20, on=f"{OCT}-20")
+        api.run(self.con, "receipt", {"amount": 90000, "on": f"{OCT}-25", "who": SUP})
+        self.pay(300000, f"{OCT}-28")
+        self.assertEqual((self.line()["amount"], self.line()["done"]), (0, "paid"))
+
 
 if __name__ == "__main__":
     unittest.main()

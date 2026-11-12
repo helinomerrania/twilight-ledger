@@ -86,8 +86,8 @@ export const kindName = k => (S.data && S.data.kinds[k]) || String(k || '').repl
 
 /* --------------------------------------------------------------- the server */
 
-async function call(path, options) {
-  const r = await fetch(path, options);
+async function call(path, init) {
+  const r = await fetch(path, init);
   let body;
   try { body = await r.json(); } catch { body = { error: `the server replied ${r.status}` }; }
   if (!r.ok || body.error) {

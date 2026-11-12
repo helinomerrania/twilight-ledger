@@ -233,5 +233,54 @@ class MainPot(unittest.TestCase):
         self.assertEqual(queries.balance(con, "cash:box"), 1000)
 
 
+class AfterARename(unittest.TestCase):
+    """A correction stays with the person it was for, found by the account it
+    was posted to, whatever the name written on it now belongs to."""
+
+    def setUp(self):
+        self.con = fresh_books()
+        api.run(self.con, "sales", {"amount": 400000, "on": DAY})
+        self.adv = api.run(self.con, "staff_advance",
+                           {"amount": 10000, "who": "Bob", "on": DAY})["id"]
+        self.bob = db.one(self.con, "SELECT id, code FROM account WHERE name = 'Bob'")
+
+    def rename(self, name):
+        api.run(self.con, "account_rename", {"id": self.bob["id"], "name": name})
+
+    def posted_to(self, entry_id):
+        return {r["account_id"] for r in db.all_(
+            self.con, "SELECT account_id FROM posting WHERE entry_id = ?", (entry_id,))}
+
+    def test_not_to_someone_new_with_the_old_name(self):
+        self.rename("Bob (left)")
+        api.run(self.con, "account_add", {"kind": "staff", "name": "Bob", "salary": 100000})
+        e = queries.entries(self.con, ids=[self.adv])[0]
+        self.assertEqual((e["detail"], e["who"]), ("Bob", "Bob (left)"))
+        fixed = api.run(self.con, "edit_entry", {"id": self.adv, "amount": 12000})["id"]
+        self.assertIn(self.bob["id"], self.posted_to(fixed))
+
+    def test_after_two_renames(self):
+        self.rename("Bobby")
+        later = api.run(self.con, "staff_advance", {"amount": 5000, "who": "Bobby", "on": DAY})["id"]
+        self.rename("Robert")
+        fixed = api.run(self.con, "edit_entry", {"id": later, "amount": 6000})["id"]
+        self.assertIn(self.bob["id"], self.posted_to(fixed))
+
+    def test_moved_to_someone_else_on_purpose(self):
+        fixed = api.run(self.con, "edit_entry", {"id": self.adv, "detail": "Alice"})["id"]
+        alice = db.scalar(self.con, "SELECT id FROM account WHERE name = 'Alice'")
+        self.assertIn(alice, self.posted_to(fixed))
+
+    def test_a_receipt_paid_in_cash_keeps_its_supplier(self):
+        r = api.run(self.con, "receipt", {"amount": 20000, "on": DAY, "who": "Star Store",
+                                          "terms": "cash"})["id"]
+        sup = db.scalar(self.con, "SELECT id FROM account WHERE name = 'Star Store'")
+        api.run(self.con, "account_rename", {"id": sup, "name": "Star Store (old)"})
+        api.run(self.con, "account_add", {"kind": "supplier", "name": "Star Store"})
+        fixed = api.run(self.con, "edit_entry", {"id": r, "amount": 21000})["id"]
+        self.assertEqual(db.scalar(self.con, "SELECT supplier_id FROM receipt WHERE entry_id = ?",
+                                   (fixed,)), sup)
+
+
 if __name__ == "__main__":
     unittest.main()

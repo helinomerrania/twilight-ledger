@@ -666,5 +666,11 @@
 "Dec",
 "Undo",
 "Taken back.",
-"Taken back. What it replaced is back."
+"Taken back. What it replaced is back.",
+"{0} owed − {1} of their stock still here; {2} came after the count and is not due yet",
+"{0} already has its takings in the books ({1}). Delete those first if this is the right figure.",
+"{0} already has its takings in the books ({1}). Correct those instead.",
+"That has since been corrected, so there is nothing to take back.",
+"That has already been taken back.",
+"Part of this page could not be drawn"
 ]

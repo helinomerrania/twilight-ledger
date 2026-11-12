@@ -12,8 +12,7 @@ import json
 from fractions import Fraction
 
 from . import db, kinds
-from .dates import (days_in, month_end, month_of, month_range, next_month,
-                    prev_month, today)
+from .dates import (days_in, month_of, month_range, prev_month, today)
 from .money import mround, mround_fraction, pct, split_shares
 
 # --------------------------------------------------------------- balances
@@ -470,15 +469,17 @@ def drawings(con, month):
 
 # ---------------------------------------------------------------- suppliers
 
-def supplier_owed(con, supplier_id, month):
-    """What a supplier is owed for everything up to the end of `month`. Goods
-    count on the day they came; a payment counts for the month it was made
-    for, so October's goods paid on 3 November are paid in October."""
+def supplier_owed(con, supplier_id, month, upto=None):
+    """What a supplier is owed for everything up to the end of `month`, or for
+    the goods that had come by `upto` within it. Goods count on the day they
+    came; a payment counts for the month it was made for, so October's goods
+    paid on 3 November are paid in October."""
     _, end = month_range(month)
+    upto = min(upto or end, end)
     return db.scalar(con,
         "SELECT COALESCE(SUM(m.amount * m.normal), 0) FROM movement m "
         "WHERE m.account_id = ? AND CASE WHEN m.entry_kind = 'supplier_payment' "
-        "THEN m.period <= ? ELSE m.happened_on <= ? END", (supplier_id, month, end))
+        "THEN m.period <= ? ELSE m.happened_on <= ? END", (supplier_id, month, upto))
 
 
 def on_shelves(con, supplier_id, count_date):
@@ -517,7 +518,10 @@ def supplier_statement(con, month):
         out.append({"id": a["id"], "name": a["name"], "brought_forward": bf,
                     "received": got, "paid": paid, "closing": closing,
                     "owed_now": a["balance"], "active": a["active"],
-                    "on_shelves": on_shelves(con, a["id"], cd), "count_date": cd})
+                    "on_shelves": on_shelves(con, a["id"], cd), "count_date": cd,
+                    # what was owed for the goods that could have been on the
+                    # shelf at the count: anything later was not there to count
+                    "owed_at_count": supplier_owed(con, a["id"], month, cd) if cd else closing})
     return out
 
 
@@ -712,8 +716,9 @@ def entries(con, *, on=None, month=None, limit=None, q=None, detail=None,
             {"name": leg["name"], "code": leg["code"], "kind": leg["kind"],
              "amount": leg["amount"]})
     receipts = {r["entry_id"]: dict(r) for r in db.all_(con,
-        f"SELECT entry_id, id, number, what, terms FROM receipt "
-        f"WHERE entry_id IN ({marks})", [r["id"] for r in rows])}
+        f"SELECT r.entry_id, r.id, r.number, r.what, r.terms, a.name AS supplier "
+        f"FROM receipt r LEFT JOIN account a ON a.id = r.supplier_id "
+        f"WHERE r.entry_id IN ({marks})", [r["id"] for r in rows])}
     closed = {m for m in months(con) if is_closed(con, m)}
 
     for r in rows:
@@ -730,6 +735,11 @@ def entries(con, *, on=None, month=None, limit=None, q=None, detail=None,
             r["pot_to"] = None
         r["tagged"] = r["period"] != r["happened_on"][:7]
         r["receipt"] = receipts.get(r["id"])
+        # the person it was for, by the account it was posted to, as they are
+        # called now: `detail` keeps the name written at the time
+        person = next((l for l in legs if l["kind"] in ("staff", "supplier")
+                       or l["code"].startswith("prt:")), None)
+        r["who"] = person["name"] if person else (r["receipt"] or {}).get("supplier")
         # An imported row from before the rebase date has its other side on
         # Opening balances; correcting it would re-post it against the person
         # and invent a balance, so it is part of the record and left alone.

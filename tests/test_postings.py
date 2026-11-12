@@ -132,9 +132,8 @@ class PotsAndTransfers(unittest.TestCase):
         self.assertEqual(queries.live_result(self.con, "2026-11")["rev"], 1000000)
 
     def test_a_transfer_to_the_same_pot_is_refused(self):
-        with self.assertRaises(db.LedgerError):
-            with db.tx(self.con):
-                post.transfer(self.con, 1000, frm="Box", to="Box", on="2026-11-02")
+        with self.assertRaises(db.LedgerError), db.tx(self.con):
+            post.transfer(self.con, 1000, frm="Box", to="Box", on="2026-11-02")
 
     def test_a_float_is_not_cash_on_hand(self):
         post.ensure_account(self.con, "float:alice", "Alice float", "float", 1)
@@ -154,9 +153,8 @@ class ClosedMonths(unittest.TestCase):
             post.sales(self.con, 100000, on="2026-10-05")
         self.con.execute("UPDATE period SET status='closed', closed_at=datetime('now') "
                          "WHERE month='2026-10'")
-        with self.assertRaises(db.LedgerError) as caught:
-            with db.tx(self.con):
-                post.sales(self.con, 5000, on="2026-10-06")
+        with self.assertRaises(db.LedgerError) as caught, db.tx(self.con):
+            post.sales(self.con, 5000, on="2026-10-06")
         self.assertIn("closed", str(caught.exception))
 
     def test_an_import_may_still_seed_a_closed_month(self):

@@ -159,9 +159,6 @@ class Importer:
                 "ON CONFLICT(name) DO UPDATE SET amount = excluded.amount",
                 (f["name"], to_int(f.get("amount")),
                  post.account_id(con, "exp:rent")))
-        # Salaries are dated from the first month in the books, so a later
-        # change does not rewrite history the way the old Setup did.
-        first = self.first_month()
         # Salaries are dated from the first month that is still open. The
         # closed months keep the totals they were closed with, so there is
         # nothing to say about what anyone earned before that.
@@ -366,7 +363,6 @@ class Importer:
 
     # ------------------------------------------------------------ cash book
     def cashbook(self):
-        con = self.con
         rows = sorted(self.d.get("cb") or [], key=lambda e: (ymd(e["d"]), str(e.get("id"))))
         n, fixed = 0, 0
         for e in rows:

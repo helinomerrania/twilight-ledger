@@ -112,8 +112,8 @@ def settle(con, month):
 
     Salaries and rent are "up to the end of this month" — what is owed for it
     and anything older that was never settled. A supplier is paid for what has
-    been used up: what is owed to them at the end of the month, less their
-    goods still on the shelves at the month's count, which stay owed until they
+    been used up: what was owed for the goods that had come by the month's
+    count, less those still on the shelves at it, which stay owed until they
     are used. When that comes to nothing the line says so, so a month whose
     goods are all paid for can be seen to be.
     """
@@ -134,15 +134,23 @@ def settle(con, month):
                       "who": "Electricity", "amount": elec, "note": ""})
     note = money.NOTE
     for s in queries.supplier_statement(con, month):
-        owed, stock = s["closing"], s["on_shelves"]
-        if owed <= 0:
+        if s["closing"] <= 0:
             continue
+        # What had come by the count, less what of it was still on the shelf
+        # then. Goods that came after the count were not there to be counted,
+        # so they cannot have been used up by it.
+        owed, stock = s["owed_at_count"], s["on_shelves"]
         # rounded down to a whole note, so the noise in weighing never asks to be paid
         due = max(owed - stock, 0) // note * note
+        if s["count_date"]:
+            words = f"{owed:,} owed − {stock:,} of their stock still here"
+            later = s["closing"] - owed
+            if later > 0:
+                words += f"; {later:,} came after the count and is not due yet"
+        else:
+            words = f"{owed:,} owed, with no count to set against it"
         line = {"action": "pay_supplier", "what": "Supplier", "who": s["name"],
-                "amount": due,
-                "note": (f"{owed:,} owed − {stock:,} of their stock still here"
-                         if s["count_date"] else f"{owed:,} owed, with no count to set against it")}
+                "amount": due, "note": words}
         if not due:
             line["done"] = "paid" if s["paid"] else "nothing consumed to pay"
         lines.append(line)

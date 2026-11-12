@@ -58,7 +58,9 @@ def sync(con):
 def seen(con, keys):
     """Remember pieces of text the screens showed. Returns how many were new."""
     new = 0
-    for k in list(keys or [])[:2000]:
+    if not isinstance(keys, list):
+        return new
+    for k in keys[:2000]:
         if _good(k):
             new += con.execute("INSERT OR IGNORE INTO lang_text(key) VALUES (?)", (k,)).rowcount
     return new

@@ -121,7 +121,7 @@ def view(con, count_date=None):
             have = Fraction(line["qty_milli"], 1000)
             gap = have - should
             row.update(counted=float(have), gap=float(gap), worth=half_up(gap * price))
-            if abs(gap) * 1000 < 1 or it["letter"] == "A" and abs(gap) <= SCALES:
+            if abs(gap) * 1000 < 1 or (it["letter"] == "A" and abs(gap) <= SCALES):
                 row["flag"] = False
             elif it["letter"] == "A" and gap < 0:   # a bucket dries
                 row["flag"] = -gap > should * allow / 100

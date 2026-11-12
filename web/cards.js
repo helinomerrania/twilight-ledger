@@ -4,14 +4,18 @@
    disagreed. */
 
 import {
-  S, args, card, cls, empty, esc, field, kindName, money, monthName, monthOf,
+  S, args, card, cls, empty, esc, field, money, monthName,
   options, pct, potOptions, signed, table, tile, tiles,
 } from './lib.js';
+
+/** The months that are closed, as a set. */
+const closedMonths = () =>
+  new Set((S.data.summary || []).filter(m => m.status === 'closed').map(m => m.month));
 import { BATCH, texts } from './i18n.js';
 
 // c.go is a screen, or a page of one ('books/cash'); the button names the screen
 const go = c => (c.go ? ` <button class="mini link" data-go="${esc(c.go)}">Open ${esc(c.go.split('/')[0])}</button>` : '');
-/* A box for an amount of money shows its commas as it is typed (601,750);
+/* A box for an amount of money shows its commas as it is typed (1,250,000);
    the screens read it without them. */
 const MONEY = 'type="text" inputmode="numeric" autocomplete="off" data-money';
 const commas = v => (v === null || v === undefined || v === '' ? ''
@@ -349,16 +353,18 @@ function entryRow(e, { date = true, lines = false } = {}) {
 
 function editRow(e, { date }) {
   const names = whoList(e.kind);
+  // a person as they are called now, not the name written on the entry
+  const who = (names && e.who) || e.detail;
   const isReceipt = e.kind.startsWith('receipt_');
   const r = e.receipt || {};
-  const closed = new Set((S.data.summary || []).filter(r => r.status === 'closed').map(r => r.month));
+  const closed = closedMonths();
   const months = S.data.months.filter(m => m <= S.data.this_month && (!closed.has(m) || m === e.period));
   return `<tr class="editing" data-edit="${e.id}">
     <td colspan="${date ? 6 : 5}">
       <div class="grid-form">
         ${field('Date', `<input type="date" data-e="on" value="${esc(e.happened_on)}" max="${esc(S.data.today)}">`)}
         ${names ? field(isReceipt ? 'Supplier' : 'Who or what',
-            `<select data-e="detail">${options(names.includes(e.detail) ? names : [e.detail, ...names], e.detail)}</select>`) : ''}
+            `<select data-e="detail">${options(names.includes(who) ? names : [who, ...names], who)}</select>`) : ''}
         ${e.kind === 'transfer'
           ? field('From', `<select data-e="pot">${potOptions(e.pot)}</select>`)
             + field('To', `<select data-e="pot_to">${potOptions(e.pot_to)}</select>`)
@@ -878,10 +884,10 @@ export function expectedCard() {
   const v = S.data.stock.expected;
   if (!v) return '';
   const cats = Object.fromEntries(S.data.setup.categories.map(c => [c.letter, c.name]));
-  const qty = (r, x, signed) => {
+  const qty = (r, x, withSign) => {
     if (x === null || x === undefined) return '';
-    if (Math.abs(x) < 0.0005) return signed ? '' : '0';
-    const sign = x < 0 ? '−' : signed ? '+' : '';
+    if (Math.abs(x) < 0.0005) return withSign ? '' : '0';
+    const sign = x < 0 ? '−' : withSign ? '+' : '';
     const a = Math.abs(x);
     return sign + (['A', 'B'].includes(r.letter)
       ? (a < 1 ? `${Math.round(a * 1000)} g` : `${+a.toFixed(3)} kg`) : `${+a.toFixed(2)}`);
@@ -1011,7 +1017,7 @@ export function receiptList() {
    saved as you leave it, like the count sheet. */
 function linesRow(e) {
   const rid = e.receipt.id;
-  const closed = new Set((S.data.summary || []).filter(r => r.status === 'closed').map(r => r.month));
+  const closed = closedMonths();
   const ro = closed.has(e.period) ? ' disabled' : '';
   const saved = e.lines;
   const pending = ((S.draft.rpending || {})[rid] || [])
@@ -1112,7 +1118,7 @@ export function newEntryCard() {
   };
   const isTransfer = kind === 'transfer';
   const into = ['income', 'staff_repay', 'partner_in'].includes(kind);
-  const closed = new Set((S.data.summary || []).filter(r => r.status === 'closed').map(r => r.month));
+  const closed = closedMonths();
   const months = S.data.months.filter(m => m <= S.data.this_month && !closed.has(m));
   return card(`<h2>New entry</h2>
     <p class="sub">${isTransfer

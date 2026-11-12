@@ -54,7 +54,7 @@ def to_int(v, field="amount"):
         try:
             return to_int(float(s), field)
         except ValueError:
-            raise ValueError(f"{field}: {v!r} is not an amount")
+            raise ValueError(f"{field}: {v!r} is not an amount") from None
     raise ValueError(f"{field}: {type(v).__name__} is not an amount")
 
 

@@ -37,54 +37,66 @@ const TABS = [
    a screen opens on, until another is picked; HEADS go above every page. */
 const PAGES = {
   tonight: [
-    ['close', 'Closing up', () => C.needsALook() + C.closingUp() + C.nightDrawer()],
-    ['today', 'Today', () => C.todayFigures() + C.todayEntries()],
-    ['sold', 'Sold tonight', () => C.nightSold()],
+    ['close', 'Closing up', [C.needsALook, C.closingUp, C.nightDrawer]],
+    ['today', 'Today', [C.todayFigures, C.todayEntries]],
+    ['sold', 'Sold tonight', [C.nightSold]],
   ],
   stock: [
-    ['count', 'Count', () => C.stockFigures() + C.countPicker() + C.countSheet()],
-    ['fill', 'Fill a bucket', () => C.fillCard()],
-    ['receipts', 'Receipts', () => C.receiptForm() + C.receiptList()],
-    ['shelf', 'Should be there', () => C.countPicker() + C.expectedCard() + C.ratiosCard()],
-    ['counts', 'Past counts', () => C.countHistory()],
+    ['count', 'Count', [C.stockFigures, C.countPicker, C.countSheet]],
+    ['fill', 'Fill a bucket', [C.fillCard]],
+    ['receipts', 'Receipts', [C.receiptForm, C.receiptList]],
+    ['shelf', 'Should be there', [C.countPicker, C.expectedCard, C.ratiosCard]],
+    ['counts', 'Past counts', [C.countHistory]],
   ],
   month: [
-    ['profit', 'Profit', () => C.monthFigures() + C.soFarCard() + C.resultCard()],
-    ['settle', 'Settle up', () => C.settleCard() + C.electricityCard() + C.payrollCard()
-                                  + C.partnersCard() + C.suppliersCard()],
-    ['cash', 'Cash', () => C.moneyFlow() + C.cashDifferences()],
-    ['sales', 'Sales', () => C.salesByDay() + C.monthSold() + C.monthWhen() + C.monthMakes()],
-    ['close', 'Checks and closing', () => C.allChecks() + C.closeCard() + C.everyMonth()],
+    ['profit', 'Profit', [C.monthFigures, C.soFarCard, C.resultCard]],
+    ['settle', 'Settle up', [C.settleCard, C.electricityCard, C.payrollCard, C.partnersCard,
+                             C.suppliersCard]],
+    ['cash', 'Cash', [C.moneyFlow, C.cashDifferences]],
+    ['sales', 'Sales', [C.salesByDay, C.monthSold, C.monthWhen, C.monthMakes]],
+    ['close', 'Checks and closing', [C.allChecks, C.closeCard, C.everyMonth]],
   ],
   books: [
-    ['entries', 'Entries', () => C.newEntryCard() + C.entryList()],
-    ['cash', 'Cash counts', () => C.whereMoneyIs() + C.cashCountsCard()],
-    ['changes', 'Recent changes', () => C.recentChanges()],
+    ['entries', 'Entries', [C.newEntryCard, C.entryList]],
+    ['cash', 'Cash counts', [C.whereMoneyIs, C.cashCountsCard]],
+    ['changes', 'Recent changes', [C.recentChanges]],
   ],
   setup: [
-    ['people', 'People', () =>
-      C.editAccounts('staff', 'Staff', 'A salary change applies from the month on screen if it is open, never to a closed one.')
-      + C.editAccounts('supplier', 'Suppliers', 'A positive balance is what you owe them.')
-      + C.editAccounts('partner', 'Partners', 'Shares decide how a closed month’s profit is split.')],
-    ['cash', 'Cash', () =>
-      C.editAccounts('cash', 'Cash pots', 'Where the business keeps its money. The first one is the main pot, used unless another is picked.')
-      + C.floatsCard() + C.cashCountingCard()],
-    ['bills', 'Rent and bills', () => C.editFixed() + C.editElecFactors()],
-    ['stock', 'Stock', () => C.editItems() + C.menuUses() + C.editTares() + C.editConversions(),
+    ['people', 'People', [
+      () => C.editAccounts('staff', 'Staff', 'A salary change applies from the month on screen if it is open, never to a closed one.'),
+      () => C.editAccounts('supplier', 'Suppliers', 'A positive balance is what you owe them.'),
+      () => C.editAccounts('partner', 'Partners', 'Shares decide how a closed month’s profit is split.')]],
+    ['cash', 'Cash', [
+      () => C.editAccounts('cash', 'Cash pots', 'Where the business keeps its money. The first one is the main pot, used unless another is picked.'),
+      C.floatsCard, C.cashCountingCard]],
+    ['bills', 'Rent and bills', [C.editFixed, C.editElecFactors]],
+    ['stock', 'Stock', [C.editItems, C.menuUses, C.editTares, C.editConversions],
      'What is counted and what it is worth'],
-    ['lists', 'Lists', () =>
-      C.editList('expense', 'Daily expenses', 'The first twelve show as buttons on Tonight.')
-      + C.editList('income', 'Other income', '')
-      + C.editList('reason', 'Reasons for a cash difference', ''),
+    ['lists', 'Lists', [
+      () => C.editList('expense', 'Daily expenses', 'The first twelve show as buttons on Tonight.'),
+      () => C.editList('income', 'Other income', ''),
+      () => C.editList('reason', 'Reasons for a cash difference', '')],
      'What the pickers offer'],
-    ['sambapos', 'SambaPOS', () => C.sambaposCard() + C.sambaposAccounts() + C.sambaposMenu(),
+    ['sambapos', 'SambaPOS', [C.sambaposCard, C.sambaposAccounts, C.sambaposMenu],
      'Keeping each night before the reset deletes it'],
-    ['app', 'This app', () => C.businessCard() + C.languageCard() + C.backupCard() + C.updateCard(),
+    ['app', 'This app', [C.businessCard, C.languageCard, C.backupCard, C.updateCard],
      'The business, the language, the backups, and updates'],
   ],
 };
 
-const HEADS = { month: () => C.periodPicker() };
+const HEADS = { month: C.periodPicker };
+
+/** One card, drawn on its own: a card that cannot be drawn says so in its
+    place, and the rest of the page is still drawn and still works. */
+function draw(card) {
+  try {
+    return card() || '';
+  } catch (err) {
+    console.error(err);
+    return `<div class="banner bad"><strong>Part of this page could not be drawn</strong>
+      <p style="margin:0">${esc(err.message)}</p></div>`;
+  }
+}
 
 /** How many checks that are not right point at each page ('books/cash'),
     and at each screen; Checks and closing has all of them. */
@@ -203,9 +215,9 @@ function render({ fresh = false, skip = [] } = {}) {
   }).join('');
   main.innerHTML = `<h1>${esc(title)}</h1>`
     + `<div class="pagebar"><nav class="pages" aria-label="${esc(title)}">${tabs}</nav>`
-    + `${HEADS[S.tab] ? HEADS[S.tab]() : ''}</div>`
+    + `${HEADS[S.tab] ? draw(HEADS[S.tab]) : ''}</div>`
     + (note ? `<p class="pagenote">${esc(note)}</p>` : '')
-    + (cards() || `<div class="card">${empty('Nothing here yet.')}</div>`);
+    + (cards.map(draw).join('') || `<div class="card">${empty('Nothing here yet.')}</div>`);
   if (onPage('stock', 'fill') && S.draft.fill) fillFigures();
   applyFind();
   if (!kept.size && !focus) return;
@@ -306,8 +318,8 @@ function watchBackups() {
   if (++watchTries <= 40) watchTimer = setTimeout(refreshQuietly, 2500);
 }
 
-/* Amounts of money show their commas as they are typed: 601750 is shown as
-   601,750, with the cursor still after the same digit. */
+/* Amounts of money show their commas as they are typed: 1250000 is shown as
+   1,250,000, with the cursor still after the same digit. */
 function moneyBox(el) {
   const raw = westernDigits(el.value);
   const at = el.selectionStart ?? raw.length;
@@ -408,6 +420,11 @@ async function act(fn, { skip = [], onError = null } = {}) {
     if (out.state && mine >= shown) {
       shown = mine;
       await apply(out.state, { skip });
+    }
+    // saved, but something after it was not: said, and never as a failure
+    if (out.warning) {
+      say(out.warning, true);
+      if (!out.state) refreshQuietly();
     }
     return out;
   } catch (err) {
@@ -933,7 +950,6 @@ const H = {
 
   async moveRest(el) {
     const to = document.getElementById('restTo').value;
-    const dr = S.data.drawer;
     if (!to) return say('Pick where the rest goes.', true);
     const out = await act(() => sendGuarded('move_rest', {
       amount: Number(el.dataset.amount), to, on: S.on }));
@@ -1103,16 +1119,12 @@ const H = {
   printStatement() {
     const st = S.statement;
     if (!st) return;
-    let run = st.opening;
     printSlip(`<h3>${esc(S.data.business.name || 'Twilight')}</h3>
       <div>${esc(st.name)}</div><div>${esc(monthName(st.month))}</div>
       <div class="rule"></div>
       <table><tr><td>Owed coming in</td><td style="text-align:end">${money(st.opening)}</td></tr>
-      ${st.lines.map(l => {
-        run += l.amount;
-        return `<tr><td>${esc(l.on.slice(5))} ${esc(l.what)}</td>
-          <td style="text-align:end">${signed(l.amount)}</td></tr>`;
-      }).join('')}</table>
+      ${st.lines.map(l => `<tr><td>${esc(l.on.slice(5))} ${esc(l.what)}</td>
+          <td style="text-align:end">${signed(l.amount)}</td></tr>`).join('')}</table>
       <div class="rule"></div>
       <table><tr><td><strong>Owed at the end</strong></td>
         <td style="text-align:end"><strong>${money(st.closing)}</strong></td></tr></table>`);

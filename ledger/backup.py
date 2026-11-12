@@ -99,10 +99,22 @@ def set_folder(con, path):
 
 def run(con, why="manual"):
     """Take a copy now, check it, and put it in the second place as well."""
-    dest = db.snapshot(con.path, why=why)
+    try:
+        dest = db.snapshot(con.path, why=why)
+    except sqlite3.Error as exc:
+        raise db.LedgerError(f"the copy could not be made: {exc}") from exc
     if dest is None:
         raise db.LedgerError("there are no books to copy yet")
-    entries, postings = verify(dest)
+    try:
+        entries, postings = verify(dest)
+    except db.LedgerError:
+        # a copy that does not check out is not kept as one, or today would
+        # look as if it had been backed up
+        try:
+            dest.unlink(missing_ok=True)
+        except OSError:
+            pass
+        raise
     status = {"at": datetime.now().isoformat(timespec="seconds"), "why": why,
               "file": str(dest), "entries": entries, "postings": postings,
               "second": None, "second_ok": None, "second_error": None}

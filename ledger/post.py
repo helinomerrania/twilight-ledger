@@ -189,6 +189,15 @@ def void(con, entry_id, why=None):
     return entry_id
 
 
+def takings(con, on, *, but=None):
+    """The takings standing in the books for a night, other than `but`."""
+    return con.execute(
+        "SELECT e.id, e.source, (SELECT SUM(p.amount) FROM posting p "
+        "WHERE p.entry_id = e.id AND p.amount > 0) AS amount FROM entry e "
+        "WHERE e.kind = 'daily_sales' AND e.happened_on = ? "
+        "AND e.voided_at IS NULL AND e.id IS NOT ?", (on, but)).fetchall()
+
+
 def unvoid(con, entry_id):
     """Put a deleted entry back. Refused for one that was replaced by a
     correction, because the correction is already standing in its place."""
@@ -201,6 +210,17 @@ def unvoid(con, entry_id):
         raise db.LedgerError("that entry was corrected, not deleted. "
                              "The corrected one is in the books.")
     assert_open(con, r["period"])
+    if r["kind"] == "daily_sales":
+        # A night has one set of takings: a figure typed in, or SambaPOS's
+        # lines, one for each way of paying. Putting one back beside another
+        # would count the night's sales twice.
+        there = [t for t in takings(con, r["happened_on"], but=entry_id)
+                 if r["source"] != "pos" or t["source"] != "pos"]
+        if there:
+            raise db.LedgerError(
+                f"{r['happened_on']} already has its takings in the books "
+                f"({sum(t['amount'] for t in there):,}). Delete those first "
+                "if this is the right figure.")
     con.execute("UPDATE entry SET voided_at = NULL WHERE id = ?", (entry_id,))
     con.execute("UPDATE receipt SET voided_at = NULL WHERE entry_id = ?", (entry_id,))
     db.audit(con, "entry.unvoid", f"entry:{entry_id}",

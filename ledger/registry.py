@@ -14,7 +14,6 @@ payment larger than the pot means either the wrong pot, a typo, or money that
 came in and was never recorded. The old app let it through silently and showed
 a pot below zero.
 """
-import json
 import re
 
 from . import db, kinds, post, queries
@@ -69,7 +68,7 @@ def clean_date(value, *, what="the date"):
     try:
         d = ymd(value)
     except ValueError:
-        raise ApiError(f"{what} is not a date")
+        raise ApiError(f"{what} is not a date") from None
     if d > today():
         raise ApiError(f"{what} is in the future ({d}). Entries are dated the "
                        "day the money moved.")

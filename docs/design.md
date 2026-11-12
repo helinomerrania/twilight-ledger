@@ -139,6 +139,21 @@ deleted until the month is reopened, and the charges the app works out itself
 (rent, salaries, electricity) are never edited by hand: change the salary, the
 rent or the meter reading and the charge follows.
 
+A correction stays with the person it was for. It is found by the account the
+entry was posted to, under the name that account has now, never by the name
+written on the entry: that name may since have been given to someone else.
+
+A night has one set of takings: a figure typed in, or SambaPOS's lines, one
+for each way of paying. Putting a deleted figure back, or moving one to
+another night, is refused while that night already has takings, so its sales
+are never counted twice.
+
+A change that has been saved is never reported as failed. The day's copy of
+the books and the new state for the screen come after the save; if either
+fails, the answer says so beside the change, not instead of it, so nothing is
+entered a second time. On the screens, each card is drawn on its own, and one
+that cannot be drawn says so in its place while the rest of the page works.
+
 ## Running balances start on 30 September 2026
 
 The old books began in August from an Excel workbook, and what each person was
@@ -306,9 +321,11 @@ of showing a cost of nothing.
 A supplier's balance is one running account, the same whichever month is on
 screen. Settle up asks it the question the lounge pays by: what has been used
 up. Their goods still on the shelf stay owed until they are used, so a month's
-due is what is owed at the end of the month less their stock at that month's
-count, rounded down to a whole note so the noise in weighing never asks to be
-paid. Both sides belong to the month: goods by the day they came, a payment by
+due is what was owed for the goods that had come by that month's count, less
+their stock at the count, rounded down to a whole note so the noise in weighing
+never asks to be paid. Goods that came after the count were not on the shelf to
+be counted, so they are not due yet, and the line says so. Both sides belong to
+the month: goods by the day they came, a payment by
 the month it was made for, so October's goods paid on 3 November are paid in
 October, and whatever Settle up pays is counted for the month on screen. When
 nothing is due the line says so, so a month whose goods are all paid for can

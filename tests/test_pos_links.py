@@ -10,7 +10,6 @@ import unittest
 
 from ledger import api, checks, db
 from ledger.pos import adding, archive, links
-from ledger.pos import actions as pos
 from tests.helpers import fresh_books
 from tests.test_pos import night_with_documents
 

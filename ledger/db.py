@@ -16,9 +16,7 @@ Three habits make this safe rather than merely tidy:
 import json
 import os
 import re
-import shutil
 import sqlite3
-import sys
 import threading
 from datetime import date, datetime
 from pathlib import Path
@@ -94,6 +92,14 @@ def thread_connection(db_path):
         _local.con = con
         _local.path = str(db_path)
     return con
+
+
+def close_thread_connection():
+    """Close the calling thread's connection, once it has nothing more to ask."""
+    con = getattr(_local, "con", None)
+    _local.con = _local.path = None
+    if con is not None:
+        con.close()
 
 
 # ---------------------------------------------------------------- migrations
@@ -237,6 +243,14 @@ def snapshot(db_path=DEFAULT_DB, why="manual"):
             target.execute("PRAGMA journal_mode=DELETE")
         finally:
             target.close()
+    except Exception:
+        # half a copy must not sit among the backups looking like one
+        for leftover in (dest, Path(f"{dest}-journal")):
+            try:
+                leftover.unlink(missing_ok=True)
+            except OSError:
+                pass
+        raise
     finally:
         con.close()
     return dest

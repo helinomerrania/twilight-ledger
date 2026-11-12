@@ -38,7 +38,7 @@ def milli(v):
 
 def describe(line):
     """One kept work period in words: 'the night of 2026-11-10: 85 tickets,
-    354,750 paid'."""
+    350,000 paid'."""
     bits = [f"{line['tickets']} tickets", f"{line['takings']:,} paid"]
     if line.get("unpaid"):
         bits.append(f"{line['unpaid']:,} unpaid")

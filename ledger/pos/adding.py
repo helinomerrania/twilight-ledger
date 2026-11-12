@@ -19,7 +19,7 @@ to put right, because adding it would count the money twice.
 import json
 from collections import defaultdict
 
-from .. import db, post, queries
+from .. import db, post
 from . import archive, links
 
 ENTRY = {  # (what the account is, which way the money went) -> entry kind
@@ -306,6 +306,7 @@ def add(con, p):
     """Post every line of a plan that is new. Call inside a transaction."""
     on, n = p["night"], 0
     sales = [l for l in p["lines"] if l.get("kind") == "daily_sales"]
+    replaced, takings = [], None
     if any(l["status"] == "new" for l in sales):
         # replace takings added from SambaPOS before, never ones typed by hand
         # (the plan holds new takings back while there are any)
@@ -315,13 +316,15 @@ def add(con, p):
                          (on,)):
             if e["source_ref"] not in keep:
                 post.void(con, e["id"], why="replaced by a fuller copy of the night")
+                replaced.append(e["id"])
     for line in p["lines"]:
         if line["status"] != "new":
             continue
         src = {"source": "pos", "source_ref": line["ref"]}
         kind, amount, pot, detail = line["kind"], line["amount"], line["pot"], line["detail"]
         if kind == "daily_sales":
-            post.sales(con, amount, on=on, into=pot, **src)
+            eid = post.sales(con, amount, on=on, into=pot, **src)
+            takings = takings or eid
         elif kind == "daily_expense":
             post.daily_expense(con, amount, detail=detail, on=on, out_of=pot, **src)
         elif kind == "staff_advance":
@@ -341,4 +344,7 @@ def add(con, p):
         else:
             continue
         n += 1
+    # what they replaced is not put back beside them
+    for rid in replaced:
+        con.execute("UPDATE entry SET replaced_by = ? WHERE id = ?", (takings, rid))
     return n

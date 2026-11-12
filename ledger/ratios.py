@@ -15,6 +15,7 @@ so the hookahs on the menu have to be given their tobacco first.
 """
 from datetime import date, timedelta
 from fractions import Fraction
+from itertools import pairwise
 
 from . import db
 from .pos import uses
@@ -43,7 +44,7 @@ def pairs(con, item_id):
           JOIN stock_count_line l ON l.count_id = c.id AND l.item_id = ?
          WHERE c.source = 'counted' ORDER BY c.count_date""", (item_id,))]
     out = []
-    for a, b in zip(counts, counts[1:]):
+    for a, b in pairwise(counts):
         came = db.scalar(con, """
             SELECT COALESCE(SUM(rl.qty_milli), 0) FROM receipt_line rl
               JOIN receipt r ON r.id = rl.receipt_id

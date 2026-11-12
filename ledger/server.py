@@ -59,6 +59,8 @@ class Handler(BaseHTTPRequestHandler):
         self.send_header("Content-Length", str(len(body)))
         self.send_header("Cache-Control", "no-store")
         self.send_header("X-Content-Type-Options", "nosniff")
+        if self.close_connection:
+            self.send_header("Connection", "close")
         self.end_headers()
         self.wfile.write(body)
 
@@ -93,6 +95,15 @@ class Handler(BaseHTTPRequestHandler):
     def con(self):
         """This thread's own connection to the books."""
         return db.thread_connection(self.db_path)
+
+    def finish(self):
+        # Each browser connection is answered on a thread of its own, which
+        # ends with it: its connection to the books is closed here rather
+        # than left for the garbage collector.
+        try:
+            super().finish()
+        finally:
+            db.close_thread_connection()
 
     def _safe_host(self):
         host = (self.headers.get("Host") or "").rsplit(":", 1)[0]
@@ -158,13 +169,20 @@ class Handler(BaseHTTPRequestHandler):
 
     # ---------------------------------------------------------------- POST
     def do_POST(self):
-        if not self._safe_host():
-            return self.send_json({"error": "this server only answers on localhost"}, 403)
-        if not self._own_page():
-            return self.send_json({"error": "writes are only accepted from the "
-                                            "app's own page"}, 403)
+        refused = ("this server only answers on localhost" if not self._safe_host() else
+                   "writes are only accepted from the app's own page" if not self._own_page()
+                   else None)
+        try:
+            length = int(self.headers.get("Content-Length") or 0)
+        except ValueError:
+            length = -1
+        if refused or length < 0:
+            # The body is left unread, so the connection ends here: what is
+            # left of it must not be taken for the next request.
+            self.close_connection = True
+            return self.send_json({"error": refused or "that was not valid JSON"},
+                                  403 if refused else 400)
         url = urlparse(self.path)
-        length = int(self.headers.get("Content-Length") or 0)
         raw = self.rfile.read(length) if length else b"{}"
         try:
             body = json.loads(raw or b"{}")
@@ -187,17 +205,33 @@ class Handler(BaseHTTPRequestHandler):
                 return self.send_json({"error": "no such endpoint"}, 404)
             name = url.path[len("/api/do/"):]
             out = api.run(self.con, name, body)
-            if name == "business_set":
-                api.load_settings(self.con)
-            backup.daily(self.con)
-            out["state"] = api.state(self.con, month=body.get("view_month"),
-                                     on=body.get("view_on"),
-                                     count_date=body.get("view_count"))
-            return self.send_json(out)
         except (api.ApiError, db.LedgerError) as exc:
             return self.send_error_json(exc)
         except Exception as exc:                       # noqa: BLE001
             return self.send_json({"error": f"{type(exc).__name__}: {exc}"}, 500)
+        # Saved. Nothing after this point may make it look as if it was not, or
+        # it would be entered again: a failure is said beside the answer.
+        out.update(self._after_save(name, body))
+        return self.send_json(out)
+
+    def _after_save(self, name, body):
+        """The day's copy of the books, and the new state for the screen."""
+        out, problems = {}, []
+        try:
+            if name == "business_set":
+                api.load_settings(self.con)
+            backup.daily(self.con)
+        except Exception as exc:                       # noqa: BLE001
+            problems.append(f"today's copy of the books could not be taken ({exc})")
+        try:
+            out["state"] = api.state(self.con, month=body.get("view_month"),
+                                     on=body.get("view_on"),
+                                     count_date=body.get("view_count"))
+        except Exception as exc:                       # noqa: BLE001
+            problems.append(f"the screen could not be brought up to date ({exc})")
+        if problems:
+            out["warning"] = "Saved, but " + " and ".join(problems) + "."
+        return out
 
 
 def free_port(port):

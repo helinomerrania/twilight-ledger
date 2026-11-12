@@ -4,6 +4,7 @@ import sqlite3
 import tempfile
 import unittest
 from pathlib import Path
+from unittest import mock
 
 from ledger import api, backup, checks, db
 from ledger.dates import month_of, today
@@ -54,6 +55,31 @@ class Copies(unittest.TestCase):
         self.assertTrue(out["second_error"])
         ok = {c["label"]: c["ok"] for c in checks.checks(self.con, NOW)}
         self.assertFalse(ok["The books have a copy somewhere else"])
+
+    def copies(self):
+        return backup.copies(self.con.path)
+
+    def test_a_copy_that_does_not_check_out_is_not_kept_as_one(self):
+        before = self.copies()
+        with mock.patch.object(backup, "verify", side_effect=db.LedgerError("the copy is damaged")), \
+                self.assertRaises(db.LedgerError):
+            backup.run(self.con, why="daily")
+        self.assertEqual(self.copies(), before)
+
+    def test_a_copy_the_database_cannot_make_is_said_plainly_and_left_nowhere(self):
+        # what Windows says of a folder it will not let the copy be written to
+        before = self.copies()
+        real = sqlite3.connect
+
+        def refuse(target, *a, **k):
+            if str(target).endswith("-daily.db"):
+                raise sqlite3.OperationalError("unable to open database file")
+            return real(target, *a, **k)
+        with mock.patch.object(sqlite3, "connect", side_effect=refuse), \
+                self.assertRaises(db.LedgerError) as cm:
+            backup.run(self.con, why="daily")
+        self.assertIn("unable to open database file", str(cm.exception))
+        self.assertEqual(self.copies(), before)
 
 
 class SecondFolder(unittest.TestCase):

@@ -9,7 +9,7 @@ someone moved August.
 import json
 
 from . import db, post, queries
-from .dates import month_end, month_of, next_month, today
+from .dates import month_end, next_month
 from .money import split_shares
 
 
@@ -91,8 +91,7 @@ def close_month(con, month):
     # partner's account only holds what they have taken out, so the balance
     # reads as if they owe the business everything they have ever drawn.
     # Closing is the moment the share becomes real.
-    import json as _json
-    shares = [(a["name"], float(_json.loads(a["meta"] or "{}").get("share") or 0))
+    shares = [(a["name"], float(json.loads(a["meta"] or "{}").get("share") or 0))
               for a in queries.partner_accounts(con)]
     cut = split_shares(result["net"], [s for s in shares if s[1] > 0])
     for name, amount in cut.items():

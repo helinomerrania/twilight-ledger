@@ -18,7 +18,7 @@ from . import db, post, queries
 from .dates import month_of
 from .money import to_int
 from .pos import adding, archive, links
-from .registry import ApiError, action, clean_date
+from .registry import ApiError, action, clean_date, pot
 
 DEFAULTS = {"float": 0, "blind": False, "rest_to": ""}
 
@@ -117,10 +117,9 @@ def _move_rest(con, body):
     if amount <= 0:
         raise ApiError("there is nothing above the float to move")
     frm = drawer(con, on)["pot"]
-    to = str(body.get("to") or "").strip()
-    if not to:
+    if not str(body.get("to") or "").strip():
         raise ApiError("pick where the rest goes")
-    post.pot_id(con, to)
+    to = pot(con, body, "to")                   # a pot still in use, nothing else
     if to == frm:
         raise ApiError("pick a different pot to move it to")
     eid = post.transfer(con, amount, frm=frm, to=to, on=on,
@@ -143,8 +142,6 @@ def _cash_settings(con, body):
         s["blind"] = str(body.get("blind")).strip().lower() in ("1", "true", "yes")
     if "rest_to" in body:
         name = str(body.get("rest_to") or "").strip()
-        if name:
-            post.pot_id(con, name)              # must be a pot
-        s["rest_to"] = name
+        s["rest_to"] = pot(con, body, "rest_to") if name else ""
     db.set_setting(con, "cash", s)
     return {}
