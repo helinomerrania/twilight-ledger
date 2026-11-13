@@ -105,7 +105,8 @@ counts as its 30th, so a 31st or the end of February is the 30th
 started, and someone who leaves the day they left. The month they started in
 and the month they left in carry a thirtieth of the salary for each day of it
 they worked, to the note; the months between carry the whole of it, and the
-months before and after nothing. Putting either day right, or bringing someone
+months before and after nothing. Someone who comes back is asked the day
+they came back, and the days they were away are not charged. Putting either day right, or bringing someone
 back, sets the open months right, and a closed month that would now be charged
 differently is named rather than touched: reopening it is what puts it right.
 

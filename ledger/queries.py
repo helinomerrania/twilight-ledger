@@ -358,7 +358,8 @@ def salary_days(a, month):
     they left. `a` is their account row (id, meta, active).
 
     Someone marked as left before the day was asked has `left_after` and no
-    `left_on`: the whole of that month counts, as it always did."""
+    `left_on`: the whole of that month counts, as it always did. `away` holds
+    each time they left and came back, as [last day, first day back]."""
     meta = json.loads(a["meta"] or "{}")
     start, left_on = meta.get("started_on"), None
     if start and month < start[:7]:
@@ -370,7 +371,14 @@ def salary_days(a, month):
         left_on = meta.get("left_on")
     first = day_of_30(start) if start and start[:7] == month else 1
     last = day_of_30(left_on) if left_on and left_on[:7] == month else MONTH_DAYS
-    return max(0, min(MONTH_DAYS, last - first + 1))
+    worked = set(range(first, last + 1))
+    # time away: someone who left and came back is not paid for the days between
+    for gone, back in meta.get("away") or []:
+        if gone[:7] <= month <= back[:7]:
+            a = day_of_30(gone) + 1 if gone[:7] == month else 1
+            b = day_of_30(back) - 1 if back[:7] == month else MONTH_DAYS
+            worked -= set(range(a, b + 1))
+    return len(worked)
 
 
 def payroll(con, month):

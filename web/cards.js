@@ -1295,7 +1295,10 @@ export function editAccounts(kind, title, note) {
         ? (kind === 'staff'
           ? `<button class="mini" data-act="hasLeft" data-id="${a.id}" data-name="${esc(a.name)}">Has left</button>`
           : `<button class="mini" data-do="account_active" data-args="${args({ id: a.id, active: 0 })}">Retire</button>`)
-        : `<button class="mini" data-do="account_active" data-args="${args({ id: a.id, active: 1 })}">Bring back</button>`}</td>
+        : (kind === 'staff' && a.meta.left_on
+          ? `<button class="mini" data-act="cameBack" data-id="${a.id}" data-name="${esc(a.name)}"
+               data-on="${esc(a.meta.left_on)}">Bring back</button>`
+          : `<button class="mini" data-do="account_active" data-args="${args({ id: a.id, active: 1 })}">Bring back</button>`)}</td>
     </tr>`;
   const fields = [['name', 'Name']];
   if (kind === 'staff') fields.push(['salary', 'Salary', 'money', 140]);

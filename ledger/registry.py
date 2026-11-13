@@ -199,10 +199,10 @@ def _not_long_before(con, body):
     limit = first
     for _ in range(EARLY_MONTHS):
         limit = prev_month(limit)
-    for key in ("on", "period"):
+    for key in ("on", "period", "view_month"):
         value = body.get(key)
         try:
-            month = ymd(value)[:7] if key == "on" else str(value or "")
+            month = ymd(value)[:7] if key == "on" else str(value or "")[:7]
         except (ValueError, TypeError):
             continue                      # not a date: the action says so itself
         if len(month) == 7 and month[:4].isdigit() and month < limit:

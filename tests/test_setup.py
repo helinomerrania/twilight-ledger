@@ -145,6 +145,33 @@ class Leaving(unittest.TestCase):
                                       "salary charged in them stands. Reopen them, newest "
                                       "first, on Month to put it right.")
 
+    def test_time_away_is_not_paid_for(self):
+        self.leave("2026-09-10")
+        api.run(self.con, "account_active", {"id": self.bob, "active": 1,
+                                             "back_on": "2026-10-21"})
+        accruals.ensure_all(self.con)
+        self.assertEqual(self.charged("2026-09"), 66750)    # the 1st to the 10th
+        self.assertEqual(self.charged("2026-10"), 66750)    # the 21st to the 30th
+        self.assertEqual(self.charged(NOW), 200000)
+
+    def test_back_the_day_after_is_never_away(self):
+        self.leave("2026-09-10")
+        api.run(self.con, "account_active", {"id": self.bob, "active": 1,
+                                             "back_on": "2026-09-11"})
+        accruals.ensure_all(self.con)
+        self.assertEqual(self.charged("2026-09"), 200000)
+        with self.assertRaises(api.ApiError):               # back before they left
+            self.leave("2026-09-10")
+            api.run(self.con, "account_active", {"id": self.bob, "active": 1,
+                                                 "back_on": "2026-09-10"})
+
+    def test_away_and_back_in_one_month(self):
+        self.leave("2026-10-05")
+        api.run(self.con, "account_active", {"id": self.bob, "active": 1,
+                                             "back_on": "2026-10-16"})
+        accruals.ensure_all(self.con)
+        self.assertEqual(self.charged("2026-10"), 133250)   # 30 days less the 6th to the 15th
+
     def test_bringing_them_back_names_the_closed_months_too(self):
         self.leave("2026-09-10")
         self.close("2026-09", "2026-10")

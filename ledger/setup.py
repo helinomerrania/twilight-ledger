@@ -10,7 +10,7 @@ import json
 import re
 
 from . import accruals, backup, db, money, post, queries, stock
-from .dates import month_name, month_of, next_month, today, ymd
+from .dates import month_name, month_of, next_day, next_month, today, ymd
 from .money import to_int
 from .registry import ApiError, action, clean_date, name_of
 
@@ -41,6 +41,8 @@ def _line(name):
             r = db.one(con, f"SELECT name FROM {table} WHERE id = ?", (int(body["id"]),))
             ctx["who"] = r["name"] if r else "something"
         ctx["verb"] = "Brought back" if body.get("active") else "Retired"
+        if name == "account_active" and body.get("back_on") and body.get("active"):
+            return f"{ctx['who']} came back on {body['back_on']}"
         if name == "account_active" and body.get("left_on") and not body.get("active"):
             return f"{ctx['who']} left on {body['left_on']}"
         if name == "account_add" and body.get("kind") == "staff" and body.get("started_on"):
@@ -129,6 +131,14 @@ def _account_active(con, body):
     was_left = meta.get("left_after")
     if a["kind"] == "staff":
         if active:
+            if body.get("back_on") and meta.get("left_on"):
+                # back after time away: the days between are not paid for
+                back = _a_day(body["back_on"], "the day they came back",
+                              "Bring them back once they are here.")
+                if back <= meta["left_on"]:
+                    raise ApiError(f"they left on {meta['left_on']}, so they came back after it")
+                if back != next_day(meta["left_on"]):
+                    meta["away"] = (meta.get("away") or []) + [[meta["left_on"], back]]
             for k in ("left_after", "left_on", "former"):
                 meta.pop(k, None)
         elif body.get("left_on"):
@@ -138,6 +148,9 @@ def _account_active(con, body):
             if meta.get("started_on") and on < meta["started_on"]:
                 raise ApiError(f"they started on {meta['started_on']}, so they cannot "
                                "have left before it")
+            if meta.get("away") and on < meta["away"][-1][1]:
+                raise ApiError(f"they came back on {meta['away'][-1][1]}, so they cannot "
+                               "have left again before it")
             meta["left_on"], meta["left_after"] = on, month_of(on)
         else:
             meta["left_after"] = month_of(today())

@@ -1058,6 +1058,22 @@ const H = {
     else say(el.dataset.on ? 'Saved.' : `${name} has left. Their history stays in the books.`);
   },
 
+  /* Someone who left is back. The days they were away are not paid for;
+     the day after their last day means they were never away. */
+  async cameBack(el) {
+    const next = new Date(`${el.dataset.on}T12:00:00Z`);
+    next.setUTCDate(next.getUTCDate() + 1);
+    const never = next.toISOString().slice(0, 10);
+    const on = await askDate(withName('When did ', el.dataset.name, ' come back?'),
+      `Their first day back at work. The days they were away are not charged. `
+      + `If they never left, pick ${never}, the day after their last day.`,
+      S.data.tonight, S.data.today, 'They are back');
+    if (!on) return;
+    const out = await act(() => send('account_active',
+      { id: Number(el.dataset.id), active: 1, back_on: on }));
+    if (out) say(out.note || 'Saved.', Boolean(out.note));
+  },
+
   /* The day someone on the staff started, put right. */
   async started(el) {
     const on = await askDate(withName('When did ', el.dataset.name, ' start?'), START_BODY,

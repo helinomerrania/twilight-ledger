@@ -92,3 +92,8 @@ def days_in(month):
     end = datetime.strptime(b, ISO).date()
     return [(start + timedelta(days=i)).isoformat()
             for i in range((end - start).days + 1)]
+
+
+def next_day(on):
+    """The day after `on`."""
+    return (date.fromisoformat(on) + timedelta(days=1)).isoformat()

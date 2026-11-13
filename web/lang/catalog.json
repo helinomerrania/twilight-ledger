@@ -811,5 +811,13 @@
 "they started on {0}, so they cannot have left before it",
 "they left on {0}, so they cannot have started after it",
 "only staff have a first day of work",
-"{0} is long before the books begin ({1} {2}). Check the year."
+"{0} is long before the books begin ({1} {2}). Check the year.",
+"When did {0} come back?",
+"Their first day back at work. The days they were away are not charged. If they never left, pick {0}, the day after their last day.",
+"They are back",
+"the day they came back is not a date",
+"the day they came back is needed",
+"{0} has not come yet. Bring them back once they are here.",
+"they left on {0}, so they came back after it",
+"they came back on {0}, so they cannot have left again before it"
 ]
