@@ -18,7 +18,7 @@ import re
 import sqlite3
 
 from . import db, kinds, post, queries
-from .dates import month_of, today, ymd
+from .dates import month_name, month_of, prev_month, today, ymd
 from .money import to_int
 
 
@@ -185,12 +185,38 @@ def describe_entry(con, entry_id):
     return " · ".join(bits)
 
 
+# How many months before the books begin a date may fall. Every month from
+# the first one on is charged its rent and salaries, so a year typed wrong
+# would charge a year of them, and taking the entry back would not undo it.
+EARLY_MONTHS = 3
+
+
+def _not_long_before(con, body):
+    """Refuse a date far before the books begin: it is a slip of the year."""
+    first = db.scalar(con, "SELECT MIN(month) FROM period")
+    if not first or body.get("allow_early"):
+        return
+    limit = first
+    for _ in range(EARLY_MONTHS):
+        limit = prev_month(limit)
+    for key in ("on", "period"):
+        value = body.get(key)
+        try:
+            month = ymd(value)[:7] if key == "on" else str(value or "")
+        except (ValueError, TypeError):
+            continue                      # not a date: the action says so itself
+        if len(month) == 7 and month[:4].isdigit() and month < limit:
+            raise ApiError(f"{value} is long before the books begin "
+                           f"({month_name(first)}). Check the year.")
+
+
 def run(con, name, body):
     spec = ACTIONS.get(name)
     if not spec:
         raise ApiError(f"no such action: {name}", 404)
     body = body or {}
     from . import accruals
+    _not_long_before(con, body)
     try:
         if not spec["in_tx"]:
             return spec["fn"](con, body) or {}

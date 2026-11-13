@@ -810,5 +810,6 @@
 "{0} has not come yet. Add them on their first day of work.",
 "they started on {0}, so they cannot have left before it",
 "they left on {0}, so they cannot have started after it",
-"only staff have a first day of work"
+"only staff have a first day of work",
+"{0} is long before the books begin ({1} {2}). Check the year."
 ]

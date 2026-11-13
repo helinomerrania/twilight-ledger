@@ -126,6 +126,31 @@ class SetupReachesForwardOnly(unittest.TestCase):
         self.assertIn('"share": 0.01', meta)
 
 
+class AYearTypedWrong(unittest.TestCase):
+    """Every month from the first is charged rent and salaries, so a date a
+    year back would charge a year of them, and voiding it would not undo it."""
+
+    def setUp(self):
+        self.con = fresh_books()
+        charge(self.con, NOW)
+
+    def test_a_date_long_before_the_books_is_refused(self):
+        before = db.scalar(self.con, "SELECT COUNT(*) FROM entry")
+        on = f"{int(NOW[:4]) - 1}{NOW[4:]}-13"
+        with self.assertRaises(api.ApiError) as err:
+            api.run(self.con, "expense", {"detail": "Tea", "amount": 5000, "on": on,
+                                          "pot": "Box", "allow_overdraw": True})
+        self.assertIn("Check the year", str(err.exception))
+        api.state(self.con)
+        self.assertEqual(db.scalar(self.con, "SELECT COUNT(*) FROM entry"), before)
+        self.assertEqual(queries.months(self.con), [NOW])
+
+    def test_last_month_is_still_fine(self):
+        api.run(self.con, "expense", {"detail": "Tea", "amount": 5000, "on": f"{PREV}-13",
+                                      "pot": "Box", "allow_overdraw": True})
+        self.assertIn(PREV, queries.months(self.con))
+
+
 class MonthsArriveCharged(unittest.TestCase):
     def test_months_the_app_was_not_opened_in_are_charged_too(self):
         con = fresh_books()
