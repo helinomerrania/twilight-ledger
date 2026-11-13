@@ -255,6 +255,7 @@ def _set_salary(con, body):
     started = json.loads(a["meta"] or "{}").get("started_on")
     if started and not db.one(con, "SELECT 1 FROM salary WHERE account_id = ?", (a["id"],)):
         month = month_of(started)          # their first salary: paid from their first day
+    month = _effective_month(con, {"view_month": month})     # never a month still to come
     return {"id": a["id"], "from": _save_salary(con, a["id"], amount, month)}
 
 
@@ -279,8 +280,9 @@ def _fixed_set(con, body):
         raise ApiError("a monthly charge cannot be negative")
     month = _effective_month(con, body)
     old = db.one(con, "SELECT * FROM fixed_charge WHERE name = ?", (name,))
-    if old and old["amount"] == value and old["active"] and not old["to_month"]:
-        return {"name": name}
+    if old and old["amount"] == value and old["active"] and not old["to_month"] \
+            and (old["from_month"] or "") <= month:
+        return {"name": name}       # nothing new: this month already carries it
     con.execute(
         "INSERT INTO fixed_charge(name, amount, account_id, from_month) VALUES (?,?,?,?) "
         "ON CONFLICT(name) DO UPDATE SET amount = excluded.amount, active = 1, "

@@ -102,6 +102,18 @@ class SetupReachesForwardOnly(unittest.TestCase):
         api.run(self.con, "fixed_remove", {"name": "Rent", "view_month": NOW})
         self.assertEqual((self.rent(PREV), self.rent(NOW)), (RENT, 0))
 
+    def test_the_same_rent_can_be_taken_back_a_month(self):
+        api.run(self.con, "fixed_set", {"name": "Rent", "amount": 800000, "view_month": NOW})
+        api.run(self.con, "fixed_set", {"name": "Rent", "amount": 800000, "view_month": PREV})
+        accruals.ensure_all(self.con)
+        self.assertEqual((self.rent(PREV), self.rent(NOW)), (800000, 800000))
+
+    def test_stopping_a_charge_reaches_the_month_on_screen(self):
+        api.run(self.con, "fixed_set", {"name": "Rent", "amount": 800000, "view_month": NOW})
+        api.run(self.con, "fixed_remove", {"name": "Rent", "view_month": PREV})
+        accruals.ensure_all(self.con)
+        self.assertEqual((self.rent(PREV), self.rent(NOW)), (0, 0))
+
     def test_a_new_charge_is_not_backdated(self):
         api.run(self.con, "fixed_set", {"name": "Internet", "amount": 50000,
                                         "view_month": NOW})

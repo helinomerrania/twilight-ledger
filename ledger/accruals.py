@@ -47,10 +47,12 @@ def _fixed_target(f, month):
     that keep what they were charged at the time, even if they are still open
     — putting the rent up in November must not reach back into October.
     """
+    if f["to_month"]:
+        # stopped: nothing after its last month, and that month and those
+        # before it as they stand
+        return None if month <= f["to_month"] else 0
     if f["from_month"] and month < f["from_month"]:
         return None
-    if f["to_month"]:
-        return None if month <= f["to_month"] else 0
     return f["amount"] if f["active"] else 0
 
 
