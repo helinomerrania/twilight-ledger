@@ -69,7 +69,8 @@ class ShouldBe(unittest.TestCase):
         # not on the count: nothing to compare with
         self.assertIsNone(r[self.cups]["gap"])
         v = expected.view(self.con, AFTER)
-        self.assertEqual((v["from"], v["counted"], v["flagged"]), (BEFORE, True, 2))
+        self.assertEqual((v["from"], v["counted"], sum(r["flag"] for r in v["rows"])),
+                         (BEFORE, True, 2))
 
     def test_a_bucket_may_dry_a_little(self):
         self.count(AFTER, self.mix, gross_grams="1800")              # 50 g short of 1,850

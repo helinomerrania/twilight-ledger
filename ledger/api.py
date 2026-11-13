@@ -12,7 +12,7 @@ what registers their actions.
 import json
 
 from . import (accruals, actions, backup, buckets, cash, checks as _checks, db, expected,
-               kinds, lang, money, ratios, stock, post, queries, setup, update)
+               lang, money, ratios, stock, post, queries, setup, update)
 from .dates import NIGHT_ENDS, month_of, prev_month, today, tonight
 from .pos import actions as pos
 from .registry import ACTIONS, ApiError, run            # noqa: F401  (re-exported)
@@ -37,8 +37,7 @@ def bootstrap(con):
                 con.execute("INSERT INTO stock_category(letter, name, sort) "
                             "VALUES (?,?,?)", (letter, name, i))
         if not db.setting(con, "business"):
-            db.set_setting(con, "business", {"name": "Twilight Rest & Cafe",
-                                             "currency": "IQD", "note": 250})
+            db.set_setting(con, "business", {"name": "Twilight Rest & Cafe", "note": 250})
     load_settings(con)
 
 
@@ -72,7 +71,6 @@ def state(con, *, month=None, on=None, count_date=None):
         "period": dict(per) if per else {"month": month, "status": "open"},
         "business": db.setting(con, "business", {}) or {},
         "note": money.NOTE,
-        "kinds": kinds.LABELS,
         "main_pot": post.main_pot(con)["name"],
         "fixed_names": [r["name"] for r in db.all_(
             con, "SELECT name FROM fixed_charge WHERE active = 1 ORDER BY name")],

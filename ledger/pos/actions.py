@@ -53,7 +53,6 @@ def view(con, on, month):
             "accounts": links.listing(con),
             "targets": links.targets(con),
             "gone": links.gone_but_here(con),
-            "left_used": links.left_but_used(con),
             "uses": uses.view(con)}
 
 

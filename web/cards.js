@@ -396,7 +396,7 @@ function editRow(e, { date }) {
     </td></tr>`;
 }
 
-export function entryTable(rows, opts = {}) {
+function entryTable(rows, opts = {}) {
   const date = opts.date !== false;
   return table(`${date ? '<th>Date</th>' : ''}<th>What</th><th>Details</th><th>Pot</th>
                 <th class="num">Amount</th><th></th>`,

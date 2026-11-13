@@ -57,8 +57,7 @@ def seed(con):
     for i, name in enumerate(["A", "B", "C", "D", "E", "F"]):
         con.execute("INSERT INTO stock_category(letter, name, sort) VALUES (?,?,?)",
                     (name, f"{name} - category", i))
-    db.set_setting(con, "business", {"name": "Test Lounge",
-                                     "currency": "IQD", "note": 250})
+    db.set_setting(con, "business", {"name": "Test Lounge", "note": 250})
     return con
 
 

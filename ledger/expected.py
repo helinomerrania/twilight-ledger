@@ -133,7 +133,7 @@ def view(con, count_date=None):
     gaps = [r for r in rows if r["flag"]]
     return {"from": base["count_date"], "to": upto, "counted": bool(here and counted),
             "rows": rows, "short": sum(r["worth"] for r in gaps if r["worth"] < 0),
-            "over": sum(r["worth"] for r in gaps if r["worth"] > 0), "flagged": len(gaps),
+            "over": sum(r["worth"] for r in gaps if r["worth"] > 0),
             "drying": float(allow), "not_set": sorted(not_set),
             "heads_unknown": float(heads_unknown)}
 

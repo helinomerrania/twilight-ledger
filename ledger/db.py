@@ -54,17 +54,21 @@ def connect(db_path=DEFAULT_DB, *, migrate=True, check=True, readonly=False):
         con = sqlite3.connect(f"file:{path}?mode=ro", uri=True, factory=Books)
     else:
         con = sqlite3.connect(str(path), isolation_level=None, factory=Books)
-    con.row_factory = sqlite3.Row
-    con.execute("PRAGMA foreign_keys = ON")
-    if not readonly:
-        con.execute("PRAGMA journal_mode = WAL")
-        con.execute("PRAGMA synchronous = FULL")
-    con.execute("PRAGMA busy_timeout = 5000")
-    con.path = str(path)
-    if migrate and not readonly:
-        run_migrations(con)
-    if check:
-        assert_balanced(con)
+    try:
+        con.row_factory = sqlite3.Row
+        con.execute("PRAGMA foreign_keys = ON")
+        if not readonly:
+            con.execute("PRAGMA journal_mode = WAL")
+            con.execute("PRAGMA synchronous = FULL")
+        con.execute("PRAGMA busy_timeout = 5000")
+        con.path = str(path)
+        if migrate and not readonly:
+            run_migrations(con)
+        if check:
+            assert_balanced(con)
+    except BaseException:
+        con.close()              # books that will not open are not left open
+        raise
     return con
 
 

@@ -170,7 +170,7 @@ read off its source — figure by figure.
 ```
 twilight.py            the one command
 ledger/
-  db.py                opening, migrating and snapshotting the books
+  db.py                opening and migrating the books
   post.py              the only place money is written
   queries.py           every figure the screens show, each defined once
   accruals.py          rent, salaries and electricity charged to their month

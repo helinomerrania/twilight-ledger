@@ -205,7 +205,7 @@ def live_result(con, month):
     return {"month": month, "sales": sales, "other": other, "rev": rev,
             "cogs": c, "gross": gross, "grossPct": pct(gross, rev),
             "daily": daily, "elec": elec, "fixed": fixed, "salaries": salaries,
-            "differences": differences, "opex": opex, "net": net,
+            "differences": differences, "net": net,
             "netPct": pct(net, rev), "frozen": False}
 
 
@@ -269,13 +269,13 @@ def so_far(con, month):
                                "WHERE code = 'rev:sales' AND period = ? AND happened_on > ?",
                           (month, c["date"]))
         extra = mround_fraction(later * ratio) if (ratio is not None and later > 0) else 0
-        cost, basis = c["value"] + extra, "counted"
+        cost = c["value"] + extra
         note = f"counted {c['date']}" + (", days since estimated" if extra else "")
     elif ratio is not None:
-        cost, basis = mround_fraction(r["rev"] * ratio), "estimated"
+        cost = mround_fraction(r["rev"] * ratio)
         note = f"no count yet this month, so taken at last month's {float(ratio) * 100:.0f}%"
     else:
-        cost, basis, note = c["value"], "unknown", "no count to go on"
+        cost, note = c["value"], "no count to go on"
 
     # Each estimated line is rounded to the note like every other figure, so
     # the result can be split between the partners without odd dinar.
@@ -291,7 +291,7 @@ def so_far(con, month):
     salaries = part(r["salaries"])
     net = r["rev"] - cost - r["daily"] - elec - fixed - salaries - r["differences"]
     return {"days": days, "days_in_month": total, "through": last,
-            "rev": r["rev"], "cogs": cost, "cogs_basis": basis, "cogs_note": note,
+            "rev": r["rev"], "cogs": cost, "cogs_note": note,
             "daily": r["daily"], "elec": elec, "elec_estimated": elec_estimated,
             "fixed": fixed, "salaries": salaries, "differences": r["differences"],
             "net": net, "netPct": pct(net, r["rev"])}
@@ -483,15 +483,11 @@ def partners(con, month):
         share = float(meta.get("share") or 0)
         taken = _on_account(con, a["id"], month, ("partner_draw", "partner_settlement"))
         put_in = _on_account(con, a["id"], month, ("partner_in",), sign=-1)
-        allocated = db.scalar(con,
-            "SELECT COALESCE(SUM(-m.amount), 0) FROM movement m WHERE m.account_id = ? "
-            "AND m.entry_kind = 'profit_share'", (a["id"],))
         if not (share or taken or put_in or a["balance"]):
             continue
         out.append({"id": a["id"], "name": a["name"], "share": share,
                     "active": a["active"], "profit": cut.get(a["name"], 0),
-                    "so_far": bool(sf),
-                    "allocated": allocated, "posted": closed,
+                    "so_far": bool(sf), "posted": closed,
                     "taken": taken, "put_in": put_in,
                     "balance": balance(con, a["code"]),
                     "this_month": cut.get(a["name"], 0) - taken + put_in})
@@ -721,13 +717,12 @@ def day(con, on=None):
             "pots": pots(con, as_of=on), "entries": entries(con, on=on), "count": count}
 
 
-def entries(con, *, on=None, month=None, limit=None, q=None, detail=None,
-            kind=None, date_from=None, date_to=None, ids=None):
+def entries(con, *, on=None, month=None, limit=None, q=None, kind=None, ids=None):
     """Entries with everything a row on screen needs: what it was, who, which
     pot, how much, and whether it can still be corrected.
 
-    `month` selects by the month an entry belongs to; the date arguments
-    select by the day the cash moved. `q` searches every month.
+    `month` selects by the month an entry belongs to, `on` by the day the
+    cash moved. `q` searches every month.
     """
     sql = ("SELECT e.id, e.happened_on, e.period, e.kind, e.detail, e.memo, "
            "       e.source, e.source_ref FROM entry e WHERE e.voided_at IS NULL")
@@ -738,18 +733,9 @@ def entries(con, *, on=None, month=None, limit=None, q=None, detail=None,
     if month:
         sql += " AND e.period = ?"
         args.append(month)
-    if detail is not None:
-        sql += " AND COALESCE(e.detail, '') = ?"
-        args.append(detail)
     if kind:
         sql += " AND e.kind = ?"
         args.append(kind)
-    if date_from:
-        sql += " AND e.happened_on >= ?"
-        args.append(date_from)
-    if date_to:
-        sql += " AND e.happened_on <= ?"
-        args.append(date_to)
     if ids is not None:
         if not ids:
             return []

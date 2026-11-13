@@ -99,8 +99,6 @@ class Importer:
         b = self.setup.get("business") or {}
         db.set_setting(con, "business", {
             "name": b.get("name") or "Twilight Rest & Cafe",
-            "owner": b.get("owner"),
-            "currency": b.get("currency") or "IQD",
             "note": to_int(b.get("rounding") or 250)})
         db.set_setting(con, "conversions", self.setup.get("conversions") or {})
         db.set_setting(con, "elec_factors", (self.d.get("elec") or {}).get("factors") or {})

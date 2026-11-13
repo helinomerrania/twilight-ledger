@@ -207,7 +207,7 @@ class Linking(unittest.TestCase):
                          ["Expense", "Staff", "Partner", "Supplier", "Other income", "Pot"])
         self.assertIn([f"staff:{self.alice}", "Alice"], p["targets"][1]["options"])
         self.assertTrue(any(r["pos_id"] == ALICE_POS for r in p["accounts"]))
-        self.assertEqual((p["gone"], p["left_used"]), ([], []))
+        self.assertEqual(p["gone"], [])
 
 
 if __name__ == "__main__":

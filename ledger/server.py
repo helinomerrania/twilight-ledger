@@ -133,11 +133,8 @@ class Handler(BaseHTTPRequestHandler):
                                                 on=q.get("on"),
                                                 count_date=q.get("count_date")))
             if url.path == "/api/entries":
-                return self.send_json(queries.entries(
-                    self.con, on=q.get("on"), month=q.get("month"),
-                    q=q.get("q"), detail=q.get("detail"), kind=q.get("kind"),
-                    date_from=q.get("from"), date_to=q.get("to"),
-                    limit=min(int(q.get("limit") or 300), 2000)))
+                return self.send_json(queries.entries(               # the search box
+                    self.con, q=q.get("q"), limit=min(int(q.get("limit") or 300), 2000)))
             if url.path == "/api/supplier":
                 out = queries.supplier_lines(self.con, int(q.get("id") or 0),
                                              q.get("month"))

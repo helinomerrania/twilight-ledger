@@ -160,9 +160,11 @@ class ClosedMonths(unittest.TestCase):
     def test_an_import_may_still_seed_a_closed_month(self):
         self.con.execute("INSERT INTO period(month, status, closed_at) "
                          "VALUES ('2026-08','closed',datetime('now'))")
-        with db.tx(self.con):
-            post.opening_balance(self.con, 1234567, account_code="inv:stock",
-                                 on="2026-08-01", period="2026-08")
+        with db.tx(self.con):                   # as tools/import_json.py books them
+            post.record(self.con, kind="opening", on="2026-08-01", period="2026-08",
+                        source="import", allow_closed=True,
+                        legs=[(post.account_id(self.con, "inv:stock"), 1234567),
+                              (post.account_id(self.con, "eq:opening"), -1234567)])
         self.assertEqual(queries.balance(self.con, "inv:stock"), 1234567)
 
 

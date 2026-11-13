@@ -47,7 +47,7 @@ function build() {
     .filter(Boolean).join('|'), 'gu');
 }
 
-export const kurdish = () => lang === 'ckb';
+const kurdish = () => lang === 'ckb';
 
 /** English or Kurdish, and the page's direction with it. */
 export function setLanguage(l) {
@@ -87,7 +87,7 @@ const NAME_FIELDS = new Set([
   'group', 'portion', 'tables', 'opened_by', 'closed_by', 'supplier', 'rows', 'not_set',
   'fixed_names', 'second', 'local_folder', 'folder', 'path',
 ]);
-const APP_WORDS = new Set(['checks', 'lang', 'kinds', 'recent', 'categories', 'accounts',
+const APP_WORDS = new Set(['checks', 'lang', 'recent', 'categories', 'accounts',
                            'targets', 'legs', 'differences', 'levels', 'update']);
 const MADE = new Set(['Several items', 'Total sales of the day', 'not known']);
 const escape = s => s.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
@@ -234,7 +234,7 @@ function attrs(el) {
 /** Translate everything in `root`, and `root` itself. Safe to run again: what
     is done is left alone. In English nothing changes; the pieces are only
     noted, so Gemini can be asked for them before Kurdish is chosen. */
-export function localise(root) {
+function localise(root) {
   if (!root || root.nodeType !== 1 || root.closest(LEAVE)) return;
   const a = document.activeElement;
   let at = null;

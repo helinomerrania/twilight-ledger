@@ -146,14 +146,6 @@ def half_up(frac):
     return int(whole)
 
 
-def money(amount, currency=""):
-    """Format for a screen: thousands separated, minus sign kept in front."""
-    amount = to_int(amount)
-    s = f"{abs(amount):,}"
-    s = ("-" + s) if amount < 0 else s
-    return f"{s} {currency}".strip() if currency else s
-
-
 def pct(part, whole, places=1):
     """Percentage as a float for display only; never used in the money path."""
     part, whole = to_int(part), to_int(whole)

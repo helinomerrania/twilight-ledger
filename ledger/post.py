@@ -411,11 +411,3 @@ def cash_difference(con, diff, *, pot, on, reason=None, source_ref=None):
                   source_ref=source_ref,
                   legs=[(pot_id(con, pot), diff),
                         (account_id(con, "eq:difference"), -diff)])
-
-
-def opening_balance(con, amount, *, account_code, on, period=None, memo=None):
-    """Seed a balance that predates the books, against Opening balances."""
-    return record(con, kind="opening", on=on, period=period, memo=memo,
-                  detail=account_code, source="import", allow_closed=True,
-                  legs=[(account_id(con, account_code), to_int(amount)),
-                        (account_id(con, "eq:opening"), -to_int(amount))])

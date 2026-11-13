@@ -485,9 +485,8 @@ def _tare_set(con, body):
 @action("business_set", guard_pots=False, summary=_line("business_set"))
 def _business_set(con, body):
     b = dict(db.setting(con, "business", {}) or {})
-    for key in ("name", "owner", "currency"):
-        if key in body:
-            b[key] = str(body[key] or "").strip()
+    if "name" in body:
+        b["name"] = str(body["name"] or "").strip()
     if "note" in body and body["note"] not in (None, ""):
         note = to_int(body["note"], "note")
         if note < 1 or note > 100000:

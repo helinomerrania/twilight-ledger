@@ -32,7 +32,7 @@ html[lang="ckb"] body { font-size: 15.5px; }
 html[lang="ckb"] * { letter-spacing: 0 !important; }
 
 @media (prefers-color-scheme: dark) {
-  :root:not([data-theme="light"]) {
+  :root {
     --paper:  #13131a;
     --card:   #1a1a23;
     --ink:    #ecebf3;
@@ -48,13 +48,6 @@ html[lang="ckb"] * { letter-spacing: 0 !important; }
     color-scheme: dark;
   }
 }
-:root[data-theme="dark"] {
-  --paper:  #13131a; --card: #1a1a23; --ink: #ecebf3; --muted: #9b97ad;
-  --faint:  #6e6a80; --line: #2a2936; --accent: #a99df0;
-  --accent-soft: #221f36; --good: #4ebd8c; --bad: #e4808d;
-  --warn: #d9ab5c; --warn-soft: #241e12; color-scheme: dark;
-}
-
 * { box-sizing: border-box; }
 
 html, body { height: 100%; }
