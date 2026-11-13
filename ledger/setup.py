@@ -126,6 +126,7 @@ def _account_active(con, body):
         raise ApiError(f"{a['name']} still holds "
                        f"{queries.balance(con, a['code']):,}. Move it out first.")
     meta = json.loads(a["meta"] or "{}")
+    was_left = meta.get("left_after")
     if a["kind"] == "staff":
         if active:
             for k in ("left_after", "left_on", "former"):
@@ -147,8 +148,10 @@ def _account_active(con, body):
     con.execute("UPDATE account SET active = ?, meta = ? WHERE id = ?",
                 (active, json.dumps(meta, ensure_ascii=False), a["id"]))
     note = None
-    if a["kind"] == "staff" and not active and not meta.get("former"):
-        note = _closed_note(accruals.closed_off(con, a["id"], meta["left_after"]))
+    if a["kind"] == "staff" and not meta.get("former"):
+        # the months this reaches: from the one they left in, now or before
+        since = min(m for m in (meta.get("left_after"), was_left, month_of(today())) if m)
+        note = _closed_note(accruals.closed_off(con, a["id"], since))
     return {"id": a["id"], "note": note}
 
 

@@ -145,6 +145,13 @@ class Leaving(unittest.TestCase):
                                       "salary charged in them stands. Reopen them, newest "
                                       "first, on Month to put it right.")
 
+    def test_bringing_them_back_names_the_closed_months_too(self):
+        self.leave("2026-09-10")
+        self.close("2026-09", "2026-10")
+        out = self.leave(None, active=1)
+        self.assertIn("September 2026 and October 2026 are closed", out["note"])
+        self.assertEqual(self.charged("2026-09"), 66750)
+
     def test_an_open_month_has_nothing_to_say(self):
         self.assertIsNone(self.leave("2026-09-10")["note"])
 

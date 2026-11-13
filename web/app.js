@@ -1335,7 +1335,7 @@ document.addEventListener('click', async e => {
         return;
       }
       const out = await act(() => send(doer.dataset.do, JSON.parse(doer.dataset.args || '{}')));
-      if (out) say('Saved.');
+      if (out) say(typeof out.note === 'string' ? out.note : 'Saved.', typeof out.note === 'string');
     });
     return;
   }
@@ -1681,6 +1681,12 @@ document.addEventListener('wheel', e => {
   const el = document.activeElement;
   if (el && el.type === 'number' && e.target === el) el.blur();
 }, { passive: true });
+
+/* An address typed or picked from the browser's history opens its screen. */
+window.addEventListener('hashchange', () => {
+  const where = location.hash.slice(1);
+  if (S.data && where !== `${S.tab}/${pageOf(S.tab)[0]}`) setTab(where);
+});
 
 /* -------------------------------------------------------------------- boot */
 

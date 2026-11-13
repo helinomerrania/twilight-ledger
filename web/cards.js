@@ -74,13 +74,20 @@ export const NIGHT = [
   ['staff_repay', 'Money back', 'A member of staff handing money back. Cash comes in and their advances go down.'],
 ];
 
+/** Who can still be paid, or hand money back: everyone here now, and anyone
+    who has left or been retired with the account not yet square. `sign` is
+    the side of the balance that matters: 1 owed to them, -1 owed by them. */
+const unsettled = (list, sign) => list
+  .filter(a => a.active || a.balance * sign > 0).map(a => a.name);
+
 function nightNames(kind) {
   const p = S.data.people;
   const active = list => list.filter(a => a.active).map(a => a.name);
   return {
     expense: S.data.lists.expense || [],
-    staff_advance: active(p.staff), pay_salary: active(p.staff), staff_repay: active(p.staff),
-    partner_draw: active(p.partner), pay_supplier: active(p.supplier),
+    staff_advance: active(p.staff), pay_salary: unsettled(p.staff, 1),
+    staff_repay: unsettled(p.staff, -1),
+    partner_draw: active(p.partner), pay_supplier: unsettled(p.supplier, 1),
     pay_fixed: S.data.fixed_names || [],
   }[kind] || [];
 }
@@ -1121,8 +1128,8 @@ export function newEntryCard() {
   const active = list => list.filter(a => a.active).map(a => a.name);
   const detailsFor = {
     expense: lists.expense || [], income: lists.income || [],
-    staff_advance: active(people.staff), staff_repay: active(people.staff),
-    pay_salary: active(people.staff), pay_supplier: active(people.supplier),
+    staff_advance: active(people.staff), staff_repay: unsettled(people.staff, -1),
+    pay_salary: unsettled(people.staff, 1), pay_supplier: unsettled(people.supplier, 1),
     partner_draw: active(people.partner), partner_in: active(people.partner),
     pay_fixed: S.data.fixed_names || [],
   };
