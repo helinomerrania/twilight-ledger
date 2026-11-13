@@ -85,6 +85,7 @@ async function call(path, init) {
   const r = await fetch(path, init);
   let body;
   try { body = await r.json(); } catch { body = { error: `the server replied ${r.status}` }; }
+  if (body.reload) setTimeout(() => location.reload(), 2500);   // updated under this page
   if (!r.ok || body.error) {
     const err = new Error(body.error || `the server replied ${r.status}`);
     err.status = r.status;
@@ -106,7 +107,7 @@ export const load = (month, on, countDate) => {
     screen can never show a figure from before the change. */
 export const send = (action, body = {}) => call('/api/do/' + action, {
   method: 'POST',
-  headers: { 'Content-Type': 'application/json' },
+  headers: { 'Content-Type': 'application/json', 'X-Twilight-Version': (S.data || {}).version || '' },
   body: JSON.stringify({ ...body, view_month: S.month, view_on: S.picked ? S.on : null,
                          view_count: S.count }),
 });

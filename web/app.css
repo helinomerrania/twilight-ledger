@@ -232,23 +232,6 @@ nav.pages button[aria-current="true"] { color: var(--accent); border-bottom-colo
 .cardhead h2 { margin: 0; font-size: 15px; }
 .cardhead .right { margin-inline-start: auto; }
 
-.sectionhead {
-  margin: 28px 0 12px;
-  font-size: 12px;
-  font-weight: 600;
-  letter-spacing: 0.06em;
-  text-transform: uppercase;
-  color: var(--faint);
-}
-.sectionhead span {
-  display: block;
-  text-transform: none;
-  letter-spacing: 0;
-  font-weight: 400;
-  font-size: 13px;
-  color: var(--muted);
-}
-
 /* ------------------------------------------------------------------- tiles */
 
 .tiles {

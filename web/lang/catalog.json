@@ -826,5 +826,6 @@
 "The date is right?",
 "Every month up to now will be charged its rent and salaries.",
 "Yes, it is right",
-"This computer's date says {0} {1}, but the books were last used in {2} {3}. Check the computer's clock. If the date is right, say so at the top of the page."
+"This computer's date says {0} {1}, but the books were last used in {2} {3}. Check the computer's clock. If the date is right, say so at the top of the page.",
+"The app has been updated since this page was opened. It is loading again: please repeat what you were doing."
 ]

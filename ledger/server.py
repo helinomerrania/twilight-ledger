@@ -192,6 +192,13 @@ class Handler(BaseHTTPRequestHandler):
                 raise ValueError
         except ValueError:
             return self.send_json({"error": "that was not valid JSON"}, 400)
+        # A page left open across an update still has the old screens, and
+        # what they send may no longer mean what the new app takes it to mean.
+        page = self.headers.get("X-Twilight-Version")
+        if page and page != update.current():
+            return self.send_json({"error": "The app has been updated since this page was "
+                                            "opened. It is loading again: please repeat "
+                                            "what you were doing.", "reload": True}, 409)
 
         try:
             if url.path == "/api/update":

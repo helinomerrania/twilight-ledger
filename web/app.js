@@ -276,8 +276,13 @@ async function useLanguage(state) {
 /** Take a new state from the server, refresh anything open beside it, and
     redraw. */
 let applied = 0;
+let loadedAs = null;         // the app's version when this page was loaded
 
 async function apply(state, opts = {}) {
+  // A page left open across an update is still running the old screens
+  // against the new app: load the new ones before showing or sending anything.
+  if (loadedAs && state.version && state.version !== loadedAs) { location.reload(); return; }
+  loadedAs = loadedAs || state.version;
   applied++;
   S.data = state;
   S.month = state.month;

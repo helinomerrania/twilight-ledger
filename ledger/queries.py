@@ -96,10 +96,6 @@ def _days_ago(day, n):
     return (date(y, m, d) - timedelta(days=n)).isoformat()
 
 
-def _day_before(d):
-    return _days_ago(d, 1)
-
-
 # -------------------------------------------------------------------- stock
 
 def count_dates(con, *, valued_only=True):

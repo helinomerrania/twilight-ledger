@@ -93,19 +93,6 @@ def _pos_settings(con, body):
     return {}
 
 
-@action("pos_newest", guard_pots=False, in_tx=False)
-def _pos_newest(con, body):
-    """Bring in the newest backup in SambaPOS's backup folder."""
-    try:
-        files = sources.backups_in(settings(con)["folder"])
-        if not files:
-            raise sources.PosError("there are no SambaPOS backups in that folder yet")
-        snap = sources.read_backup(files[-1])
-    except sources.PosError as exc:
-        _fail(exc)
-    return {"file": files[-1].name, "kept": keep(con, snap, f"from {files[-1].name}")}
-
-
 def _pos_id(body):
     try:
         return int(body.get("pos_id"))

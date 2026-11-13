@@ -146,14 +146,6 @@ def half_up(frac):
     return int(whole)
 
 
-def share_of(amount, part, whole):
-    """amount x part / whole, exactly, rounded once. For a pro-rata figure such
-    as eight days' worth of a thirty-day rent."""
-    if not whole:
-        return 0
-    return half_up(Fraction(to_int(amount)) * Fraction(part) / Fraction(whole))
-
-
 def money(amount, currency=""):
     """Format for a screen: thousands separated, minus sign kept in front."""
     amount = to_int(amount)

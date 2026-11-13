@@ -67,6 +67,13 @@ class Server(unittest.TestCase):
         status, _ = self.expense(**{"Content-Type": "text/plain"})
         self.assertEqual((status, self.saved()), (403, 0))
 
+    def test_a_page_older_than_the_app_is_told_to_load_again(self):
+        # left open across an update, its screens are the old ones
+        status, out = self.expense(**{"X-Twilight-Version": "2020.1.1.1"})
+        self.assertEqual((status, out.get("reload"), self.saved()), (409, True, 0))
+        status, _ = self.expense(**{"X-Twilight-Version": server.update.current()})
+        self.assertEqual((status, self.saved()), (200, 1))
+
     def test_a_refused_write_ends_its_connection(self):
         # its body is never read, so it must not be taken for the next request
         c = http.client.HTTPConnection("127.0.0.1", self.port, timeout=10)

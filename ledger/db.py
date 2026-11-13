@@ -18,7 +18,7 @@ import os
 import re
 import sqlite3
 import threading
-from datetime import date, datetime
+from datetime import datetime
 from pathlib import Path
 
 HERE = Path(__file__).resolve().parent
@@ -254,15 +254,6 @@ def snapshot(db_path=DEFAULT_DB, why="manual"):
     finally:
         con.close()
     return dest
-
-
-def daily_snapshot(db_path=DEFAULT_DB):
-    """One copy per day, taken the first time the app runs that day."""
-    out = backup_dir(db_path)
-    today = date.today().isoformat()
-    if out.exists() and any(p.name.startswith(f"twilight-{today}") for p in out.glob("*.db")):
-        return None
-    return snapshot(db_path, why="daily")
 
 
 # ------------------------------------------------------------------- guards
