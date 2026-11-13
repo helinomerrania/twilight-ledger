@@ -833,5 +833,6 @@
 "Nobody retired still has a share of the profit",
 "{0} still has a share",
 "{0}, {1} still have shares",
-"Closing splits the profit by every share. Set theirs to {0} in Setup and give it to the others."
+"Closing splits the profit by every share. Set theirs to {0} in Setup and give it to the others.",
+"that was written by closing the month. Close the month again and it is written again."
 ]

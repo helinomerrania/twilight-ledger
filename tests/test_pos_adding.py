@@ -208,6 +208,17 @@ class AddingANight(unittest.TestCase):
         self.assertEqual([(e["amount"], e["source"]) for e in self.entries("daily_sales")],
                          [(15000, "pos")])
 
+    def test_takings_a_fuller_copy_replaced_cannot_be_put_back_beside_it(self):
+        self.link_all()
+        self.add()
+        old = self.entries("daily_sales")[0]["id"]
+        self.con.execute("UPDATE pos_period SET takings = 15000 WHERE night = ?", (NIGHT,))
+        self.con.execute("UPDATE pos_payment SET amount = amount + 3000")
+        self.add()
+        with self.assertRaises(api.ApiError):
+            api.run(self.con, "put_back", {"id": old})
+        self.assertEqual([e["amount"] for e in self.entries("daily_sales")], [15000])
+
     def test_the_same_money_split_differently_counts_as_typed(self):
         self.link_all()
         for amount in (5000, 5500):

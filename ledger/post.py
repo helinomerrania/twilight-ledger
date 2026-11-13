@@ -209,11 +209,17 @@ def unvoid(con, entry_id):
     if r["replaced_by"]:
         raise db.LedgerError("that entry was corrected, not deleted. "
                              "The corrected one is in the books.")
+    if r["source"] == "close":
+        # written by closing the month and taken back by opening it again:
+        # back beside the month's own figures it would count them twice
+        raise db.LedgerError("that was written by closing the month. Close the month "
+                             "again and it is written again.")
     assert_open(con, r["period"])
     if r["kind"] == "daily_sales":
         # A night has one set of takings: a figure typed in, or SambaPOS's
         # lines, one for each way of paying. Putting one back beside another
-        # would count the night's sales twice.
+        # would count the night's sales twice. (SambaPOS's lines a fuller copy
+        # of the night replaced are marked replaced, and refused above.)
         there = [t for t in takings(con, r["happened_on"], but=entry_id)
                  if r["source"] != "pos" or t["source"] != "pos"]
         if there:

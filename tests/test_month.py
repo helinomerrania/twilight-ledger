@@ -219,6 +219,21 @@ class BeforeClosing(unittest.TestCase):
     def test_but_they_do_not_stop_it(self):
         self.assertTrue(close.ready(self.con, PREV)["can_close"])
 
+    def test_what_closing_wrote_cannot_be_put_back_by_hand(self):
+        """Opening a month again takes back what closing wrote. Put back by
+        hand, a profit share stood beside the month's own figures, and closing
+        again wrote a second one."""
+        con = fresh_books()
+        api.run(con, "sales", {"amount": 900000, "on": f"{PREV}-15"})
+        add_count(con, f"{PREV}-28", 1000000)
+        api.run(con, "close_month", {"month": PREV})
+        api.run(con, "reopen_month", {"month": PREV})
+        for e in db.all_(con, "SELECT id FROM entry WHERE source = 'close'"):
+            with self.assertRaises(api.ApiError):
+                api.run(con, "put_back", {"id": e["id"]})
+        self.assertFalse(db.all_(con, "SELECT 1 FROM entry WHERE source = 'close' "
+                                      "AND voided_at IS NULL"))
+
     def test_a_month_is_charged_before_it_is_frozen(self):
         """Closed before any screen had charged it (from the command line,
         say), a month was frozen without its rent and salaries."""
