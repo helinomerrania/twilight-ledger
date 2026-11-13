@@ -216,6 +216,11 @@ def run(con, name, body):
         raise ApiError(f"no such action: {name}", 404)
     body = body or {}
     from . import accruals
+    jump = accruals.clock_jump(con)
+    if jump and name != "clock_ok":
+        raise ApiError(f"This computer's date says {month_name(jump['now'])}, but the books "
+                       f"were last used in {month_name(jump['last'])}. Check the computer's "
+                       "clock. If the date is right, say so at the top of the page.")
     _not_long_before(con, body)
     try:
         if not spec["in_tx"]:

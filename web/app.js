@@ -213,7 +213,17 @@ function render({ fresh = false, skip = [] } = {}) {
     return `<button data-go="${S.tab}/${k}" aria-current="${k === key}"><span>${esc(label)}</span>${n
       ? `<span class="dot${count ? ' n' : ''}" title="${n} need a look">${count ? n : ''}</span>` : ''}</button>`;
   }).join('');
-  main.innerHTML = `<h1>${esc(title)}</h1>`
+  // a date far ahead of the books is doubted before anything is charged on it
+  const clock = S.data.clock ? `<div class="banner bad"><strong>Is the computer's date right?</strong>
+      <p style="margin:6px 0 10px">It says ${esc(S.data.today)}, but the books were last used in
+      ${esc(monthName(S.data.clock.last))}. Nothing can be entered until this is settled: a
+      wrong date would charge rent and salaries for every month up to it. If the date is wrong,
+      set the computer's clock and open the app again.</p>
+      <button class="btn" data-do="clock_ok" data-args="{}"
+        data-confirm="The date is right?"
+        data-confirm-body="Every month up to now will be charged its rent and salaries."
+        data-yes="Yes, it is right">The date is right</button></div>` : '';
+  main.innerHTML = clock + `<h1>${esc(title)}</h1>`
     + `<div class="pagebar"><nav class="pages" aria-label="${esc(title)}">${tabs}</nav>`
     + `${HEADS[S.tab] ? draw(HEADS[S.tab]) : ''}</div>`
     + (note ? `<p class="pagenote">${esc(note)}</p>` : '')

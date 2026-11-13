@@ -2,6 +2,7 @@
 and what has to be true before it closes."""
 import unittest
 from fractions import Fraction
+from unittest import mock
 
 from ledger import accruals, api, checks, close, db, queries
 from ledger.dates import days_in, month_name, month_of, next_month, prev_month, today
@@ -149,6 +150,39 @@ class AYearTypedWrong(unittest.TestCase):
         api.run(self.con, "expense", {"detail": "Tea", "amount": 5000, "on": f"{PREV}-13",
                                       "pot": "Box", "allow_overdraw": True})
         self.assertIn(PREV, queries.months(self.con))
+
+
+class TheClockIsWrong(unittest.TestCase):
+    """Every month up to today is charged. A computer whose date has jumped
+    years ahead must not charge years of rent at a glance."""
+
+    def setUp(self):
+        self.con = fresh_books()
+        charge(self.con, NOW)
+        self.entries = lambda: db.scalar(self.con, "SELECT COUNT(*) FROM entry")
+        far = f"{int(NOW[:4]) + 3}{NOW[4:]}-05"
+        from ledger import registry, setup
+        for mod in (accruals, api, registry, setup):
+            p = mock.patch.object(mod, "today", lambda: far)
+            p.start()
+            self.addCleanup(p.stop)
+
+    def test_nothing_is_charged_until_the_date_is_confirmed(self):
+        before = self.entries()
+        state = api.state(self.con)
+        self.assertEqual(state["clock"]["last"], NOW)
+        self.assertEqual((self.entries(), queries.months(self.con)), (before, [NOW]))
+        with self.assertRaises(api.ApiError) as err:
+            api.run(self.con, "expense", {"detail": "Tea", "amount": 5000, "pot": "Box",
+                                          "on": f"{NOW}-01", "allow_overdraw": True})
+        self.assertIn("clock", str(err.exception))
+        self.assertEqual(self.entries(), before)
+
+    def test_a_date_said_to_be_right_charges_the_months_between(self):
+        api.run(self.con, "clock_ok", {})
+        state = api.state(self.con)
+        self.assertIsNone(state["clock"])
+        self.assertEqual(len(queries.months(self.con)), 37)
 
 
 class MonthsArriveCharged(unittest.TestCase):

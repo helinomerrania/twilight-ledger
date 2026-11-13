@@ -168,6 +168,15 @@ def _account_active(con, body):
     return {"id": a["id"], "note": note}
 
 
+@action("clock_ok", guard_pots=False,
+        summary=lambda con, body, out: f"Said the computer's date is right: {today()}")
+def _clock_ok(con, body):
+    """The computer's date is far ahead of the books, and it is right: the
+    months between are charged as any months the app was not opened in."""
+    db.set_setting(con, "clock_ok", month_of(today()))
+    return {}
+
+
 @action("staff_started", guard_pots=False, summary=_line("staff_started"))
 def _staff_started(con, body):
     """The day someone on the staff started, given or put right. The month

@@ -121,7 +121,7 @@ def reconcile_salaries(con, month):
 def ensure_needed(con, month):
     """Would `ensure` post anything? Asked first so that simply looking at a
     month does not open a write transaction unless there is something to do."""
-    if month > month_of(today()) or not _is_open(con, month):
+    if month > month_of(today()) or not _is_open(con, month) or clock_jump(con):
         return False
     for f in db.all_(con, "SELECT * FROM fixed_charge"):
         target = _fixed_target(f, month)
@@ -137,10 +137,32 @@ def ensure_needed(con, month):
     return False
 
 
+# How many months the computer's date may be ahead of the newest month in
+# the books before it is doubted. Every month up to "today" is charged its
+# rent and salaries, so a clock set to the wrong year would charge years of
+# them at a glance, and nothing would take them back.
+CLOCK_GAP = 3
+
+
+def clock_jump(con):
+    """The computer's date, if it is far ahead of the books and nobody has
+    said it is right: {"last", "now"}. None when all is well."""
+    now = month_of(today())
+    last = db.scalar(con, "SELECT MAX(month) FROM period")
+    if not last:
+        return None
+    limit = last
+    for _ in range(CLOCK_GAP):
+        limit = next_month(limit)
+    if now <= limit or db.setting(con, "clock_ok") == now:
+        return None
+    return {"last": last, "now": now}
+
+
 def ensure(con, month):
     """Make sure an open month carries its rent and salaries. Never a future
     month: December is not charged until December arrives."""
-    if month > month_of(today()):
+    if month > month_of(today()) or clock_jump(con):
         return 0
     post.ensure_period(con, month)
     if not _is_open(con, month):
@@ -155,6 +177,8 @@ def ensure_all(con):
     of January, January still needs its rent and salaries when it is opened
     in February.
     """
+    if clock_jump(con):
+        return 0                # nothing is charged on a date nobody trusts
     now = month_of(today())
     existing = queries.months(con)
     m = existing[0] if existing else now

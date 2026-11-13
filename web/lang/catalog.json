@@ -819,5 +819,12 @@
 "the day they came back is needed",
 "{0} has not come yet. Bring them back once they are here.",
 "they left on {0}, so they came back after it",
-"they came back on {0}, so they cannot have left again before it"
+"they came back on {0}, so they cannot have left again before it",
+"Is the computer's date right?",
+"It says {0}, but the books were last used in {1} {2}. Nothing can be entered until this is settled: a wrong date would charge rent and salaries for every month up to it. If the date is wrong, set the computer's clock and open the app again.",
+"The date is right",
+"The date is right?",
+"Every month up to now will be charged its rent and salaries.",
+"Yes, it is right",
+"This computer's date says {0} {1}, but the books were last used in {2} {3}. Check the computer's clock. If the date is right, say so at the top of the page."
 ]

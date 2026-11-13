@@ -67,6 +67,7 @@ def state(con, *, month=None, on=None, count_date=None):
         "version": update.current(),
         "month": month,
         "this_month": now,
+        "clock": accruals.clock_jump(con),
         "months": queries.months(con),
         "period": dict(per) if per else {"month": month, "status": "open"},
         "business": db.setting(con, "business", {}) or {},
