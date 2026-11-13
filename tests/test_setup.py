@@ -195,6 +195,25 @@ class Leaving(unittest.TestCase):
         self.assertIn("Bob left on 2026-09-10", line)
 
 
+class TheMonthSoFar(unittest.TestCase):
+    """Part-way through the month its salaries are counted for the days gone:
+    by each person's own days, so someone who left early has cost all of
+    theirs, and someone who started late none before they came."""
+
+    def test_someone_who_left_on_the_first_has_cost_that_day(self):
+        con = fresh_books()
+        on = f"{NOW}-01"
+        api.run(con, "sales", {"amount": 900000, "on": on})
+        bob = acct(con, "staff", "Bob")["id"]
+        api.run(con, "account_active", {"id": bob, "active": 0, "left_on": on})
+        api.state(con)
+        sf = queries.so_far(con, NOW)
+        if sf is None:                       # only for the month we are in
+            self.skipTest("the month so far is shown only while the month runs")
+        # Alice 500,000, Carol 300,000, Dave 400,000 and Bob 200,000: one day of thirty
+        self.assertEqual(sf["salaries"], 46750)
+
+
 class ThirtyDays(unittest.TestCase):
     """A salary counts every month as thirty days: a month's last day is its
     thirtieth, so a 31st or the end of February is the 30th."""

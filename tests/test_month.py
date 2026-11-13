@@ -1,12 +1,14 @@
 """The month: how far through it we are, what is due, what Setup can reach,
 and what has to be true before it closes."""
 import unittest
+from datetime import datetime
 from fractions import Fraction
 from unittest import mock
 
 from ledger import accruals, api, checks, close, db, queries
 from ledger.dates import days_in, month_name, month_of, next_month, prev_month, today
 from ledger.money import mround_fraction
+from tests import clock_at
 from tests.helpers import RENT, SALARIES, STAFF, add_count, fresh_books
 
 NOW = month_of(today())
@@ -33,7 +35,8 @@ class SoFar(unittest.TestCase):
     def test_one_night_of_sales_carries_one_days_rent_and_salaries(self):
         self.assertEqual(self.sf["days"], 1)
         self.assertEqual(self.sf["fixed"], mround_fraction(Fraction(RENT, self.total)))
-        self.assertEqual(self.sf["salaries"], mround_fraction(Fraction(SALARIES, self.total)))
+        # a salary counts thirty days to every month, however long the month is
+        self.assertEqual(self.sf["salaries"], mround_fraction(Fraction(SALARIES, 30)))
 
     def test_it_adds_up(self):
         s = self.sf
@@ -58,6 +61,23 @@ class SoFar(unittest.TestCase):
 
     def test_a_finished_month_has_no_so_far(self):
         self.assertIsNone(queries.so_far(self.con, PREV))
+
+
+class SoFarWhateverTheMonth(unittest.TestCase):
+    """Rent is spread over the month's own days; a salary over thirty, in a
+    month of thirty-one days or of twenty-eight."""
+
+    def test_a_long_month_and_a_short_one(self):
+        for when in (datetime(2026, 12, 14, 20), datetime(2027, 2, 14, 20)):
+            with clock_at(when):
+                now = month_of(today())
+                con = fresh_books()
+                charge(con, now)
+                api.run(con, "sales", {"amount": 400000, "on": f"{now}-01"})
+                sf = queries.so_far(con, now)
+                self.assertEqual(sf["fixed"], mround_fraction(Fraction(RENT, len(days_in(now)))),
+                                 now)
+                self.assertEqual(sf["salaries"], mround_fraction(Fraction(SALARIES, 30)), now)
 
 
 class WhatIsDue(unittest.TestCase):

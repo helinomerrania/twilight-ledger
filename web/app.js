@@ -276,6 +276,7 @@ async function useLanguage(state) {
 /** Take a new state from the server, refresh anything open beside it, and
     redraw. */
 let applied = 0;
+let shownAt = 0;             // when the state on screen arrived
 let loadedAs = null;         // the app's version when this page was loaded
 
 async function apply(state, opts = {}) {
@@ -284,6 +285,7 @@ async function apply(state, opts = {}) {
   if (loadedAs && state.version && state.version !== loadedAs) { location.reload(); return; }
   loadedAs = loadedAs || state.version;
   applied++;
+  shownAt = Date.now();
   S.data = state;
   S.month = state.month;
   S.on = state.day.on;
@@ -341,7 +343,19 @@ function followTheNight() {
   refreshQuietly();
 }
 setInterval(followTheNight, 60 * 1000);
-window.addEventListener('focus', followTheNight);
+
+/* A second window on the books (the shortcut opens one each time it is
+   started while the app is already open) went on showing what the books said
+   when it was last used: a salary paid in the other window still unpaid, and
+   one click from being paid twice. Brought back to the front, it asks again. */
+function lookAgain() {
+  if (document.hidden || !S.data) return;
+  if (nightNow() !== S.data.tonight) followTheNight();
+  else if (Date.now() - shownAt > 3000) refreshQuietly();
+}
+window.addEventListener('focus', lookAgain);
+document.addEventListener('visibilitychange', lookAgain);
+window.addEventListener('pageshow', e => { if (e.persisted) lookAgain(); });
 
 function watchBackups() {
   clearTimeout(watchTimer);

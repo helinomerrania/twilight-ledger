@@ -60,8 +60,21 @@ def cmd_backup(a):
     return 0 if out["second_ok"] is not False else 1
 
 
+def _open_on(db_path):
+    """Where the app is open on these books, if it is. Replacing the books or
+    the code under it leaves it running: old code against books a newer
+    version has changed, or its screens on books that are no longer there."""
+    from ledger import server
+    return server.running_at(server.PORT, Path(db_path).resolve())
+
+
 def cmd_restore(a):
     from ledger import backup
+    here = _open_on(a.db)
+    if here:
+        print(f"The app is open at {here}. Stop it first: close the black window it "
+              "runs in (closing the browser does not stop it), then run this again.")
+        return 1
     if not a.yes:
         print("This replaces the live books with the copy. The books being replaced")
         print("are set aside first. Run again with --yes to go ahead.")
@@ -85,6 +98,11 @@ def cmd_update(a):
         return 0
     if a.check:
         return 0
+    here = _open_on(a.db)
+    if here:
+        print(f"The app is open at {here}. Update it there, in Setup under This app, "
+              "or stop it first by closing the black window it runs in.")
+        return 1
     con = db.connect(a.db)
     out = update.download_and_apply(con)
     print(f"updated to {out['to']}. The books were copied first: {out['books_copy']}")

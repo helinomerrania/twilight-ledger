@@ -285,13 +285,31 @@ def so_far(con, month):
         elec = part((pr or {}).get("elec") or 0)
         elec_estimated = bool(elec)
     fixed = part(r["fixed"])
-    salaries = part(r["salaries"])
+    salaries = _salaries_so_far(con, month, last, r["salaries"])
     net = r["rev"] - cost - r["daily"] - elec - fixed - salaries - r["differences"]
     return {"days": days, "days_in_month": total, "through": last,
             "rev": r["rev"], "cogs": cost, "cogs_note": note,
             "daily": r["daily"], "elec": elec, "elec_estimated": elec_estimated,
             "fixed": fixed, "salaries": salaries, "differences": r["differences"],
             "net": net, "netPct": pct(net, r["rev"])}
+
+
+def _salaries_so_far(con, month, through, charged):
+    """The month's salaries for the days of it that have gone: a thirtieth of
+    each salary for each of those days the person worked. Someone who left on
+    the 10th has cost all ten days by the 20th; someone who started on the
+    21st has cost none of them by then. Charges the app does not work out
+    itself (people brought over from the old app) go by the days gone."""
+    k = day_of_30(through)
+    total, worked_out = Fraction(0), 0
+    for a in db.all_(con, "SELECT id, meta, active FROM account WHERE kind = 'staff'"):
+        if json.loads(a["meta"] or "{}").get("former"):
+            continue
+        full = salary_for(con, a["id"], month)
+        total += Fraction(full) * sum(1 for d in worked_days(a, month) if d <= k) / MONTH_DAYS
+        worked_out += _on_account(con, a["id"], month, ("salary_charge",), sign=-1)
+    rest = charged - worked_out            # anything else on the salaries line
+    return mround_fraction(total + Fraction(rest) * k / MONTH_DAYS)
 
 
 def summary(con):
@@ -346,7 +364,12 @@ def day_of_30(on):
 
 
 def salary_days(a, month):
-    """How many of `month`'s thirty days someone is paid for: all of them,
+    """How many of `month`'s thirty days someone is paid for (`worked_days`)."""
+    return len(worked_days(a, month))
+
+
+def worked_days(a, month):
+    """Which of `month`'s thirty days someone is paid for: all of them,
     unless they started or left in it, and none before they started or after
     they left. `a` is their account row (id, meta, active).
 
@@ -356,11 +379,11 @@ def salary_days(a, month):
     meta = json.loads(a["meta"] or "{}")
     start, left_on = meta.get("started_on"), None
     if start and month < start[:7]:
-        return 0
+        return set()
     if not a["active"]:
         left = meta.get("left_after")
         if not left or month > left:
-            return 0
+            return set()
         left_on = meta.get("left_on")
     first = day_of_30(start) if start and start[:7] == month else 1
     last = day_of_30(left_on) if left_on and left_on[:7] == month else MONTH_DAYS
@@ -371,7 +394,7 @@ def salary_days(a, month):
             a = day_of_30(gone) + 1 if gone[:7] == month else 1
             b = day_of_30(back) - 1 if back[:7] == month else MONTH_DAYS
             worked -= set(range(a, b + 1))
-    return len(worked)
+    return worked
 
 
 def payroll(con, month):

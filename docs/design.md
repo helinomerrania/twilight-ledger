@@ -204,6 +204,10 @@ Rent and salaries are charged for the whole month on the first day, so on the
 shows a loss that is not real. The Month screen shows both: the full month, and
 *so far*, which charges only the days that have passed and estimates the cost
 of goods since the last count at last month's ratio. It says it is an estimate.
+Rent goes by the month's own days. Salaries go by each person's own days, a
+thirtieth of the salary for each, the way they are paid: someone who left on
+the 10th has cost all ten of their days by the 20th, and someone who started
+on the 21st none yet.
 The partners' share of profit and the drawings warning use the so-far figure
 while the month is running, and the real one once it is over.
 

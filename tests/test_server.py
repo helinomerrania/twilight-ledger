@@ -98,6 +98,17 @@ class Server(unittest.TestCase):
         self.assertEqual(here, f"http://127.0.0.1:{self.port}/")
         self.assertIsNone(server.running_at(self.port, self.con.path + "-other"))
 
+    def test_the_books_are_not_replaced_under_the_open_app(self):
+        """Restored from the command line while the app was open, the books
+        changed under it: old code against books a newer version had changed,
+        and screens on books that were no longer there."""
+        import twilight
+        copy = backup.run(self.con, why="test")["file"]
+        api.run(self.con, "sales", {"amount": 5000, "on": ON})
+        with mock.patch.object(server, "PORT", self.port):
+            self.assertEqual(twilight.main(["--db", self.con.path, "restore", copy, "--yes"]), 1)
+        self.assertEqual(queries.day(self.con, ON)["sales"], 5000)      # still there
+
     # ------------------------------------------------------------------ saving
     def test_a_save_comes_back_with_the_new_state(self):
         status, out = self.expense()
