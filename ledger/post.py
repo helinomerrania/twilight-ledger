@@ -259,18 +259,18 @@ def daily_expense(con, amount, *, detail, on=None, out_of=None, period=None, **s
                         (cash, -to_int(amount))])
 
 
-def charge_fixed(con, amount, *, name, period, account="exp:rent", on=None):
+def charge_fixed(con, amount, *, name, period):
     """Charge rent (or another fixed cost) to a month whether or not it is paid.
 
     This is the accrual. Paying it later is a separate transaction that settles
     the liability, which is why rent shows in October's result even when the
-    cash leaves in November.
+    cash leaves in November. Every monthly charge goes on the Rent line.
     """
-    on = on or f"{period}-01"
     liability = ensure_account(con, f"acc:{slug(name)}", f"{name} not yet paid",
                                "accrual", -1)
-    return record(con, kind="fixed_charge", on=on, period=period, detail=name,
-                  legs=[(account_id(con, account), to_int(amount)),
+    return record(con, kind="fixed_charge", on=f"{period}-01", period=period,
+                  detail=name,
+                  legs=[(account_id(con, "exp:rent"), to_int(amount)),
                         (liability, -to_int(amount))])
 
 
@@ -283,11 +283,11 @@ def pay_fixed(con, amount, *, name, on=None, out_of=None, period=None):
                   legs=[(liability, to_int(amount)), (cash, -to_int(amount))])
 
 
-def charge_salary(con, amount, *, staff, period, on=None):
-    """A month's salary, charged in full to that month."""
-    on = on or f"{period}-01"
+def charge_salary(con, amount, *, staff, period):
+    """A month's salary, charged to that month on its first day."""
     who = account_by_name(con, "staff", staff)
-    return record(con, kind="salary_charge", on=on, period=period, detail=staff,
+    return record(con, kind="salary_charge", on=f"{period}-01", period=period,
+                  detail=staff,
                   legs=[(account_id(con, "exp:salaries"), to_int(amount)),
                         (who, -to_int(amount))])
 
@@ -381,10 +381,9 @@ def account_by_name_any(con, name):
     return r["id"]
 
 
-def electricity_used(con, amount, *, period, on=None, note=None):
+def electricity_used(con, amount, *, period, note=None):
     """What the meter says was used this month, charged to the month."""
-    on = on or f"{period}-01"
-    return record(con, kind="electricity_charge", on=on, period=period,
+    return record(con, kind="electricity_charge", on=f"{period}-01", period=period,
                   detail="Electricity", memo=note,
                   legs=[(account_id(con, "exp:electricity"), to_int(amount)),
                         (account_id(con, "acc:electricity"), -to_int(amount))])

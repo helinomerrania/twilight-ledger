@@ -172,7 +172,7 @@ def split_sql(script):
     return out
 
 
-def run_migrations(con, *, quiet=True):
+def run_migrations(con):
     """Apply anything new, in order, each in its own transaction.
 
     Forward only. A migration that has already run is never re-run and never
@@ -219,8 +219,6 @@ def run_migrations(con, *, quiet=True):
                 pass
             raise LedgerError(f"{f.name} failed: {exc}") from exc
         applied.append(f.name)
-        if not quiet:
-            print(f"  applied {f.name}")
     return applied
 
 

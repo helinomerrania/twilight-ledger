@@ -31,7 +31,7 @@ def balance(con, code, as_of=None):
     return db.scalar(con, sql, args)
 
 
-def balances(con, kind, as_of=None, *, include_inactive=True):
+def balances(con, kind, as_of=None):
     """Every account of one kind with its balance, in Setup order."""
     sql = ("SELECT a.id, a.code, a.name, a.active, a.meta, a.kind, "
            "       COALESCE(SUM(CASE WHEN ? IS NULL OR m.happened_on <= ? "
@@ -40,8 +40,6 @@ def balances(con, kind, as_of=None, *, include_inactive=True):
            "  FROM account a LEFT JOIN movement m ON m.account_id = a.id "
            " WHERE a.kind = ?")
     args = [as_of, as_of, kind]
-    if not include_inactive:
-        sql += " AND a.active = 1"
     sql += " GROUP BY a.id ORDER BY a.active DESC, a.sort, a.name"
     return db.all_(con, sql, args)
 
@@ -98,15 +96,14 @@ def _days_ago(day, n):
 
 # -------------------------------------------------------------------- stock
 
-def count_dates(con, *, valued_only=True):
+def count_dates(con):
     """The days the stock was counted, oldest first. A count values the
     stock once something is on it: one just started, with nothing typed into
     it yet, is not a count of anything."""
-    sql = "SELECT count_date FROM stock_count"
-    if valued_only:
-        sql += (" WHERE closing <> 0 OR EXISTS (SELECT 1 FROM stock_count_line l "
-                "WHERE l.count_id = stock_count.id)")
-    return [r["count_date"] for r in db.all_(con, sql + " ORDER BY count_date")]
+    sql = ("SELECT count_date FROM stock_count WHERE closing <> 0 OR EXISTS "
+           "(SELECT 1 FROM stock_count_line l WHERE l.count_id = stock_count.id) "
+           "ORDER BY count_date")
+    return [r["count_date"] for r in db.all_(con, sql)]
 
 
 def booked(con, count_date):
@@ -604,8 +601,8 @@ def supplier_lines(con, supplier_id, month):
             "on_shelves": on_shelves(con, supplier_id, cd), "count_date": cd}
 
 
-def owed_to_suppliers(con, as_of=None):
-    return sum(max(r["balance"], 0) for r in balances(con, "supplier", as_of))
+def owed_to_suppliers(con):
+    return sum(max(r["balance"], 0) for r in balances(con, "supplier"))
 
 
 # -------------------------------------------------------------- cash counts

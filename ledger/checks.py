@@ -10,6 +10,8 @@ only fails when there is something to do today:
 
 Every check that fails says, in its own words, what to do about it.
 """
+import json
+
 from . import backup, db, expected, queries
 from .dates import month_name, month_of, prev_month, today
 from .pos import auto, links
@@ -110,6 +112,14 @@ def checks(con, month):
     add(abs(shares - 1) < 0.0005, "Partners' shares add up to 100%",
         "" if abs(shares - 1) < 0.0005 else f"they add up to {shares * 100:.0f}%",
         "Fix the shares in Setup, or a month's profit will not split properly.", "setup/people")
+
+    kept = [p["name"] for p in queries.partner_accounts(con)
+            if not p["active"] and float(json.loads(p["meta"] or "{}").get("share") or 0)]
+    if kept:
+        add(False, "Nobody retired still has a share of the profit",
+            ", ".join(kept) + (" still has a share" if len(kept) == 1 else " still have shares"),
+            "Closing splits the profit by every share. Set theirs to 0 in Setup and give "
+            "it to the others.", "setup/people")
 
     # ---- SambaPOS's accounts and the people in the books
     gone = links.gone_but_here(con)

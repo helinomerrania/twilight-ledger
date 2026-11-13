@@ -173,6 +173,36 @@ class FloatAndBlind(Base):
         self.assertEqual(queries.balance(self.con, "cash:safe"), 64000)
         self.assertEqual(cash.drawer(self.con, NIGHT)["moved"], 64000)
 
+    def test_correcting_the_rest_moved_keeps_it_after_the_count(self):
+        """Correcting the transfer wrote a plain one in its place: the count then
+        expected the money gone before it was counted, 63,000 over, and the
+        drawer offered to move the rest a second time."""
+        api.run(self.con, "cash_settings", {"float": "25000"})
+        api.run(self.con, "sales", {"amount": 90000, "on": NIGHT})
+        api.run(self.con, "cash_count", {"on": NIGHT, "pots": {"Box": 89000}})
+        out = api.run(self.con, "move_rest", {"on": NIGHT, "to": "Safe", "amount": 64000})
+        api.run(self.con, "edit_entry", {"id": out["id"], "amount": 63000})
+        c = queries.cash_counts(self.con)[-1]
+        self.assertEqual((c["found"], c["diff"]), (-1000, -1000))    # still the count's own
+        self.assertEqual(cash.drawer(self.con, NIGHT)["moved"], 63000)
+
+    def test_a_count_whose_rest_was_moved_is_not_deleted_under_it(self):
+        """The move kept the deleted count's number, which the next count of the
+        night is given: counted again after the move, it was told the move came
+        later, and read 65,000 short for a night 1,000 short."""
+        api.run(self.con, "cash_settings", {"float": "25000"})
+        api.run(self.con, "sales", {"amount": 90000, "on": NIGHT})
+        api.run(self.con, "cash_count", {"on": NIGHT, "pots": {"Box": 89000}})
+        out = api.run(self.con, "move_rest", {"on": NIGHT, "to": "Safe", "amount": 64000})
+        cid = queries.cash_counts(self.con)[-1]["id"]
+        with self.assertRaises(api.ApiError) as err:
+            api.run(self.con, "delete_cash_count", {"id": cid})
+        self.assertIn("Delete the move", str(err.exception))
+        api.run(self.con, "void", {"id": out["id"]})        # the move first, then the count
+        api.run(self.con, "delete_cash_count", {"id": cid})
+        api.run(self.con, "cash_count", {"on": NIGHT, "pots": {"Box": 89000}})
+        self.assertEqual(queries.cash_counts(self.con)[-1]["diff"], -1000)
+
     def test_a_count_says_how_far_out_it_is_whatever_the_night(self):
         """The screen keeps only the latest thirty counts, so an older night
         counted again must say its own difference, not "ties"."""

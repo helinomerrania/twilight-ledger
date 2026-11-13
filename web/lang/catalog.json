@@ -827,5 +827,11 @@
 "Every month up to now will be charged its rent and salaries.",
 "Yes, it is right",
 "This computer's date says {0} {1}, but the books were last used in {2} {3}. Check the computer's clock. If the date is right, say so at the top of the page.",
-"The app has been updated since this page was opened. It is loading again: please repeat what you were doing."
+"The app has been updated since this page was opened. It is loading again: please repeat what you were doing.",
+"the rest of the drawer was moved out after that count. Delete the move on Books first.",
+"{0} still has a {1} share of the profit. Give it to the others in Setup, or every month closed from now on is split with {2} too.",
+"Nobody retired still has a share of the profit",
+"{0} still has a share",
+"{0}, {1} still have shares",
+"Closing splits the profit by every share. Set theirs to {0} in Setup and give it to the others."
 ]

@@ -165,6 +165,12 @@ def _account_active(con, body):
         # the months this reaches: from the one they left in, now or before
         since = min(m for m in (meta.get("left_after"), was_left, month_of(today())) if m)
         note = _closed_note(accruals.closed_off(con, a["id"], since))
+    share = float(meta.get("share") or 0) if a["kind"] == "partner" else 0
+    if share and not active:
+        # closing splits a month's profit by every share, theirs too
+        note = (f"{a['name']} still has a {share * 100:g}% share of the profit. Give it to "
+                "the others in Setup, or every month closed from now on is split with "
+                f"{a['name']} too.")
     return {"id": a["id"], "note": note}
 
 

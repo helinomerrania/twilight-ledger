@@ -269,7 +269,7 @@ def _why_not(con, e, verb):
 
 
 # How to write each kind of entry again from a corrected form.
-def _repost(con, kind, f):
+def _repost(con, kind, f, source_ref=None):
     kw = dict(on=f["on"], period=f["period"])
     if kind == "daily_sales":
         return post.sales(con, f["amount"], into=f["pot"], **kw)
@@ -294,7 +294,8 @@ def _repost(con, kind, f):
     if kind == "partner_in":
         return post.partner_in(con, f["amount"], partner=f["detail"], into=f["pot"], **kw)
     if kind == "transfer":
-        return post.transfer(con, f["amount"], frm=f["pot"], to=f["pot_to"], **kw)
+        return post.transfer(con, f["amount"], frm=f["pot"], to=f["pot_to"],
+                             source_ref=source_ref, **kw)
     raise ApiError("that kind of entry cannot be corrected here")
 
 
@@ -366,7 +367,11 @@ def _edit_entry(con, body):
             con.execute("UPDATE receipt_line SET receipt_id = (SELECT id FROM receipt "
                         "WHERE entry_id = ?) WHERE receipt_id = ?", (new_id, r["id"]))
     else:
-        new_id = _repost(con, kind, f)
+        # The rest moved out of the drawer after a count stays the count's: the
+        # count does not expect it, and the drawer knows it has been moved.
+        tied = e["source_ref"] if kind == "transfer" and \
+            str(e["source_ref"] or "").startswith("count:") else None
+        new_id = _repost(con, kind, f, source_ref=tied)
     con.execute("UPDATE entry SET replaced_by = ? WHERE id = ?", (new_id, e["id"]))
     return {"id": new_id, "replaced": e["id"], "_was": was}
 
@@ -423,6 +428,13 @@ def _delete_cash_count(con, body):
               (f"count:{c['id']}:%", c["counted_on"])):
         raise ApiError("a difference on that count was written off. Delete the "
                        "write-off on Books first.")
+    # The rest moved out after it would pass to the next count of the night,
+    # which is taken after the move and must expect it gone.
+    if db.one(con, "SELECT 1 FROM entry WHERE source_ref = ? AND voided_at IS NULL "
+                   "AND kind = 'transfer' AND happened_on = ?",
+              (f"count:{c['id']}:rest", c["counted_on"])):
+        raise ApiError("the rest of the drawer was moved out after that count. Delete "
+                       "the move on Books first.")
     con.execute("DELETE FROM cash_count WHERE id = ?", (c["id"],))
     return {"on": c["counted_on"]}
 

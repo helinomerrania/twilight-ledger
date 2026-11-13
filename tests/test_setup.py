@@ -313,6 +313,31 @@ class Starting(unittest.TestCase):
         self.assertFalse(hana["start_open"])
 
 
+class APartnerRetired(unittest.TestCase):
+    """Closing splits a month's profit by every partner's share, a retired
+    partner's too: retiring one with a share says so, and so do the checks."""
+
+    def setUp(self):
+        self.con = fresh_books()
+        self.erin = db.scalar(self.con, "SELECT id FROM account WHERE name = 'Erin Moss'")
+
+    def flagged(self):
+        from ledger import checks
+        return [c["ok"] for c in checks.checks(self.con, NOW) if "retired" in c["label"]]
+
+    def test_retiring_a_partner_with_a_share_says_so(self):
+        out = api.run(self.con, "account_active", {"id": self.erin, "active": 0})
+        self.assertIn("Erin Moss still has a 50% share", out["note"])
+        self.assertEqual(self.flagged(), [False])
+        api.run(self.con, "set_share", {"id": self.erin, "share": 0})
+        self.assertEqual(self.flagged(), [])
+
+    def test_retiring_one_without_a_share_says_nothing(self):
+        api.run(self.con, "set_share", {"id": self.erin, "share": 0})
+        out = api.run(self.con, "account_active", {"id": self.erin, "active": 0})
+        self.assertIsNone(out["note"])
+
+
 class Accounts(unittest.TestCase):
     def setUp(self):
         self.con = fresh_books()
