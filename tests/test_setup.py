@@ -365,6 +365,19 @@ class Accounts(unittest.TestCase):
         with self.assertRaises(api.ApiError):
             api.run(self.con, "account_add", {"kind": "supplier", "name": "Star Store"})
 
+    def test_nor_names_that_differ_only_in_capitals_or_spacing(self):
+        """Added as "alice" beside Alice, there were two people no list could
+        tell apart, and a salary could go to either."""
+        for kind, name in (("staff", "alice"), ("staff", "ALICE"), ("partner", "Erin  Moss"),
+                           ("supplier", "star store"), ("cash", "bank")):
+            with self.assertRaises(api.ApiError, msg=name):
+                api.run(self.con, "account_add", {"kind": kind, "name": name})
+        bob = db.one(self.con, "SELECT id FROM account WHERE name = 'Bob'")["id"]
+        with self.assertRaises(api.ApiError):
+            api.run(self.con, "account_rename", {"id": bob, "name": "aLiCe"})
+        # their own name may still be written another way
+        api.run(self.con, "account_rename", {"id": bob, "name": "BOB"})
+
     def test_nor_a_float_and_a_pot(self):
         """Money is moved by a pot's name, so a float called Bank beside the
         Bank pot could never be paid into: it would all go to the pot."""

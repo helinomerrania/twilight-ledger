@@ -58,12 +58,19 @@ _KIND = {"cash": ("cash", 1), "float": ("float", 1), "supplier": ("sup", -1),
          "staff": ("staff", -1), "partner": ("prt", -1)}
 
 
+def _as_read(name):
+    """A name as the eye reads it: capitals and the spaces between words aside."""
+    return " ".join(name.split()).casefold()
+
+
 def _taken(con, kind, name, but=None):
     """Is the name already in use? Pots and floats are both picked by name
-    wherever money moves, so one name may only belong to one of them."""
+    wherever money moves, so one name may only belong to one of them. "alice"
+    beside "Alice" would be two people nobody could tell apart on a list."""
     kinds = ("cash", "float") if kind in ("cash", "float") else (kind,)
-    return bool(db.one(con, f"SELECT 1 FROM account WHERE kind IN ({','.join('?' * len(kinds))}) "
-                            "AND name = ? AND id IS NOT ?", (*kinds, name, but)))
+    rows = db.all_(con, f"SELECT id, name FROM account WHERE kind IN ({','.join('?' * len(kinds))})",
+                   kinds)
+    return any(r["id"] != but and _as_read(r["name"]) == _as_read(name) for r in rows)
 
 
 def _account(con, body):
