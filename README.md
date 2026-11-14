@@ -132,7 +132,7 @@ both at once. Nothing has to be back-dated to make a month come out right.
 python -m unittest discover -s tests -t .
 ```
 
-528 tests, no dependencies. They run against real SQLite with the real
+530 tests, no dependencies. They run against real SQLite with the real
 migrations, because the schema's constraints are part of what is being tested.
 Their invented nights are dated November 2026, so the tests set the app's clock
 to the evening of 14 November 2026, whatever the real date (`tests/__init__.py`).

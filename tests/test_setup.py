@@ -422,6 +422,24 @@ class Rent(unittest.TestCase):
         api.run(con, "fixed_set", {"name": "Rent", "amount": 800000, "view_month": NOW})
         self.assertEqual(queries.live_result(con, NOW)["fixed"], 800000)
 
+    def test_the_rent_typed_in_other_capitals_is_still_the_rent(self):
+        """Typed as "rent", it became a second bill beside Rent, and the month
+        was charged both."""
+        con = fresh_books()
+        with db.tx(con):
+            accruals.ensure(con, NOW)
+        api.run(con, "fixed_set", {"name": " rent", "amount": 800000, "view_month": NOW})
+        self.assertEqual([r["name"] for r in db.all_(con, "SELECT name FROM fixed_charge")], ["Rent"])
+        self.assertEqual(queries.live_result(con, NOW)["fixed"], 800000)
+
+    def test_nor_is_a_list_given_the_same_word_twice(self):
+        con = fresh_books()
+        for value in ("Ice", "ice", "ICE "):
+            api.run(con, "list_add", {"list": "expense", "value": value})
+        ices = db.all_(con, "SELECT value FROM pick_list WHERE list = 'expense' "
+                            "AND lower(value) = 'ice'")
+        self.assertEqual([r["value"] for r in ices], ["Ice"])
+
 
 class Electricity(unittest.TestCase):
     def setUp(self):

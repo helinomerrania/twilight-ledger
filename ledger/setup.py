@@ -63,6 +63,14 @@ def _as_read(name):
     return " ".join(name.split()).casefold()
 
 
+def _spelt(name, known):
+    """The name as it is already spelt among `known`, capitals and spacing
+    aside, so that "rent" is Rent and not a second bill beside it."""
+    if name in known:
+        return name
+    return next((k for k in known if _as_read(k) == _as_read(name)), name)
+
+
 def _taken(con, kind, name, but=None):
     """Is the name already in use? Pots and floats are both picked by name
     wherever money moves, so one name may only belong to one of them. "alice"
@@ -309,7 +317,7 @@ def _effective_month(con, body):
 def _fixed_set(con, body):
     """Set a monthly charge. A change applies from the month on screen and
     every month after; earlier months keep what they were charged."""
-    name = name_of(body)
+    name = _spelt(name_of(body), [r["name"] for r in db.all_(con, "SELECT name FROM fixed_charge")])
     value = to_int(body.get("amount"), "amount")
     if value < 0:
         raise ApiError("a monthly charge cannot be negative")
@@ -341,7 +349,9 @@ def _fixed_remove(con, body):
 def _list_add(con, body):
     if body.get("list") not in ("expense", "reason", "income", "bill"):
         raise ApiError("no such list")
-    value = name_of(body, "value")
+    value = _spelt(name_of(body, "value"),
+                   [r["value"] for r in db.all_(con, "SELECT value FROM pick_list WHERE list = ?",
+                                                (body["list"],))])
     sort = db.scalar(con, "SELECT COALESCE(MAX(sort), 0) + 1 FROM pick_list "
                           "WHERE list = ?", (body["list"],))
     con.execute("INSERT INTO pick_list(list, value, sort) VALUES (?,?,?) "
