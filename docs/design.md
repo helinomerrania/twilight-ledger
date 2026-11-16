@@ -423,6 +423,15 @@ to install, zero packages, no build step.
 The screens stay in a browser because the browser already prints his 72mm
 thermal till rolls, there is nothing to install, and he knows it.
 
+What prints on the roll is what the old app printed, and a little more: the
+month; where the cash went, all of it; one kind of it, such as every staff
+advance, each under its name with its day and, where the books know it, its
+time; everything under one name; the suppliers, and one supplier's account;
+and the recent changes. A time is SambaPOS's own for what came from SambaPOS,
+and otherwise the time the entry was first written down, when that was during
+its own night: one typed in the next day, or brought over from the old app,
+prints with its day only. The month's summary for a partner is an A4 page.
+
 ## The gate
 
 `tools/oracle.py` is the old app's arithmetic reimplemented from its source,

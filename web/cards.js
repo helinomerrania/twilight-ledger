@@ -256,7 +256,7 @@ export function cashDifferences() {
 const hhmm = t => String(t || '').slice(11, 16);
 
 /** A time the database wrote in UTC, as the clock on the wall shows it. */
-const localTime = at => {
+export const localTime = at => {
   const d = new Date(String(at || '').replace(' ', 'T') + 'Z');
   return isNaN(d) ? String(at || '') : d.toLocaleString('en-GB', {
     day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit' });
@@ -640,21 +640,51 @@ function statementRow(st) {
 export function moneyFlow() {
   const f = S.data.flow;
   if (!f.out.length && !f.in.length) return '';
-  const group = (g, total) => `<details class="flow">
+  const pick = S.draft.flow || {};
+  const group = (g, total, side) => {
+    const open = pick.kind === g.kind && pick.side === side;
+    return `<details class="flow"${open ? ' open' : ''}>
       <summary><span>${esc(g.label)}</span>
         <span class="track"><span class="fill" style="width:${total ? g.total / total * 100 : 0}%"></span></span>
         <span class="num">${money(g.total)}</span></summary>
+      <div class="row" style="justify-content:flex-end"><button class="mini" data-act="printKind"
+        data-k="${esc(g.kind)}" data-side="${side}">Print</button></div>
       ${table('<th>Who or what</th><th class="num">Amount</th>',
-        g.rows.map(([n, v]) => `<tr><td>${esc(n)}</td><td class="num">${money(v)}</td></tr>`).join(''))}
+        g.rows.map(([n, v]) => {
+          const shown = open && pick.name === n;
+          return `<tr><td><button class="mini link" data-act="flowName" data-k="${esc(g.kind)}"
+              data-side="${side}" data-n="${esc(n)}" aria-expanded="${shown}">${esc(n)}</button></td>
+            <td class="num">${money(v)}</td></tr>${shown ? nameLines(n) : ''}`;
+        }).join(''))}
     </details>`;
-  return card(`<h2>Where the cash went</h2>
+  };
+  return card(`<div class="cardhead"><h2>Where the cash went</h2>
+      <div class="right"><button class="btn" data-act="printFlow">Print all</button></div></div>
     <p class="sub">Cash that physically left or came into a pot between
       ${esc(f.from)} and ${esc(f.to)}, by what it was for. Moving money between your
       own pots is left out. Open a line for the detail.</p>
     <h3 class="flowh">Out — ${money(f.out_total)}</h3>
-    ${f.out.map(g => group(g, f.out_total)).join('')}
+    ${f.out.map(g => group(g, f.out_total, 'out')).join('')}
     <h3 class="flowh">In — ${money(f.in_total)}</h3>
-    ${f.in.map(g => group(g, f.in_total)).join('')}`);
+    ${f.in.map(g => group(g, f.in_total, 'in')).join('')}`);
+}
+
+/** Every entry under one name this month, whatever it was for, with the time
+    of each where the books know it. */
+function nameLines(name) {
+  const lines = S.data.flow.lines.filter(l => l.name === name);
+  const sum = side => lines.filter(l => l.out === side).reduce((a, l) => a + l.amount, 0);
+  return `<tr class="drill"><td colspan="2">
+    <div class="cardhead"><strong>${esc(name)} — ${esc(monthName(S.data.month))}</strong>
+      <div class="right"><button class="btn" data-act="printName" data-n="${esc(name)}">Print</button></div></div>
+    ${table('<th>Date</th><th>Time</th><th>What</th><th class="num">Out</th><th class="num">In</th>',
+      lines.map(l => `<tr><td class="nowrap">${esc(l.on)}</td><td class="quiet">${esc(l.time || '')}</td>
+        <td>${esc(l.label)}</td><td class="num">${l.out ? money(l.amount) : ''}</td>
+        <td class="num">${l.out ? '' : money(l.amount)}</td></tr>`).join(''),
+      `<tr class="tot"><td colspan="3">${lines.length} entr${lines.length === 1 ? 'y' : 'ies'}</td>
+        <td class="num">${sum(true) ? money(sum(true)) : ''}</td>
+        <td class="num">${sum(false) ? money(sum(false)) : ''}</td></tr>`)}
+  </td></tr>`;
 }
 
 export function salesByDay() {
@@ -1184,7 +1214,8 @@ export function entryList() {
 export function recentChanges() {
   const rows = S.data.recent;
   if (!rows.length) return '';
-  return card(`<h2>Recent changes</h2>
+  return card(`<div class="cardhead"><h2>Recent changes</h2>
+      <div class="right"><button class="btn" data-act="printChanges">Print</button></div></div>
     <p class="sub">Everything done to the books lately, newest first. A deletion
       can be put back while its month is open.</p>
     ${table('<th>When</th><th>What happened</th><th></th>',

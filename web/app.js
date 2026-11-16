@@ -576,6 +576,32 @@ async function keepPos(el, action) {
   }
 }
 
+/* ------------------------------------------------------------------- slips */
+
+/* The top of every slip: whose, what, which month, and when it was printed. */
+function slipHead(title, sub = '') {
+  const n = new Date();
+  const hm = `${String(n.getHours()).padStart(2, '0')}:${String(n.getMinutes()).padStart(2, '0')}`;
+  return `<div class="head"><h3>${esc(S.data.business.name || 'Twilight')}</h3>
+    <div><strong>${esc(title)}</strong></div>${sub ? `<div>${esc(sub)}</div>` : ''}
+    <div>Printed ${esc(S.data.today)} ${hm}</div></div>
+    <div class="rule"></div>`;
+}
+
+/* A line of a slip; both sides are markup already made safe. */
+const slipRow = (left, right, strong = false) => (strong
+  ? `<tr><td><strong>${left}</strong></td><td style="text-align:end"><strong>${right}</strong></td></tr>`
+  : `<tr><td>${left}</td><td style="text-align:end">${right}</td></tr>`);
+
+const dayMonth = on => `${on.slice(8, 10)}/${on.slice(5, 7)}`;
+
+/* A day and what happened on it, each its own piece, so that the words are
+   put into Kurdish whatever the day. */
+const pair = (a, b) => `<span>${a}</span> <span>${b}</span>`;
+
+/* An entry's day, and its time where the books know it. */
+const when = l => dayMonth(l.on) + (l.time ? ` ${l.time}` : '');
+
 /* ----------------------------------------------------------------- actions */
 
 const H = {
@@ -1222,40 +1248,100 @@ const H = {
 
   /* ------------------------------------------------------------------ print */
 
+  /* Every supplier's month: what was owed coming in, what arrived, what was
+     paid, and what is owed at the end. */
   printSuppliers() {
-    const rows = S.data.suppliers.filter(s => s.owed_now > 0);
-    printSlip(`<h3>${esc(S.data.business.name || 'Twilight')}</h3>
-      <div>Owed to suppliers</div><div>${esc(S.data.today)}</div>
-      <div class="rule"></div>
-      <table>${rows.map(s => `<tr><td>${esc(s.name)}</td>
-        <td style="text-align:end">${money(s.owed_now)}</td></tr>`).join('')}</table>
-      <div class="rule"></div>
-      <table><tr><td><strong>Total</strong></td>
-        <td style="text-align:end"><strong>${money(S.data.owed)}</strong></td></tr></table>`);
+    const sup = S.data.suppliers;
+    const end = sup.reduce((a, s) => a + s.closing, 0);
+    printSlip(slipHead('Suppliers', monthName(S.data.month))
+      + (sup.length ? `<table>${sup.map(s => slipRow(esc(s.name), money(s.closing), true)
+          + slipRow('&nbsp;&nbsp;Owed coming in', money(s.brought_forward))
+          + (s.received ? slipRow('&nbsp;&nbsp;Arrived', money(s.received)) : '')
+          + (s.paid ? slipRow('&nbsp;&nbsp;Paid', money(-s.paid)) : '')).join('')}</table>`
+        : '<div>No supplier movement.</div>')
+      + `<div class="rule"></div>
+      <table>${slipRow('Owed at the end of the month', money(end), true)}
+        ${S.data.owed !== end ? slipRow('Owed today', money(S.data.owed)) : ''}</table>`);
   },
 
   printStatement() {
     const st = S.statement;
     if (!st) return;
-    printSlip(`<h3>${esc(S.data.business.name || 'Twilight')}</h3>
-      <div>${esc(st.name)}</div><div>${esc(monthName(st.month))}</div>
+    printSlip(slipHead(st.name, monthName(st.month))
+      + `<table>${slipRow('Owed coming in', money(st.opening))}</table>
+      ${st.lines.length ? `<div class="rule"></div><table>${st.lines.map(l =>
+        slipRow(pair(esc(dayMonth(l.on)), esc(l.what)), signed(l.amount))).join('')}</table>` : ''}
       <div class="rule"></div>
-      <table><tr><td>Owed coming in</td><td style="text-align:end">${money(st.opening)}</td></tr>
-      ${st.lines.map(l => `<tr><td>${esc(l.on.slice(5))} ${esc(l.what)}</td>
-          <td style="text-align:end">${signed(l.amount)}</td></tr>`).join('')}</table>
+      <table>${st.received ? slipRow('Arrived this month', money(st.received)) : ''}
+        ${st.paid ? slipRow('Paid this month', money(-st.paid)) : ''}
+        ${slipRow('Owed at the end of the month', money(st.closing), true)}</table>
+      ${st.on_shelves ? `<div class="rule"></div>
+        <table>${slipRow('Their goods still on the shelves', money(st.on_shelves))}</table>` : ''}`);
+  },
+
+  /* Where the cash went: each kind, and each name under it. */
+  printFlow() {
+    const f = S.data.flow;
+    const part = (label, groups) => (groups.length ? `<div class="sub">${esc(label)}</div>
+      <table>${groups.map(g => slipRow(esc(g.label), money(g.total), true)
+        + g.rows.map(([n, v]) => slipRow(`&nbsp;&nbsp;${esc(n)}`, money(v))).join('')).join('')}</table>` : '');
+    printSlip(slipHead('Where the cash went', monthName(S.data.month))
+      + part('Out', f.out) + (f.in.length ? '<div class="rule"></div>' + part('In', f.in) : '')
+      + `<div class="rule"></div>
+      <table>${slipRow('Out', money(f.out_total), true)}${slipRow('In', money(f.in_total), true)}</table>`);
+  },
+
+  /* One kind, such as every staff advance: each name, and each of its
+     entries with its date and time. */
+  printKind(el) {
+    const f = S.data.flow;
+    const out = el.dataset.side !== 'in';
+    const g = (out ? f.out : f.in).find(x => x.kind === el.dataset.k);
+    if (!g) return;
+    const lines = f.lines.filter(l => l.kind === g.kind && l.out === out);
+    printSlip(slipHead(g.label, monthName(S.data.month))
+      + `<table>${g.rows.map(([n, v]) => slipRow(esc(n), money(v), true)
+          + lines.filter(l => l.name === n).map(l =>
+            slipRow(`&nbsp;&nbsp;${esc(when(l))}`, money(l.amount))).join('')).join('')}</table>
       <div class="rule"></div>
-      <table><tr><td><strong>Owed at the end</strong></td>
-        <td style="text-align:end"><strong>${money(st.closing)}</strong></td></tr></table>`);
+      <table>${slipRow('Total', money(g.total), true)}</table>`);
+  },
+
+  /* Everything under one name this month, whatever it was for. */
+  printName(el) {
+    const name = el.dataset.n;
+    const lines = S.data.flow.lines.filter(l => l.name === name);
+    const sum = side => lines.filter(l => l.out === side).reduce((a, l) => a + l.amount, 0);
+    printSlip(slipHead(name, monthName(S.data.month))
+      + `<table>${lines.map(l => slipRow(pair(esc(when(l)), esc(l.label)),
+          l.out ? money(l.amount) : `+${money(l.amount)}`)).join('')}</table>
+      <div class="rule"></div>
+      <table>${sum(true) ? slipRow('Out', money(sum(true)), true) : ''}
+        ${sum(false) ? slipRow('In', money(sum(false)), true) : ''}
+        ${slipRow(`${lines.length} entr${lines.length === 1 ? 'y' : 'ies'}`, '')}</table>`);
+  },
+
+  printChanges() {
+    const rows = S.data.recent.slice(0, 40);
+    printSlip(slipHead('Recent changes')
+      + `<table>${rows.map(r => `<tr><td>${pair(esc(C.localTime(r.at)), esc(r.summary))}</td></tr>`).join('')}</table>`);
+  },
+
+  /* A name in Where the cash went: its entries open under it, or close. */
+  flowName(el) {
+    const { k, side, n } = el.dataset;
+    const f = S.draft.flow || {};
+    const same = f.kind === k && f.side === side && f.name === n;
+    S.draft.flow = same ? { kind: k, side } : { kind: k, side, name: n };
+    render();
   },
 
   printMonth() {
     const r = S.data.result;
     const line = (k, v) => `<tr><td>${esc(k)}</td>
       <td style="text-align:end">${money(v)}</td></tr>`;
-    printSlip(`<h3>${esc(S.data.business.name || 'Twilight')}</h3>
-      <div>${esc(monthName(S.data.month))}${S.data.so_far ? ' (in progress)' : ''}</div>
-      <div class="rule"></div>
-      <table>
+    printSlip(slipHead(monthName(S.data.month) + (S.data.so_far ? ' (in progress)' : ''))
+      + `<table>
         ${line('Sales', r.rev)}
         ${line('Cost of goods', -((r.cogs || {}).value || 0))}
         ${line('Gross', r.gross)}

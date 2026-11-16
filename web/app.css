@@ -658,6 +658,10 @@ details.flow > .scroll { margin-block: 0 10px; margin-inline: 18px 0; }
     font-size: 11px;
   }
   body.slipping .slip .rule { border-top: 1px dashed #000; margin: 1.5mm 0; }
+  body.slipping .slip .head { text-align: center; }
+  body.slipping .slip .sub { font-size: 10px; font-weight: 700; text-transform: uppercase;
+                             margin: 1.5mm 0 .5mm; }
+  body.slipping .slip td + td { white-space: nowrap; padding-inline-start: 2mm; }
   /* a whole page: the month's summary, A4 */
   @page summary { size: A4; margin: 16mm 15mm; }
   body.paging { background: #fff !important; }

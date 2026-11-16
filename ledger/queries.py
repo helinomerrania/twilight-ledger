@@ -9,11 +9,12 @@ Reading rule: `movement` already excludes voided entries, so no query in this
 file has to remember to.
 """
 from bisect import bisect_right
+from datetime import datetime, timezone
 import json
 from fractions import Fraction
 
 from . import db, kinds
-from .dates import (days_in, month_of, month_range, prev_month, today)
+from .dates import (days_in, month_of, month_range, prev_month, today, tonight)
 from .money import mround, mround_fraction, pct, split_shares
 
 # --------------------------------------------------------------- balances
@@ -843,13 +844,15 @@ def money_flow(con, month):
     """
     start, end = month_range(month)
     out, inn = {}, {}
+    lines, found = [], []
     for r in db.all_(con, """
             SELECT m.entry_id, m.entry_kind, COALESCE(m.detail, '') AS detail,
-                   SUM(m.amount) AS delta
-              FROM movement m
+                   SUM(m.amount) AS delta, m.happened_on, e.created_at, e.source_ref
+              FROM movement m JOIN entry e ON e.id = m.entry_id
              WHERE m.kind IN ('cash', 'float') AND m.happened_on >= ?
                AND m.happened_on <= ? AND m.entry_kind <> 'transfer'
-             GROUP BY m.entry_id""", (start, end)):
+             GROUP BY m.entry_id
+             ORDER BY m.happened_on, m.entry_id""", (start, end)):
         if not r["delta"]:
             continue
         side = out if r["delta"] < 0 else inn
@@ -859,6 +862,16 @@ def money_flow(con, month):
         name = r["detail"] or "(not named)"
         g["total"] += abs(r["delta"])
         g["by"][name] = g["by"].get(name, 0) + abs(r["delta"])
+        # each one on its own too, for a name's entries and the slips
+        lines.append({"id": r["entry_id"], "on": r["happened_on"], "kind": r["entry_kind"],
+                      "label": g["label"], "name": name, "amount": abs(r["delta"]),
+                      "out": r["delta"] < 0})
+        found.append({"id": r["entry_id"], "happened_on": r["happened_on"],
+                      "created_at": r["created_at"], "source_ref": r["source_ref"]})
+    at = entry_times(con, found)
+    for line in lines:
+        # a night's takings came in over the whole night, not at one time
+        line["time"] = None if line["kind"] == "daily_sales" else at.get(line["id"])
 
     def shape(side):
         groups = []
@@ -869,7 +882,43 @@ def money_flow(con, month):
         return sorted(groups, key=lambda g: -g["total"])
     o, i = shape(out), shape(inn)
     return {"out": o, "in": i, "out_total": sum(g["total"] for g in o),
-            "in_total": sum(g["total"] for g in i), "from": start, "to": end}
+            "in_total": sum(g["total"] for g in i), "from": start, "to": end,
+            "lines": lines}
+
+
+def entry_times(con, rows):
+    """The time of day each entry happened, as near as the books know, as
+    "21:40" by entry id: SambaPOS's own time for a document from SambaPOS,
+    otherwise the time it was first written down here, if that was during
+    its own night. One typed in the next day, or brought over from the old
+    app, has only its date. Each of `rows` has the entry's id, happened_on,
+    created_at and source_ref."""
+    corrected = {r["replaced_by"]: r for r in db.all_(con,
+        "SELECT id, replaced_by, created_at, source_ref FROM entry "
+        "WHERE replaced_by IS NOT NULL")}
+    out = {}
+    for r in rows:
+        first = r
+        for _ in range(100):                 # a correction stands where its original was
+            if first["id"] not in corrected:
+                break
+            first = corrected[first["id"]]
+        at = _time_of(first)
+        if at and tonight(at) == r["happened_on"]:
+            out[r["id"]] = at.strftime("%H:%M")
+    return out
+
+
+def _time_of(r):
+    ref = r["source_ref"] or ""
+    try:
+        if ref.startswith("pos:doc:"):           # pos:doc:<id>:<SambaPOS's local time>
+            return datetime.strptime(ref.rsplit(":", 1)[-1][:12], "%Y%m%d%H%M")
+        # the database writes UTC; the lounge reads its own clock
+        return (datetime.strptime(r["created_at"], "%Y-%m-%d %H:%M:%S")
+                .replace(tzinfo=timezone.utc).astimezone().replace(tzinfo=None))
+    except (TypeError, ValueError):
+        return None
 
 
 def sales_by_day(con, month):
