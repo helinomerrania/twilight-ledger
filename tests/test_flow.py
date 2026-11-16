@@ -5,10 +5,11 @@ import unittest
 from datetime import datetime, timezone
 
 from ledger import accruals, api, db, queries
-from ledger.dates import month_of, today
-from tests.helpers import fresh_books
+from ledger.dates import month_of, prev_month, today
+from tests.helpers import RENT, STAFF, fresh_books
 
 NOW = month_of(today())
+PREV = prev_month(NOW)
 D5, D6 = f"{NOW}-05", f"{NOW}-06"
 
 
@@ -88,6 +89,53 @@ class EntryByEntry(unittest.TestCase):
         sales = [l for l in self.lines() if l["kind"] == "daily_sales"]
         self.assertEqual([(l["amount"], l["out"], l["time"]) for l in sales],
                          [(400000, False, None)])
+
+
+class ForEarlierMonths(unittest.TestCase):
+    """The cash that went out this month for an earlier month: October's
+    salaries and rent paid in November, a supplier's older debt."""
+
+    def setUp(self):
+        self.con = fresh_books()
+        with db.tx(self.con):
+            accruals.ensure(self.con, PREV)
+            accruals.ensure(self.con, NOW)
+
+    def pay(self, action, who, amount, period, on=D5):
+        api.run(self.con, action, {"amount": amount, "who": who, "on": on, "period": period,
+                                   "pot": "Box", "allow_overdraw": True})
+
+    def test_what_was_paid_late_is_added_up_by_month_and_by_what(self):
+        self.pay("pay_salary", "Alice", STAFF["Alice"], PREV)
+        self.pay("pay_salary", "Bob", STAFF["Bob"], PREV, on=D6)
+        self.pay("pay_fixed", "Rent", RENT, PREV)
+        self.pay("pay_supplier", "Acme Tobacco", 150000, PREV)
+        self.pay("pay_salary", "Carol Hunt", STAFF["Carol Hunt"], NOW)     # this month's
+        api.run(self.con, "staff_advance", {"amount": 20000, "who": "Dave", "on": D5,
+                                            "pot": "Box", "allow_overdraw": True})
+        f = queries.money_flow(self.con, NOW)
+        self.assertEqual(f["earlier_total"], STAFF["Alice"] + STAFF["Bob"] + RENT + 150000)
+        [m] = f["earlier"]
+        self.assertEqual((m["month"], m["total"]), (PREV, f["earlier_total"]))
+        kinds = {k["kind"]: (k["total"], k["rows"]) for k in m["kinds"]}
+        self.assertEqual(kinds["salary_payment"],
+                         (STAFF["Alice"] + STAFF["Bob"],
+                          [["Alice", STAFF["Alice"]], ["Bob", STAFF["Bob"]]]))
+        self.assertEqual(kinds["fixed_payment"][0], RENT)
+        self.assertEqual(kinds["supplier_payment"][0], 150000)
+        # and each payment says which month it was for
+        self.assertEqual(sorted(l["period"] for l in f["lines"] if l["name"] == "Carol Hunt"), [NOW])
+        self.assertEqual([l["period"] for l in f["lines"] if l["name"] == "Alice"], [PREV])
+
+    def test_paid_in_its_own_month_it_is_not_counted(self):
+        self.pay("pay_salary", "Alice", STAFF["Alice"], PREV, on=f"{PREV}-28")
+        self.assertEqual(queries.money_flow(self.con, NOW)["earlier_total"], 0)
+        self.assertEqual(queries.money_flow(self.con, PREV)["earlier_total"], 0)
+
+    def test_money_coming_in_is_not_counted(self):
+        api.run(self.con, "staff_repay", {"amount": 10000, "who": "Alice", "on": D5,
+                                          "period": PREV, "pot": "Box"})
+        self.assertEqual(queries.money_flow(self.con, NOW)["earlier_total"], 0)
 
 
 if __name__ == "__main__":

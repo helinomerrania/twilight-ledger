@@ -597,7 +597,17 @@ const dayMonth = on => `${on.slice(8, 10)}/${on.slice(5, 7)}`;
 
 /* A day and what happened on it, each its own piece, so that the words are
    put into Kurdish whatever the day. */
-const pair = (a, b) => `<span>${a}</span> <span>${b}</span>`;
+const pair = (...pieces) => pieces.filter(Boolean).map(p => `<span>${p}</span>`).join(' ');
+
+/* "for October 2026", on a payment that counts for another month. */
+const forMonth = l => (l.period && l.period !== S.data.month ? esc(`for ${monthName(l.period)}`) : '');
+
+/* What went out this month for earlier months: each month, what it was, and
+   each name, for the Cash slips. */
+const earlierRows = f => f.earlier.map(m => slipRow(esc(monthName(m.month)), money(m.total), true)
+  + m.kinds.map(k => slipRow(`&nbsp;&nbsp;${esc(k.label)}`, money(k.total))
+    + k.rows.map(([n, v]) => slipRow(`&nbsp;&nbsp;&nbsp;&nbsp;${esc(n)}`, money(v))).join('')).join(''))
+  .join('');
 
 /* An entry's day, and its time where the books know it. */
 const when = l => dayMonth(l.on) + (l.time ? ` ${l.time}` : '');
@@ -1288,7 +1298,19 @@ const H = {
     printSlip(slipHead('Where the cash went', monthName(S.data.month))
       + part('Out', f.out) + (f.in.length ? '<div class="rule"></div>' + part('In', f.in) : '')
       + `<div class="rule"></div>
-      <table>${slipRow('Out', money(f.out_total), true)}${slipRow('In', money(f.in_total), true)}</table>`);
+      <table>${slipRow('Out', money(f.out_total), true)}${slipRow('In', money(f.in_total), true)}</table>`
+      + (f.earlier_total ? `<div class="rule"></div><div class="sub">Of the Out, for earlier months</div>
+        <table>${earlierRows(f)}</table>
+        <table>${slipRow('Total', money(f.earlier_total), true)}</table>` : ''));
+  },
+
+  /* What went out this month for earlier months, on its own. */
+  printEarlier() {
+    const f = S.data.flow;
+    printSlip(slipHead('Paid for earlier months', monthName(S.data.month))
+      + `<table>${earlierRows(f)}</table>
+      <div class="rule"></div>
+      <table>${slipRow('Total', money(f.earlier_total), true)}</table>`);
   },
 
   /* One kind, such as every staff advance: each name, and each of its
@@ -1302,7 +1324,7 @@ const H = {
     printSlip(slipHead(g.label, monthName(S.data.month))
       + `<table>${g.rows.map(([n, v]) => slipRow(esc(n), money(v), true)
           + lines.filter(l => l.name === n).map(l =>
-            slipRow(`&nbsp;&nbsp;${esc(when(l))}`, money(l.amount))).join('')).join('')}</table>
+            slipRow(`&nbsp;&nbsp;${pair(esc(when(l)), forMonth(l))}`, money(l.amount))).join('')).join('')}</table>
       <div class="rule"></div>
       <table>${slipRow('Total', money(g.total), true)}</table>`);
   },
@@ -1313,7 +1335,7 @@ const H = {
     const lines = S.data.flow.lines.filter(l => l.name === name);
     const sum = side => lines.filter(l => l.out === side).reduce((a, l) => a + l.amount, 0);
     printSlip(slipHead(name, monthName(S.data.month))
-      + `<table>${lines.map(l => slipRow(pair(esc(when(l)), esc(l.label)),
+      + `<table>${lines.map(l => slipRow(pair(esc(when(l)), esc(l.label), forMonth(l)),
           l.out ? money(l.amount) : `+${money(l.amount)}`)).join('')}</table>
       <div class="rule"></div>
       <table>${sum(true) ? slipRow('Out', money(sum(true)), true) : ''}

@@ -663,10 +663,34 @@ export function moneyFlow() {
     <p class="sub">Cash that physically left or came into a pot between
       ${esc(f.from)} and ${esc(f.to)}, by what it was for. Moving money between your
       own pots is left out. Open a line for the detail.</p>
+    ${forEarlier(f)}
     <h3 class="flowh">Out — ${money(f.out_total)}</h3>
     ${f.out.map(g => group(g, f.out_total, 'out')).join('')}
     <h3 class="flowh">In — ${money(f.in_total)}</h3>
     ${f.in.map(g => group(g, f.in_total, 'in')).join('')}`);
+}
+
+/** What went out this month for an earlier month: a salary or the rent paid
+    late, what a supplier was owed from before. It is part of Out; each
+    payment says which month it is for when it is made. */
+function forEarlier(f) {
+  if (!f.earlier_total) return '';
+  const names = rows => rows.map(([n, v]) => `<bdi>${esc(n)}</bdi> ${money(v)}`).join(' · ');
+  return `<details class="flow">
+      <summary><span>Paid for earlier months</span>
+        <span class="track"><span class="fill"
+          style="width:${f.out_total ? f.earlier_total / f.out_total * 100 : 0}%"></span></span>
+        <span class="num">${money(f.earlier_total)}</span></summary>
+      <div class="row" style="justify-content:flex-end"><button class="mini"
+        data-act="printEarlier">Print</button></div>
+      ${table('<th>For</th><th>What</th><th class="num">Amount</th>',
+        f.earlier.map(m => m.kinds.map((k, i) => `<tr>
+          <td class="nowrap">${i ? '' : esc(monthName(m.month))}</td>
+          <td><span>${esc(k.label)}</span><br><span class="quiet">${names(k.rows)}</span></td>
+          <td class="num">${money(k.total)}</td></tr>`).join('')).join(''),
+        `<tr class="tot"><td colspan="2">Total</td><td class="num">${money(f.earlier_total)}</td></tr>`)}
+      <p class="note">This is already in Out below, shown here on its own.</p>
+    </details>`;
 }
 
 /** Every entry under one name this month, whatever it was for, with the time
@@ -679,7 +703,9 @@ function nameLines(name) {
       <div class="right"><button class="btn" data-act="printName" data-n="${esc(name)}">Print</button></div></div>
     ${table('<th>Date</th><th>Time</th><th>What</th><th class="num">Out</th><th class="num">In</th>',
       lines.map(l => `<tr><td class="nowrap">${esc(l.on)}</td><td class="quiet">${esc(l.time || '')}</td>
-        <td>${esc(l.label)}</td><td class="num">${l.out ? money(l.amount) : ''}</td>
+        <td><span>${esc(l.label)}</span>${l.period && l.period !== S.data.month
+          ? ` <span class="pill">for ${esc(monthName(l.period))}</span>` : ''}</td>
+        <td class="num">${l.out ? money(l.amount) : ''}</td>
         <td class="num">${l.out ? '' : money(l.amount)}</td></tr>`).join(''),
       `<tr class="tot"><td colspan="3">${lines.length} entr${lines.length === 1 ? 'y' : 'ies'}</td>
         <td class="num">${sum(true) ? money(sum(true)) : ''}</td>

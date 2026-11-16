@@ -847,7 +847,8 @@ def money_flow(con, month):
     lines, found = [], []
     for r in db.all_(con, """
             SELECT m.entry_id, m.entry_kind, COALESCE(m.detail, '') AS detail,
-                   SUM(m.amount) AS delta, m.happened_on, e.created_at, e.source_ref
+                   SUM(m.amount) AS delta, m.happened_on, e.period, e.created_at,
+                   e.source_ref
               FROM movement m JOIN entry e ON e.id = m.entry_id
              WHERE m.kind IN ('cash', 'float') AND m.happened_on >= ?
                AND m.happened_on <= ? AND m.entry_kind <> 'transfer'
@@ -865,7 +866,7 @@ def money_flow(con, month):
         # each one on its own too, for a name's entries and the slips
         lines.append({"id": r["entry_id"], "on": r["happened_on"], "kind": r["entry_kind"],
                       "label": g["label"], "name": name, "amount": abs(r["delta"]),
-                      "out": r["delta"] < 0})
+                      "out": r["delta"] < 0, "period": r["period"]})
         found.append({"id": r["entry_id"], "happened_on": r["happened_on"],
                       "created_at": r["created_at"], "source_ref": r["source_ref"]})
     at = entry_times(con, found)
@@ -881,9 +882,35 @@ def money_flow(con, month):
                            "total": g["total"], "rows": [list(x) for x in rows]})
         return sorted(groups, key=lambda g: -g["total"])
     o, i = shape(out), shape(inn)
+    earlier = _for_earlier_months(lines, month)
     return {"out": o, "in": i, "out_total": sum(g["total"] for g in o),
             "in_total": sum(g["total"] for g in i), "from": start, "to": end,
-            "lines": lines}
+            "lines": lines, "earlier": earlier,
+            "earlier_total": sum(m["total"] for m in earlier)}
+
+
+def _for_earlier_months(lines, month):
+    """The cash that went out this month for an earlier month, as each payment
+    says when it is made ("counts for October"): a salary or the rent paid
+    late, a supplier's older debt. By month, newest first, then by what it
+    was, then by name."""
+    by = {}
+    for line in lines:
+        if not line["out"] or not line["period"] or line["period"] >= month:
+            continue
+        k = by.setdefault(line["period"], {}).setdefault(
+            line["kind"], {"kind": line["kind"], "label": line["label"], "total": 0, "by": {}})
+        k["total"] += line["amount"]
+        k["by"][line["name"]] = k["by"].get(line["name"], 0) + line["amount"]
+    out = []
+    for m in sorted(by, reverse=True):
+        ks = sorted(by[m].values(), key=lambda k: -k["total"])
+        out.append({"month": m, "total": sum(k["total"] for k in ks),
+                    "kinds": [{"kind": k["kind"], "label": k["label"], "total": k["total"],
+                               "rows": [list(x) for x in sorted(k["by"].items(),
+                                                                key=lambda kv: (-kv[1], kv[0]))]}
+                              for k in ks]})
+    return out
 
 
 def entry_times(con, rows):

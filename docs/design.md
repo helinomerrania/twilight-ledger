@@ -432,6 +432,12 @@ and otherwise the time the entry was first written down, when that was during
 its own night: one typed in the next day, or brought over from the old app,
 prints with its day only. The month's summary for a partner is an A4 page.
 
+Where the cash went also says how much of it went to earlier months: a salary,
+the rent or a bill paid late, a supplier's older debt, each by the month the
+payment says it is for when it is made. It is part of Out, shown on its own, on
+the screen and on its own slip, and each such payment is marked "for October"
+in a name's entries and on the slips.
+
 ## The gate
 
 `tools/oracle.py` is the old app's arithmetic reimplemented from its source,
