@@ -121,6 +121,12 @@ def checks(con, month):
             "Closing splits the profit by every share. Set theirs to 0 in Setup and give "
             "it to the others.", "setup/people")
 
+    held = queries.retired_pots_holding(con)
+    if held:
+        add(False, "No retired pot holds money",
+            ", ".join(f"{n} holds {b:,}" for n, b in held),
+            "Bring it back in Setup and move the money into a pot in use.", "setup/cash")
+
     # ---- SambaPOS's accounts and the people in the books
     gone = links.gone_but_here(con)
     if gone:

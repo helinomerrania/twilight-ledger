@@ -215,6 +215,13 @@ def unvoid(con, entry_id):
         raise db.LedgerError("that was written by closing the month. Close the month "
                              "again and it is written again.")
     assert_open(con, r["period"])
+    retired = db.one(con, "SELECT a.name FROM posting p JOIN account a ON a.id = p.account_id "
+                          "WHERE p.entry_id = ? AND a.kind IN ('cash', 'float') "
+                          "AND a.active = 0", (entry_id,))
+    if retired:
+        # its money would land in a pot nothing shows and nothing can move
+        raise db.LedgerError(f"{retired['name']} has been retired. Bring it back in "
+                             "Setup first, then put this back.")
     if r["kind"] == "daily_sales":
         # A night has one set of takings: a figure typed in, or SambaPOS's
         # lines, one for each way of paying. Putting one back beside another

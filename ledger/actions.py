@@ -256,6 +256,9 @@ def _put_back(con, body):
 
 
 def _why_not(con, e, verb):
+    if e.get("retired_pot"):
+        return (f"{e['retired_pot']} has been retired, and its money would go back "
+                "into it. Bring it back in Setup first.")
     if queries.is_closed(con, e["period"]):
         return (f"{e['period']} is closed, so its entries cannot be {verb}. "
                 "Reopen the month first.")

@@ -401,6 +401,27 @@ def _item_add(con, body):
 FLAVOUR = " · "
 
 
+def _shelf_empty(con, item):
+    """A retired item is left off the count sheets from then on, so whatever
+    of it the last count found would drop out of the next count's closing
+    stock and be charged to that month as used. It is retired after a count
+    that no longer finds it, as a pot is emptied before it is retired."""
+    last = db.one(con, "SELECT sc.id, sc.count_date FROM stock_count sc WHERE EXISTS "
+                       "(SELECT 1 FROM stock_count_line l WHERE l.count_id = sc.id) "
+                       "ORDER BY sc.count_date DESC LIMIT 1")
+    if not last:
+        return
+    left = db.one(con, "SELECT COUNT(*) AS n, COALESCE(SUM(l.value), 0) AS value "
+                       "FROM stock_count_line l JOIN stock_item si ON si.id = l.item_id "
+                       "WHERE l.count_id = ? AND (si.id = ? OR si.parent_id = ?) "
+                       "AND (l.qty_milli > 0 OR l.value > 0)",
+                  (last["id"], item["id"], item["id"]))
+    if left["n"]:
+        raise ApiError(f"the count on {last['count_date']} found {item['name']} on the shelves"
+                       f"{f', worth {left['value']:,}' if left['value'] else ''}. Retire it "
+                       "after a count that no longer finds it.")
+
+
 @action("item_update", guard_pots=False, summary=_line("item_update"))
 def _item_update(con, body):
     """Change an item. A new price values the next count; counts already
@@ -421,6 +442,8 @@ def _item_update(con, body):
         con.execute("UPDATE stock_item SET pack_size = ? WHERE id = ?",
                     (to_int(body.get("pack_size")) or None, item["id"]))
     if "active" in body:
+        if not body.get("active") and item["active"]:
+            _shelf_empty(con, item)
         con.execute("UPDATE stock_item SET active = ? WHERE id = ? OR parent_id = ?",
                     (1 if body.get("active") else 0, item["id"], item["id"]))
     if "packs" in body:

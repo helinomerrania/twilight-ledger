@@ -53,6 +53,21 @@ class EntryByEntry(unittest.TestCase):
         self.assertEqual(group["total"], sum(l["amount"] for l in self.lines()
                                              if l["kind"] == "staff_advance"))
 
+    def test_a_renamed_person_is_still_one_person(self):
+        """Their entries keep the name written at the time; split by it, the
+        same person was two names, and a slip of one missed the other's."""
+        self.advance(20000, D5, who="Bob")
+        bob = db.one(self.con, "SELECT id FROM account WHERE name = 'Bob'")["id"]
+        api.run(self.con, "account_rename", {"id": bob, "name": "Bob Kane"})
+        self.advance(30000, D6, who="Bob Kane")
+        f = queries.money_flow(self.con, NOW)
+        group = next(g for g in f["out"] if g["kind"] == "staff_advance")
+        self.assertEqual(group["rows"], [["Bob Kane", 50000]])
+        self.assertEqual([l["amount"] for l in self.lines("Bob Kane")], [20000, 30000])
+        # and Books finds both by the name they have now
+        found = queries.entries(self.con, q="Kane", kind="staff_advance")
+        self.assertEqual(sorted(e["amount"] for e in found), [20000, 30000])
+
     def test_written_down_on_its_night_it_has_that_time(self):
         late = self.advance(20000, D5)
         written_at(self.con, late, local("05", 21, 40))

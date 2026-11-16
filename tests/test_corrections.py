@@ -2,7 +2,7 @@
 and what the server refuses outright."""
 import unittest
 
-from ledger import accruals, api, db, post, queries
+from ledger import accruals, api, checks, db, post, queries
 from ledger.dates import month_of, prev_month, today
 from ledger.registry import ApiError
 from tests.helpers import fresh_books
@@ -221,6 +221,65 @@ class Refused(unittest.TestCase):
 
     def test_an_expense_with_no_name(self):
         self.refused("expense", {"amount": 1000, "on": DAY})
+
+
+class ARetiredPot(unittest.TestCase):
+    """A pot is retired once it is empty, and then nothing shows it and nothing
+    can move money in or out of it. Deleting a move out of it, or putting back
+    takings into it, put money back into it all the same."""
+
+    def setUp(self):
+        self.con = fresh_books()
+        api.run(self.con, "account_add", {"kind": "cash", "name": "Till"})
+        api.run(self.con, "sales", {"amount": 50000, "on": DAY, "pot": "Till"})
+        self.till = lambda: queries.balance(self.con, "cash:till")
+
+    def retire(self):
+        tid = db.one(self.con, "SELECT id FROM account WHERE name = 'Till'")["id"]
+        api.run(self.con, "account_active", {"id": tid, "active": False})
+
+    def empty(self):
+        api.run(self.con, "transfer", {"amount": self.till(), "from": "Till", "to": "Box",
+                                       "on": DAY})
+        return last_of(self.con, "transfer")["id"]
+
+    def test_a_move_out_of_it_cannot_be_deleted(self):
+        move = self.empty()
+        self.retire()
+        e = next(r for r in queries.entries(self.con, month=NOW) if r["id"] == move)
+        self.assertEqual((e["deletable"], e["retired_pot"]), (False, "Till"))
+        with self.assertRaises(ApiError) as err:
+            api.run(self.con, "void", {"id": move})
+        self.assertIn("Till has been retired", str(err.exception))
+        self.assertEqual(self.till(), 0)
+
+    def test_nor_can_its_takings_be_put_back(self):
+        sales = last_of(self.con, "daily_sales")["id"]
+        api.run(self.con, "void", {"id": sales})
+        self.retire()
+        with self.assertRaises(ApiError):
+            api.run(self.con, "put_back", {"id": sales})
+        self.assertEqual(self.till(), 0)
+        # and Recent changes does not offer to
+        gone = next(r for r in queries.recent(self.con) if r["entry"] == sales)
+        self.assertFalse(gone["can_put_back"])
+
+    def test_nor_can_a_correction_away_from_it_be_taken_back(self):
+        sales = last_of(self.con, "daily_sales")["id"]
+        moved = api.run(self.con, "edit_entry", {"id": sales, "pot": "Box",
+                                                 "amount": 50000})["id"]
+        self.retire()
+        with self.assertRaises(ApiError):
+            api.run(self.con, "undo", {"id": moved})
+        self.assertEqual(self.till(), 0)
+
+    def test_one_that_holds_money_is_pointed_out(self):
+        # as books brought over from elsewhere might have it
+        self.con.execute("UPDATE account SET active = 0 WHERE name = 'Till'")
+        bad = [c for c in checks.checks(self.con, NOW) if not c["ok"]]
+        self.assertIn("No retired pot holds money", [c["label"] for c in bad])
+        self.assertIn("Till holds 50,000", next(c["detail"] for c in bad
+                                                if c["label"] == "No retired pot holds money"))
 
 
 class MainPot(unittest.TestCase):

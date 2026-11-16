@@ -165,6 +165,21 @@ class CountsAndClosedMonths(unittest.TestCase):
                                       "who": "Acme Tobacco"})
         api.run(self.con, "count_line", {"on": "2026-10-28", "item": self.leaf, "blocks": "20"})
 
+    def test_an_item_still_on_the_shelves_is_not_retired(self):
+        """Retired, it was left off the next count, and what the last count
+        found of it was charged to that month as used."""
+        with self.assertRaises(api.ApiError) as err:
+            api.run(self.con, "item_update", {"id": self.leaf, "active": False})
+        self.assertIn("the count on 2026-10-28 found Hill Leaf on the shelves", str(err.exception))
+        # after a count that no longer finds it, it can be
+        star = api.run(self.con, "item_add", {"name": "Star Leaf", "letter": "B",
+                                              "price": 20000})["id"]
+        api.run(self.con, "count_line", {"on": "2026-11-09", "item": star, "blocks": "3"})
+        api.run(self.con, "count_line", {"on": "2026-11-09", "item": self.leaf, "blocks": "0"})
+        api.run(self.con, "item_update", {"id": self.leaf, "active": False})
+        self.assertFalse(db.scalar(self.con, "SELECT active FROM stock_item WHERE id = ?",
+                                   (self.leaf,)))
+
     def test_a_count_with_nothing_on_it_yet_is_not_the_month_s_count(self):
         before = queries.cogs(self.con, "2026-10")
         api.run(self.con, "open_count", {"on": "2026-10-30"})

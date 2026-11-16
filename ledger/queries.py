@@ -765,8 +765,13 @@ def entries(con, *, on=None, month=None, limit=None, q=None, kind=None, ids=None
     for word in str(q or "").split():
         like = f"%{word}%"
         named = [k for k, v in kinds.LABELS.items() if word.lower() in v.lower()]
-        clause = "(e.detail LIKE ? OR e.memo LIKE ? OR e.happened_on LIKE ?"
-        wargs = [like, like, like]
+        # a person by the name they have now too: an entry keeps the name it
+        # was written with, so a renamed person's earlier entries are found
+        clause = ("(e.detail LIKE ? OR e.memo LIKE ? OR e.happened_on LIKE ? "
+                  "OR EXISTS (SELECT 1 FROM posting p JOIN account a ON a.id = p.account_id "
+                  "WHERE p.entry_id = e.id AND a.name LIKE ? "
+                  "AND (a.kind IN ('staff', 'supplier') OR a.code LIKE 'prt:%'))")
+        wargs = [like, like, like, like]
         if named:
             clause += f" OR e.kind IN ({','.join('?' for _ in named)})"
             wargs.extend(named)
@@ -789,12 +794,12 @@ def entries(con, *, on=None, month=None, limit=None, q=None, kind=None, ids=None
         r["legs"] = []
     marks = ",".join("?" for _ in rows)
     for leg in db.all_(con,
-            f"SELECT p.entry_id, a.name, a.code, a.kind, p.amount FROM posting p "
+            f"SELECT p.entry_id, a.name, a.code, a.kind, a.active, p.amount FROM posting p "
             f"JOIN account a ON a.id = p.account_id WHERE p.entry_id IN ({marks}) "
             f"ORDER BY p.amount DESC", [r["id"] for r in rows]):
         by_id[leg["entry_id"]]["legs"].append(
             {"name": leg["name"], "code": leg["code"], "kind": leg["kind"],
-             "amount": leg["amount"]})
+             "amount": leg["amount"], "active": leg["active"]})
     receipts = {r["entry_id"]: dict(r) for r in db.all_(con,
         f"SELECT r.entry_id, r.id, r.number, r.what, r.terms, a.name AS supplier "
         f"FROM receipt r LEFT JOIN account a ON a.id = r.supplier_id "
@@ -827,9 +832,19 @@ def entries(con, *, on=None, month=None, limit=None, q=None, kind=None, ids=None
         open_ = r["period"] not in closed
         r["editable"] = (open_ and not historic and r["source"] != "close"
                          and r["kind"] in kinds.EDITABLE)
+        # deleted, its money would go back into a pot that has been retired,
+        # where nothing shows it and nothing can move it
+        r["retired_pot"] = next((l["name"] for l in cash if not l["active"]), None)
         r["deletable"] = (open_ and not historic and r["source"] != "close"
-                          and r["kind"] in kinds.DELETABLE)
+                          and r["kind"] in kinds.DELETABLE and not r["retired_pot"])
     return rows
+
+
+def retired_pots_holding(con):
+    """Retired pots and floats that hold money, which nothing on the money
+    screens shows and nothing can move: [(name, balance)]."""
+    return [(a["name"], a["balance"]) for kind in ("cash", "float")
+            for a in balances(con, kind) if not a["active"] and a["balance"]]
 
 
 # ------------------------------------------------------- where the money went
@@ -848,7 +863,14 @@ def money_flow(con, month):
     for r in db.all_(con, """
             SELECT m.entry_id, m.entry_kind, COALESCE(m.detail, '') AS detail,
                    SUM(m.amount) AS delta, m.happened_on, e.period, e.created_at,
-                   e.source_ref
+                   e.source_ref,
+                   -- the person it was for, as they are called now: `detail`
+                   -- keeps the name written at the time, and a renamed person
+                   -- would be two people here
+                   (SELECT a.name FROM posting p JOIN account a ON a.id = p.account_id
+                     WHERE p.entry_id = m.entry_id
+                       AND (a.kind IN ('staff', 'supplier') OR a.code LIKE 'prt:%')
+                     LIMIT 1) AS person
               FROM movement m JOIN entry e ON e.id = m.entry_id
              WHERE m.kind IN ('cash', 'float') AND m.happened_on >= ?
                AND m.happened_on <= ? AND m.entry_kind <> 'transfer'
@@ -860,7 +882,7 @@ def money_flow(con, month):
         g = side.setdefault(r["entry_kind"], {"kind": r["entry_kind"],
                                               "label": kinds.label(r["entry_kind"]),
                                               "total": 0, "by": {}})
-        name = r["detail"] or "(not named)"
+        name = r["person"] or r["detail"] or "(not named)"
         g["total"] += abs(r["delta"])
         g["by"][name] = g["by"].get(name, 0) + abs(r["delta"])
         # each one on its own too, for a name's entries and the slips
@@ -994,15 +1016,21 @@ def recent(con, limit=40):
         if len(out) >= limit:
             break
     # a deletion can be put back while the entry is still deleted, was not
-    # replaced by a correction, and its month is open
+    # replaced by a correction, its month is open, and the pot its money
+    # would go back into has not been retired
     voids = [o for o in out if o["action"] == "void" and o["entry"]]
     if voids:
         marks = ",".join("?" for _ in voids)
+        retired = {r["entry_id"] for r in db.all_(con,
+            f"SELECT DISTINCT p.entry_id FROM posting p JOIN account a ON a.id = p.account_id "
+            f"WHERE p.entry_id IN ({marks}) AND a.kind IN ('cash', 'float') AND a.active = 0",
+            [o["entry"] for o in voids])}
         state = {e["id"]: e for e in db.all_(con,
             f"SELECT id, voided_at, replaced_by, period FROM entry WHERE id IN ({marks})",
             [o["entry"] for o in voids])}
         for o in voids:
             e = state.get(o["entry"])
             o["can_put_back"] = bool(e and e["voided_at"] and not e["replaced_by"]
-                                     and not is_closed(con, e["period"]))
+                                     and not is_closed(con, e["period"])
+                                     and o["entry"] not in retired)
     return out

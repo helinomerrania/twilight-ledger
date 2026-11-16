@@ -56,6 +56,10 @@ class Low(unittest.TestCase):
 
     def test_a_stopped_item_is_not_warned_about(self):
         self.minimum("2")
+        # stopped once it is gone: a later count no longer finds it
+        leaf = api.run(self.con, "item_add", {"name": "Hill Leaf", "letter": "B",
+                                              "price": 30000})["id"]
+        api.run(self.con, "count_line", {"on": "2026-11-09", "item": leaf, "blocks": "2"})
         api.run(self.con, "item_update", {"id": self.mix, "active": 0})
         self.assertIsNone(expected.low(self.con, ON))
 
