@@ -689,7 +689,8 @@ function forEarlier(f) {
           <td><span>${esc(k.label)}</span><br><span class="quiet">${names(k.rows)}</span></td>
           <td class="num">${money(k.total)}</td></tr>`).join('')).join(''),
         `<tr class="tot"><td colspan="2">Total</td><td class="num">${money(f.earlier_total)}</td></tr>`)}
-      <p class="note">This is already in Out below, shown here on its own.</p>
+      <p class="note">Part of Out below. A payment pays what was owed from before first,
+        as Settle up counts it.</p>
     </details>`;
 }
 
@@ -703,8 +704,8 @@ function nameLines(name) {
       <div class="right"><button class="btn" data-act="printName" data-n="${esc(name)}">Print</button></div></div>
     ${table('<th>Date</th><th>Time</th><th>What</th><th class="num">Out</th><th class="num">In</th>',
       lines.map(l => `<tr><td class="nowrap">${esc(l.on)}</td><td class="quiet">${esc(l.time || '')}</td>
-        <td><span>${esc(l.label)}</span>${l.period && l.period !== S.data.month
-          ? ` <span class="pill">for ${esc(monthName(l.period))}</span>` : ''}</td>
+        <td><span>${esc(l.label)}</span>${(l.earlier || []).map(([m, v]) => ` <span class="pill">${
+          v === l.amount ? '' : `${money(v)} `}for ${esc(monthName(m))}</span>`).join('')}</td>
         <td class="num">${l.out ? money(l.amount) : ''}</td>
         <td class="num">${l.out ? '' : money(l.amount)}</td></tr>`).join(''),
       `<tr class="tot"><td colspan="3">${lines.length} entr${lines.length === 1 ? 'y' : 'ies'}</td>

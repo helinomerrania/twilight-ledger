@@ -107,8 +107,9 @@ class EntryByEntry(unittest.TestCase):
 
 
 class ForEarlierMonths(unittest.TestCase):
-    """The cash that went out this month for an earlier month: October's
-    salaries and rent paid in November, a supplier's older debt."""
+    """The cash that went out this month to pay what was owed from before it,
+    oldest debt first, as Settle up and the staff table count it, whichever
+    month a payment was said to be for."""
 
     def setUp(self):
         self.con = fresh_books()
@@ -117,30 +118,52 @@ class ForEarlierMonths(unittest.TestCase):
             accruals.ensure(self.con, NOW)
 
     def pay(self, action, who, amount, period, on=D5):
-        api.run(self.con, action, {"amount": amount, "who": who, "on": on, "period": period,
-                                   "pot": "Box", "allow_overdraw": True})
+        return api.run(self.con, action, {"amount": amount, "who": who, "on": on,
+                                          "period": period, "pot": "Box",
+                                          "allow_overdraw": True})["id"]
 
-    def test_what_was_paid_late_is_added_up_by_month_and_by_what(self):
+    def flow(self):
+        return queries.money_flow(self.con, NOW)
+
+    def test_what_was_owed_from_before_is_added_up_by_month_and_by_what(self):
+        api.run(self.con, "receipt", {"amount": 150000, "who": "Acme Tobacco",
+                                      "on": f"{PREV}-20", "terms": "credit"})
         self.pay("pay_salary", "Alice", STAFF["Alice"], PREV)
         self.pay("pay_salary", "Bob", STAFF["Bob"], PREV, on=D6)
         self.pay("pay_fixed", "Rent", RENT, PREV)
-        self.pay("pay_supplier", "Acme Tobacco", 150000, PREV)
-        self.pay("pay_salary", "Carol Hunt", STAFF["Carol Hunt"], NOW)     # this month's
-        api.run(self.con, "staff_advance", {"amount": 20000, "who": "Dave", "on": D5,
-                                            "pot": "Box", "allow_overdraw": True})
-        f = queries.money_flow(self.con, NOW)
-        self.assertEqual(f["earlier_total"], STAFF["Alice"] + STAFF["Bob"] + RENT + 150000)
+        self.pay("pay_supplier", "Acme Tobacco", 150000, NOW)
+        self.pay("pay_supplier", "Star Store", 40000, NOW)      # owed nothing from before
+        f = self.flow()
         [m] = f["earlier"]
-        self.assertEqual((m["month"], m["total"]), (PREV, f["earlier_total"]))
         kinds = {k["kind"]: (k["total"], k["rows"]) for k in m["kinds"]}
+        self.assertEqual(m["month"], PREV)
         self.assertEqual(kinds["salary_payment"],
                          (STAFF["Alice"] + STAFF["Bob"],
                           [["Alice", STAFF["Alice"]], ["Bob", STAFF["Bob"]]]))
         self.assertEqual(kinds["fixed_payment"][0], RENT)
-        self.assertEqual(kinds["supplier_payment"][0], 150000)
-        # and each payment says which month it was for
-        self.assertEqual(sorted(l["period"] for l in f["lines"] if l["name"] == "Carol Hunt"), [NOW])
-        self.assertEqual([l["period"] for l in f["lines"] if l["name"] == "Alice"], [PREV])
+        self.assertEqual(kinds["supplier_payment"], (150000, [["Acme Tobacco", 150000]]))
+        self.assertEqual(f["earlier_total"], STAFF["Alice"] + STAFF["Bob"] + RENT + 150000)
+
+    def test_paid_from_this_months_screen_it_still_paid_the_older_debt(self):
+        """Paid on this month's Settle up, a payment says it is for this month,
+        but what it paid first was last month's salary, as the staff table
+        says; counted by what it said, it was missed."""
+        e = self.pay("pay_salary", "Carol Hunt", STAFF["Carol Hunt"], NOW)
+        line = next(l for l in self.flow()["lines"] if l["id"] == e)
+        self.assertEqual(line["earlier"], [[PREV, STAFF["Carol Hunt"]]])
+        carol = next(p for p in queries.payroll(self.con, PREV) if p["name"] == "Carol Hunt")
+        self.assertEqual(carol["still_to_pay"], 0)
+
+    def test_only_the_older_debt_is_counted_of_a_bigger_payment(self):
+        e = self.pay("pay_salary", "Alice", STAFF["Alice"] + 100000, NOW)
+        line = next(l for l in self.flow()["lines"] if l["id"] == e)
+        self.assertEqual(line["earlier"], [[PREV, STAFF["Alice"]]])
+        self.assertEqual(self.flow()["earlier_total"], STAFF["Alice"])
+
+    def test_a_debt_paid_before_the_month_is_not_paid_again(self):
+        self.pay("pay_salary", "Alice", STAFF["Alice"], PREV, on=f"{PREV}-28")
+        self.pay("pay_salary", "Alice", 100000, NOW)
+        self.assertEqual(self.flow()["earlier_total"], 0)
 
     def test_paid_in_its_own_month_it_is_not_counted(self):
         self.pay("pay_salary", "Alice", STAFF["Alice"], PREV, on=f"{PREV}-28")

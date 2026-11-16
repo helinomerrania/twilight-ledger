@@ -599,8 +599,10 @@ const dayMonth = on => `${on.slice(8, 10)}/${on.slice(5, 7)}`;
    put into Kurdish whatever the day. */
 const pair = (...pieces) => pieces.filter(Boolean).map(p => `<span>${p}</span>`).join(' ');
 
-/* "for October 2026", on a payment that counts for another month. */
-const forMonth = l => (l.period && l.period !== S.data.month ? esc(`for ${monthName(l.period)}`) : '');
+/* "for October 2026", on a payment that paid what was owed from before the
+   month, or "300,000 for October 2026" when it paid only part of it. */
+const forMonth = l => (l.earlier || []).map(([m, v]) =>
+  esc(`${v === l.amount ? '' : `${money(v)} `}for ${monthName(m)}`)).join(', ');
 
 /* What went out this month for earlier months: each month, what it was, and
    each name, for the Cash slips. */

@@ -904,26 +904,80 @@ def money_flow(con, month):
                            "total": g["total"], "rows": [list(x) for x in rows]})
         return sorted(groups, key=lambda g: -g["total"])
     o, i = shape(out), shape(inn)
-    earlier = _for_earlier_months(lines, month)
+    earlier = _for_earlier_months(con, lines, month)
     return {"out": o, "in": i, "out_total": sum(g["total"] for g in o),
             "in_total": sum(g["total"] for g in i), "from": start, "to": end,
             "lines": lines, "earlier": earlier,
             "earlier_total": sum(m["total"] for m in earlier)}
 
 
-def _for_earlier_months(lines, month):
-    """The cash that went out this month for an earlier month, as each payment
-    says when it is made ("counts for October"): a salary or the rent paid
-    late, a supplier's older debt. By month, newest first, then by what it
-    was, then by name."""
-    by = {}
+# What a payment can pay off from before the month: a person's salary, a
+# bill, the electricity, a supplier's goods. What raises such a debt, and so
+# dates it, is its charge or its goods; everything else on the account pays.
+PAYMENTS = ("salary_payment", "staff_advance", "fixed_payment", "electricity_payment",
+            "supplier_payment")
+DEBTS = ("salary_charge", "fixed_charge", "electricity_charge", "receipt_credit", "opening")
+
+
+def _for_earlier_months(con, lines, month):
+    """The cash that went out this month to pay what was owed from before it:
+    a salary or the rent paid late, a supplier's older goods.
+
+    Oldest debt first, as the app counts what is still owed everywhere else,
+    whichever month a payment was said to be for: Alice's October salary
+    paid on 3 November from November's Settle up paid October, and a payment
+    to someone who was owed nothing from before paid nothing from before.
+    Each line is given `earlier`, [[month, amount]], and the whole comes back
+    by month, newest first, then by what it was, then by name."""
     for line in lines:
-        if not line["out"] or not line["period"] or line["period"] >= month:
-            continue
-        k = by.setdefault(line["period"], {}).setdefault(
-            line["kind"], {"kind": line["kind"], "label": line["label"], "total": 0, "by": {}})
-        k["total"] += line["amount"]
-        k["by"][line["name"]] = k["by"].get(line["name"], 0) + line["amount"]
+        line["earlier"] = []
+    paying = [line for line in lines if line["out"] and line["kind"] in PAYMENTS]
+    if not paying:
+        return []
+    marks = ",".join("?" for _ in paying)
+    payee = {r["entry_id"]: r["account_id"] for r in db.all_(con,
+        f"SELECT p.entry_id, p.account_id FROM posting p JOIN account a ON a.id = p.account_id "
+        f"WHERE p.entry_id IN ({marks}) AND a.kind NOT IN ('cash', 'float')",
+        [line["id"] for line in paying])}
+    start = f"{month}-01"
+    debts = ",".join("?" for _ in DEBTS)
+    by = {}
+    for aid in sorted(set(payee.values())):
+        owed = db.all_(con,
+            f"SELECT m.period, SUM(m.amount * m.normal) AS owed FROM movement m "
+            f"WHERE m.account_id = ? AND m.entry_kind IN ({debts}) AND m.period < ? "
+            f"GROUP BY m.period ORDER BY m.period", (aid, *DEBTS, month))
+        # what had been handed over before the month began, oldest debt first
+        credit = -db.scalar(con,
+            f"SELECT COALESCE(SUM(m.amount * m.normal), 0) FROM movement m "
+            f"WHERE m.account_id = ? AND m.entry_kind NOT IN ({debts}) AND m.happened_on < ?",
+            (aid, *DEBTS, start))
+        credit += sum(-r["owed"] for r in owed if r["owed"] < 0)
+        credit = max(credit, 0)
+        left = []
+        for r in owed:
+            if r["owed"] <= 0:
+                continue
+            covered = min(r["owed"], credit)
+            credit -= covered
+            if r["owed"] > covered:
+                left.append([r["period"], r["owed"] - covered])
+        # this month's payments to them, in the order they were made
+        for line in sorted((l for l in paying if payee.get(l["id"]) == aid),
+                           key=lambda l: (l["on"], l["id"])):
+            pay = line["amount"]
+            while pay and left:
+                part = min(pay, left[0][1])
+                line["earlier"].append([left[0][0], part])
+                k = by.setdefault(left[0][0], {}).setdefault(
+                    line["kind"], {"kind": line["kind"], "label": line["label"],
+                                   "total": 0, "by": {}})
+                k["total"] += part
+                k["by"][line["name"]] = k["by"].get(line["name"], 0) + part
+                pay -= part
+                left[0][1] -= part
+                if not left[0][1]:
+                    left.pop(0)
     out = []
     for m in sorted(by, reverse=True):
         ks = sorted(by[m].values(), key=lambda k: -k["total"])
