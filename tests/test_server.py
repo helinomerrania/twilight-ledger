@@ -84,6 +84,20 @@ class Server(unittest.TestCase):
         self.assertEqual((r.status, r.getheader("Connection")), (403, "close"))
         c.close()
 
+    def test_each_screen_file_says_what_it_is_whatever_windows_thinks(self):
+        """Told by Windows' registry that a stylesheet or a script is plain
+        text, the server said so, and a browser told not to guess refused it:
+        the screens came up bare, or blank."""
+        with mock.patch("mimetypes.guess_type", return_value=("text/plain", None)):
+            for path, kind in (("/app.css", "text/css"), ("/app.js", "text/javascript"),
+                               ("/", "text/html"), ("/lang/catalog.json", "application/json")):
+                c = http.client.HTTPConnection("127.0.0.1", self.port, timeout=10)
+                c.request("GET", path)
+                r = c.getresponse()
+                r.read()
+                c.close()
+                self.assertEqual(r.getheader("Content-Type").split(";")[0], kind, path)
+
     def test_nothing_outside_the_screens_folder_is_served(self):
         for path in ("/../ledger/db.py", "/..%2fledger%2fdb.py", "/lang/../../twilight.py"):
             status, _ = self.ask("GET", path)

@@ -184,6 +184,18 @@ function renderRail() {
     <span>version ${esc(S.data.version)}</span>`;
 }
 
+/* Drawing the screen again takes away the box being typed in, and the browser
+   takes that for leaving it: a half-typed 8 of an 83 was saved as the count, as
+   the screen was drawn again for the line before. While what is typed in it is
+   being put into the box drawn in its place, this is that box, and nothing is
+   saved for it. */
+let drawing = null;
+
+/* A number box half way through 12.5 says it holds 12, and has no point to be
+   read back; what was last typed into it says there was one. */
+let typedLast = null;
+document.addEventListener('input', e => { typedLast = { el: e.target, data: e.data }; }, true);
+
 /** Redraw the screen. Unless `fresh`, whatever was typed and not saved is put
     back, and the cursor is put back where it was. `skip` names the boxes the
     change just used, which should come back as the server now has them. */
@@ -198,7 +210,8 @@ function render({ fresh = false, skip = [] } = {}) {
     }
     const a = document.activeElement;
     if (a && main.contains(a) && a.matches('input, select, textarea')) {
-      focus = { key: fieldKey(a), start: null, end: null };
+      focus = { key: fieldKey(a), start: null, end: null,
+                point: a.type === 'number' && typedLast?.el === a && typedLast.data === '.' };
       try { focus.start = a.selectionStart; focus.end = a.selectionEnd; } catch { /* number boxes */ }
     }
   }
@@ -228,11 +241,16 @@ function render({ fresh = false, skip = [] } = {}) {
       <p style="margin:6px 0 10px">This screen is still on the night of
         ${esc(S.stayed)}, so what is put in now is that night's.</p>
       <button class="btn" data-act="newNight">Go to the new night</button></div>` : '';
-  main.innerHTML = clock + stayed + `<h1>${esc(title)}</h1>`
-    + `<div class="pagebar"><nav class="pages" aria-label="${esc(title)}">${tabs}</nav>`
-    + `${HEADS[S.tab] ? draw(HEADS[S.tab]) : ''}</div>`
-    + (note ? `<p class="pagenote">${esc(note)}</p>` : '')
-    + (cards.map(draw).join('') || `<div class="card">${empty('Nothing here yet.')}</div>`);
+  drawing = focus && kept.has(focus.key) ? document.activeElement : null;
+  try {
+    main.innerHTML = clock + stayed + `<h1>${esc(title)}</h1>`
+      + `<div class="pagebar"><nav class="pages" aria-label="${esc(title)}">${tabs}</nav>`
+      + `${HEADS[S.tab] ? draw(HEADS[S.tab]) : ''}</div>`
+      + (note ? `<p class="pagenote">${esc(note)}</p>` : '')
+      + (cards.map(draw).join('') || `<div class="card">${empty('Nothing here yet.')}</div>`);
+  } finally {
+    drawing = null;
+  }
   if (onPage('stock', 'fill') && S.draft.fill) fillFigures();
   applyFind();
   if (!kept.size && !focus) return;
@@ -252,8 +270,31 @@ function render({ fresh = false, skip = [] } = {}) {
     el.focus({ preventScroll: true });
     if (focus.start !== null) {
       try { el.setSelectionRange(focus.start, focus.end); } catch { /* not a text box */ }
+    } else if (el.type === 'number') {
+      // A number box cannot say where its cursor was, and drawn again it had it
+      // before the number: on to a line that held 74 as the line left was saved,
+      // a 7 typed over it made 774. Not typed in yet, its number is picked, to be
+      // typed over as it was on the way in; typed in, the cursor goes after it.
+      if (kept.has(focus.key) || focus.point) {
+        const v = el.value;
+        el.value = '';
+        el.value = v;
+        if (focus.point) document.execCommand('insertText', false, '.');
+      } else el.select();
     }
+    if (kept.has(focus.key) && el.tagName !== 'SELECT') carry(el);
   }
+}
+
+/* What was typed is put back into the box drawn in its place; put back by the
+   app, it is no change to the browser, and leaving the box would not save it.
+   It is saved on leaving, as it would have been. */
+function carry(el) {
+  let told = false;
+  el.addEventListener('change', () => { told = true; }, { once: true });
+  el.addEventListener('blur', () => {
+    if (!told && drawing !== el && dirty(el)) el.dispatchEvent(new Event('change', { bubbles: true }));
+  }, { once: true });
 }
 
 /** English or Kurdish, and the Kurdish itself when it has changed. The
@@ -1580,6 +1621,7 @@ document.addEventListener('click', async e => {
 });
 
 document.addEventListener('change', async e => {
+  if (e.target === drawing) return;
   const box = e.target.closest('[data-save]');
   if (box) {
     const body = JSON.parse(box.dataset.args || '{}');
@@ -1615,6 +1657,7 @@ document.addEventListener('input', e => {
    away should not lose it, and a Save button at the bottom of a sheet of
    fifty items is a Save button nobody reaches. */
 document.addEventListener('focusout', e => {
+  if (e.target === drawing) return;
   const row = e.target.closest && e.target.closest('[data-item]');
   if (!row) return;
   if (e.relatedTarget && row.contains(e.relatedTarget)) return;     // still on this line
@@ -1848,24 +1891,10 @@ document.addEventListener('keydown', e => {
     H.saveEdit(edit.querySelector('[data-act="saveEdit"]'));
     return;
   }
-  const item = el.closest('[data-item]');
-  if (item) {                                   // down a line, like a spreadsheet
+  if (el.closest('[data-item]')) {              // down a line, like a spreadsheet
     e.preventDefault();
-    // the same column if the next line has it, else that line's first box, on into
-    // the next group; lines a find box hides are passed over
-    const rows = [...item.closest('.card').querySelectorAll('tr[data-item]')]
-      .filter(r => !r.hidden && (r.dataset.receipt || '') === (item.dataset.receipt || ''));
-    const open = 'input:not([disabled]):not([type="checkbox"])';
-    let target = null;
-    for (const r of rows.slice(rows.indexOf(item) + 1)) {
-      target = r.querySelector(`[data-k="${el.dataset.k}"]:not([disabled])`) || r.querySelector(open);
-      if (target) break;
-    }
-    if (target) {
-      target.focus();
-      target.scrollIntoView({ block: 'nearest' });
-      try { target.select(); } catch { /* not a text box */ }
-    } else el.blur();
+    const target = lineBox(el, 1);
+    if (target) goTo(target); else el.blur();
     return;
   }
   const line = el.closest('[data-line]');
@@ -1890,6 +1919,42 @@ document.addEventListener('wheel', e => {
   const el = document.activeElement;
   if (el && el.type === 'number' && e.target === el) el.blur();
 }, { passive: true });
+
+/* The box on the line below a sheet's line (step 1), or above it (-1): the same
+   column if that line has it, else its first box, on into the next group; lines
+   a find box hides are passed over. */
+function lineBox(el, step) {
+  const item = el.closest('[data-item]');
+  const rows = [...item.closest('.card').querySelectorAll('tr[data-item]')]
+    .filter(r => !r.hidden && (r.dataset.receipt || '') === (item.dataset.receipt || ''));
+  const at = rows.indexOf(item);
+  const open = 'input:not([disabled]):not([type="checkbox"])';
+  for (const r of step > 0 ? rows.slice(at + 1) : rows.slice(0, at).reverse()) {
+    const box = r.querySelector(`[data-k="${el.dataset.k}"]:not([disabled])`) || r.querySelector(open);
+    if (box) return box;
+  }
+  return null;
+}
+
+function goTo(box) {
+  box.focus();
+  box.scrollIntoView({ block: 'nearest' });
+  try { box.select(); } catch { /* not a text box */ }
+}
+
+/* In a number box ↑ and ↓ add or take away a step, where someone going up or
+   down a count sheet meant the line above or below: a count of 12 became 11.9,
+   and was saved as he left the box. They never change a number here: on a
+   sheet's lines they go to the line above or below. */
+document.addEventListener('keydown', e => {
+  const el = e.target;
+  if ((e.key !== 'ArrowUp' && e.key !== 'ArrowDown') || e.altKey || e.ctrlKey || e.metaKey
+      || !(el instanceof HTMLInputElement) || el.type !== 'number') return;
+  e.preventDefault();
+  if (!el.closest('[data-item]')) return;
+  const target = lineBox(el, e.key === 'ArrowDown' ? 1 : -1);
+  if (target) goTo(target);
+}, true);
 
 /* An address typed or picked from the browser's history opens its screen. */
 window.addEventListener('hashchange', () => {

@@ -33,6 +33,9 @@ from .pos import auto
 
 ROOT = Path(__file__).resolve().parent.parent
 WEB = ROOT / "web"
+KINDS = {".html": "text/html", ".js": "text/javascript", ".css": "text/css",
+         ".json": "application/json", ".svg": "image/svg+xml", ".png": "image/png",
+         ".ico": "image/x-icon", ".woff2": "font/woff2"}
 HOST = "127.0.0.1"
 PORT = int(os.environ.get("TWILIGHT_PORT", "8788"))
 RESTART = 3                      # exit code that asks the start file to run us again
@@ -79,9 +82,11 @@ class Handler(BaseHTTPRequestHandler):
         except ValueError:
             return self.send_json({"error": "not found"}, 404)
         body = path.read_bytes()
-        kind = mimetypes.guess_type(path.name)[0] or "application/octet-stream"
-        if path.suffix == ".js":
-            kind = "text/javascript"          # Windows' registry can say otherwise
+        # Windows' registry can say otherwise for any of these, and a browser
+        # told not to guess will not run a script, nor use a stylesheet, that
+        # is sent as something else: the screens would come up blank, or bare
+        kind = (KINDS.get(path.suffix.lower()) or mimetypes.guess_type(path.name)[0]
+                or "application/octet-stream")
         self.send_response(200)
         self.send_header("Content-Type", kind + ("; charset=utf-8"
                                                  if kind.startswith("text/")
