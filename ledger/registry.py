@@ -18,7 +18,7 @@ import re
 import sqlite3
 
 from . import db, kinds, post, queries
-from .dates import month_name, month_of, prev_month, today, ymd
+from .dates import month_name, month_of, prev_month, today, tonight, ymd
 from .money import to_int
 
 
@@ -63,9 +63,13 @@ def amount(body, key="amount"):
 
 
 def clean_date(value, *, what="the date"):
-    """A real calendar date, today or earlier."""
+    """A real calendar date, today or earlier. None is tonight, the night as
+    everything typed on Tonight is dated: paid from Settle up at two in the
+    morning, a salary was dated the next day, and that night's count of the
+    box came out short by it (on the last night of a month, it was next
+    month's cash)."""
     if value in (None, ""):
-        return today()
+        return tonight()
     try:
         d = ymd(value)
     except ValueError:

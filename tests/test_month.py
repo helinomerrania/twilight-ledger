@@ -80,6 +80,34 @@ class SoFarWhateverTheMonth(unittest.TestCase):
                 self.assertEqual(sf["salaries"], mround_fraction(Fraction(SALARIES, 30)), now)
 
 
+class TheLastNightOfTheMonth(unittest.TestCase):
+    """At half past one on the 1st it is still the last night of the month
+    before: the Month screen stays on it, and it cannot be closed yet."""
+
+    def setUp(self):
+        self.con = fresh_books()
+        charge(self.con, PREV, NOW)
+
+    def running(self, month):
+        return any("still running" in s for s in close.ready(self.con, month)["stops"])
+
+    def test_after_midnight_it_is_still_that_month(self):
+        with clock_at(datetime(2026, 12, 1, 1, 30)):
+            self.assertEqual(api.state(self.con)["this_month"], "2026-11")
+            self.assertTrue(self.running("2026-11"))
+            labels = [c["label"] for c in checks.checks(self.con, "2026-11")]
+            self.assertIn("Salaries are paid up to October 2026", labels)
+        with clock_at(datetime(2026, 12, 1, 7, 0)):
+            self.assertEqual(api.state(self.con)["this_month"], "2026-12")
+            self.assertFalse(self.running("2026-11"))
+
+    def test_a_month_is_not_closed_while_it_runs(self):
+        add_count(self.con, f"{NOW}-10", 1000000)
+        with self.assertRaises(api.ApiError) as err:
+            api.run(self.con, "close_month", {"month": NOW})
+        self.assertIn("still running", str(err.exception))
+
+
 class WhatIsDue(unittest.TestCase):
     """This month's salaries are charged from the first day, but nobody is
     expected to have paid them on the first day."""

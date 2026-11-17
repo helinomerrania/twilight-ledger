@@ -9,7 +9,7 @@ someone moved August.
 import json
 
 from . import accruals, db, post, queries
-from .dates import month_end, next_month
+from .dates import month_end, month_name, month_of, next_month, tonight
 from .money import split_shares
 
 
@@ -19,6 +19,11 @@ def ready(con, month):
     per = queries.period(con, month)
     if per and per["status"] == "closed":
         stops.append(f"{month} is already closed.")
+    elif month >= month_of(tonight()):
+        # closed at one in the morning on its last night, the rest of that
+        # night's takings and payments could no longer be put in
+        stops.append(f"{month_name(month)} is still running. It can be closed once "
+                     "its last night is over.")
     bad = db.all_(con, "SELECT * FROM unbalanced LIMIT 1")
     if bad:
         stops.append("The books do not balance.")

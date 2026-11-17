@@ -1056,7 +1056,7 @@ export function receiptForm() {
     <p class="sub">The total is what moves money. Then list what came in, so the
       stock can follow it — that part can wait.</p>
     <div class="grid-form">
-      ${field('Date', `<input type="date" id="rDate" value="${esc(S.data.today)}" max="${esc(S.data.today)}">`)}
+      ${field('Date', `<input type="date" id="rDate" value="${esc(S.data.tonight)}" max="${esc(S.data.today)}">`)}
       ${field('Supplier', `<select id="rSup">${options(sup.map(s => s.name))}</select>`)}
       ${field('Receipt no.', '<input id="rNo" placeholder="optional">')}
       ${field('For', '<input id="rWhat" placeholder="Several items">')}

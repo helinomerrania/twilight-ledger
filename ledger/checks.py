@@ -13,7 +13,7 @@ Every check that fails says, in its own words, what to do about it.
 import json
 
 from . import backup, db, expected, queries
-from .dates import month_name, month_of, prev_month, today
+from .dates import month_name, month_of, prev_month, tonight
 from .pos import auto, links
 from .registry import pot_lows
 
@@ -25,8 +25,8 @@ def checks(con, month):
         out.append({"ok": bool(ok), "label": label, "detail": detail,
                     "fix": fix, "go": go})
 
-    now = month_of(today())
-    # obligations are due once their month is over
+    now = month_of(tonight())
+    # obligations are due once their month is over, its last night included
     due = month if month < now else prev_month(now)
     due_name = month_name(due)
 

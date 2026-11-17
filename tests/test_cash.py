@@ -2,10 +2,12 @@
 beside what SambaPOS says, the float, a blind count, and differences over
 time. The lounge and the night are invented."""
 import unittest
+from datetime import datetime
 
 from ledger import api, cash, db, queries
 from ledger.pos import adding, archive, sources
-from tests.helpers import fresh_books
+from tests import clock_at
+from tests.helpers import STAFF, fresh_books
 from tests.test_pos import night_with_documents
 
 NIGHT = "2026-11-10"
@@ -344,6 +346,36 @@ class OverTime(Base):
         c = queries.cash_counts(self.con)[-1]
         api.run(self.con, "write_off", {"id": c["id"], "pot": "Box"})
         self.assertEqual(cash.differences(self.con, "2026-11")["rows"][0]["found"], -1000)
+
+
+class AfterMidnight(unittest.TestCase):
+    """The night runs past midnight. What is paid then is that night's, as
+    everything typed on Tonight is, however it was sent."""
+
+    def setUp(self):
+        self.con = fresh_books()
+
+    def salary_paid(self):
+        return queries.entries(self.con, kind="salary_payment")[0]["happened_on"]
+
+    def test_paid_from_settle_up_at_half_past_two_it_is_the_nights(self):
+        """Settle up sends no day. The payment was dated the next day, and
+        the night's count of the box came out short by it."""
+        with clock_at(datetime(2026, 11, 15, 2, 30)):
+            api.run(self.con, "sales", {"amount": 600000, "on": "2026-11-14"})
+            api.run(self.con, "pay_salary", {"amount": STAFF["Bob"], "who": "Bob",
+                                             "pot": "Box", "period": "2026-11"})
+            self.assertEqual(self.salary_paid(), "2026-11-14")
+            out = api.run(self.con, "cash_count", {"on": "2026-11-14",
+                                                   "pots": {"Box": 600000 - STAFF["Bob"]}})
+            self.assertEqual(out["diff"], 0)
+
+    def test_on_the_last_night_of_the_month_it_is_that_months_cash(self):
+        with clock_at(datetime(2026, 12, 1, 1, 30)):
+            api.run(self.con, "pay_salary", {"amount": STAFF["Bob"], "who": "Bob",
+                                             "pot": "Box", "period": "2026-11",
+                                             "allow_overdraw": True})
+            self.assertEqual(self.salary_paid(), "2026-11-30")
 
 
 if __name__ == "__main__":

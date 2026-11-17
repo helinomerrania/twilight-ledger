@@ -867,5 +867,6 @@
 "No retired pot holds money",
 "Bring it back in Setup and move the money into a pot in use.",
 "Part of Out below. A payment pays what was owed from before first, as Settle up counts it.",
-"{0} for {1} {2}"
+"{0} for {1} {2}",
+"{0} {1} is still running. It can be closed once its last night is over."
 ]

@@ -51,9 +51,10 @@ def load_settings(con):
 # ------------------------------------------------------------------- reading
 
 def state(con, *, month=None, on=None, count_date=None):
-    now = month_of(today())
+    # a night is closed up after midnight: until six it is still last night,
+    # and on the last night of a month, still that month
+    now = month_of(tonight())
     month = month or now
-    # a night is closed up after midnight: until six it is still last night
     on = on or tonight()
     # Every month up to today is charged its rent and salaries the first time
     # it is needed, and an open one is put right if Setup has changed since.

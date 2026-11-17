@@ -243,7 +243,7 @@ def so_far(con, month):
     counted, so sales after the last count are costed at last month's ratio,
     and electricity that has not been read yet is taken from last month's bill.
     """
-    if month != month_of(today()) or is_closed(con, month):
+    if month != month_of(tonight()) or is_closed(con, month):
         return None
     last = db.scalar(con, "SELECT MAX(happened_on) FROM movement "
                           "WHERE code = 'rev:sales' AND period = ? AND happened_on LIKE ?",
