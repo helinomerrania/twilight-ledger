@@ -429,7 +429,12 @@ beside "Ice cream", one called "Electricity" — is taken as the word, because
 the app's own words have it, so the app's sentences keep their words.
 Right to left is the CSS written in logical sides (`margin-inline-start`, not
 `margin-left`), with number boxes kept left to right. Switching language
-reloads the page, so everything is drawn again the new way round.
+reloads the page, so everything is drawn again the new way round. Kurdish is
+drawn in Vazirmatn, which comes with the app in `web/fonts/` (SIL Open Font
+License, `web/fonts/OFL.txt`), so it looks the same on any PC and needs no
+internet: the whole page when the screens are in Kurdish, and any Kurdish (a
+name from SambaPOS) on the English screens, whose English keeps the system's
+font.
 
 ## Updating from GitHub
 
