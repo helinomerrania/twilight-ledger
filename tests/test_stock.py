@@ -165,6 +165,18 @@ class CountsAndClosedMonths(unittest.TestCase):
                                       "who": "Acme Tobacco"})
         api.run(self.con, "count_line", {"on": "2026-10-28", "item": self.leaf, "blocks": "20"})
 
+    def test_nor_an_item_twice_in_other_capitals(self):
+        """Added as "hill leaf" beside Hill Leaf, the same tobacco could be
+        counted under either name, or under both."""
+        for name in ("hill leaf", "HILL  LEAF"):
+            with self.assertRaises(api.ApiError, msg=name):
+                api.run(self.con, "item_add", {"name": name, "letter": "B", "price": 30000})
+        star = api.run(self.con, "item_add", {"name": "Star Leaf", "letter": "B",
+                                              "price": 20000})["id"]
+        with self.assertRaises(api.ApiError):
+            api.run(self.con, "item_update", {"id": star, "name": "Hill leaf"})
+        api.run(self.con, "item_update", {"id": star, "name": "STAR LEAF"})     # its own name
+
     def test_an_item_still_on_the_shelves_is_not_retired(self):
         """Retired, it was left off the next count, and what the last count
         found of it was charged to that month as used."""

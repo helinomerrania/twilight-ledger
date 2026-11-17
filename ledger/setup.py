@@ -385,8 +385,9 @@ def _item_add(con, body):
     if not cat:
         raise ApiError("pick a category")
     name = name_of(body)
-    if db.one(con, "SELECT 1 FROM stock_item WHERE name = ? AND category_id = ?",
-              (name, cat["id"])):
+    # "hill leaf" beside Hill Leaf would be counted under either, or both
+    if any(_as_read(r["name"]) == _as_read(name) for r in db.all_(
+            con, "SELECT name FROM stock_item WHERE category_id = ?", (cat["id"],))):
         raise ApiError(f"{name} is already in that category")
     unit = {"A": "kg", "B": "kg", "E": "carton"}.get(cat["letter"], "piece")
     sort = db.scalar(con, "SELECT COALESCE(MAX(sort), 0) + 1 FROM stock_item")
@@ -484,8 +485,9 @@ def _rename(con, item, name):
             con, "SELECT id, name FROM stock_item WHERE parent_id = ?", (item["id"],))
         if f["name"].startswith(item["name"] + FLAVOUR)]
     for item_id, new in renamed:
-        if db.one(con, "SELECT 1 FROM stock_item WHERE name = ? AND id <> ? AND category_id = "
-                       "(SELECT category_id FROM stock_item WHERE id = ?)", (new, item_id, item_id)):
+        if any(_as_read(r["name"]) == _as_read(new) for r in db.all_(
+                con, "SELECT name FROM stock_item WHERE id <> ? AND category_id = "
+                     "(SELECT category_id FROM stock_item WHERE id = ?)", (item_id, item_id))):
             raise ApiError(f"{new} is already in that category")
     for item_id, new in renamed:
         con.execute("UPDATE stock_item SET name = ? WHERE id = ?", (new, item_id))
