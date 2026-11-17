@@ -27,6 +27,7 @@ from .dates import today
 from .money import half_up
 from .pos import uses
 from .registry import ApiError, action
+from .words import t
 
 SCALES = Fraction(5, 1000)          # kg: what weighing the same bucket twice can differ by
 
@@ -185,22 +186,25 @@ def low(con, on=None):
 def said(r):
     """'Hill Leaf: 450 g left, about 3 nights'."""
     q = r["left"]
-    amount = ((f"{round(q * 1000)} g" if q < 1 else f"{q:.3g} kg") if r["letter"] in ("A", "B")
-              else f"{q:.3g}")
-    nights = ("" if r["nights"] is None else ", none left at the pace it goes"
-              if r["nights"] == 0 else f", about {r['nights']} night{'s' if r['nights'] != 1 else ''}")
-    return f"{r['name']}: {amount} left{nights}"
+    amount = ((t("unit.g", round(q * 1000)) if q < 1 else t("unit.kg", f"{q:.3g}"))
+              if r["letter"] in ("A", "B") else f"{q:.3g}")
+    if r["nights"] is None:
+        return t("expected.left", r["name"], amount)
+    if r["nights"] == 0:
+        return t("expected.left_none", r["name"], amount)
+    return t("expected.left_night" if r["nights"] == 1 else "expected.left_nights",
+             r["name"], amount, r["nights"])
 
 
 @action("drying_pct", guard_pots=False,
-        summary=lambda con, body, out: f"Buckets may dry by {out['pct']:g}% between counts")
+        summary=lambda con, body, out: t("change.drying", f"{out['pct']:g}%"))
 def _drying_pct(con, body):
     raw = str(body.get("pct") or "").strip().replace("%", "")
     try:
         pct = Fraction(raw) if raw else Fraction(0)
     except (ValueError, ZeroDivisionError):
-        raise ApiError("a percentage is a number") from None
+        raise ApiError(t("drying.number")) from None
     if not 0 <= pct <= 50:
-        raise ApiError("between 0 and 50 per cent")
+        raise ApiError(t("drying.range", 0, 50))
     db.set_setting(con, "drying_pct", str(pct) if pct else None)
     return {"pct": float(pct)}

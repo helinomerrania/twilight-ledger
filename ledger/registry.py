@@ -18,8 +18,9 @@ import re
 import sqlite3
 
 from . import db, kinds, post, queries
-from .dates import month_name, month_of, prev_month, today, tonight, ymd
+from .dates import month_of, month_words, prev_month, today, tonight, ymd
 from .money import to_int
+from .words import t
 
 
 class ApiError(Exception):
@@ -55,14 +56,13 @@ def action(name, *, guard_pots=True, summary=None, in_tx=True, after=None):
 def amount(body, key="amount"):
     v = to_int(body.get(key), key)
     if v == 0:
-        raise ApiError("an amount is needed")
+        raise ApiError(t("amount.needed"))
     if v < 0:
-        raise ApiError("an amount cannot be negative. If money came back, "
-                       "record it as money back.")
+        raise ApiError(t("amount.negative"))
     return v
 
 
-def clean_date(value, *, what="the date"):
+def clean_date(value, *, what=None):
     """A real calendar date, today or earlier. None is tonight, the night as
     everything typed on Tonight is dated: paid from Settle up at two in the
     morning, a salary was dated the next day, and that night's count of the
@@ -70,15 +70,15 @@ def clean_date(value, *, what="the date"):
     month's cash)."""
     if value in (None, ""):
         return tonight()
+    what = what or t("date.the_date")
     try:
         d = ymd(value)
     except ValueError:
-        raise ApiError(f"{what} is not a date") from None
+        raise ApiError(t("date.not_a_date", what)) from None
     if d > today():
-        raise ApiError(f"{what} is in the future ({d}). Entries are dated the "
-                       "day the money moved.")
+        raise ApiError(t("date.future", what, d))
     if d < "2000-01-01":
-        raise ApiError(f"{what} ({d}) is not a believable date")
+        raise ApiError(t("date.unbelievable", what, d))
     return d
 
 
@@ -90,9 +90,9 @@ def clean_period(body, key="period"):
         return None
     v = str(v)
     if not re.fullmatch(r"\d{4}-(0[1-9]|1[0-2])", v):
-        raise ApiError("that is not a month")
+        raise ApiError(t("month.not_a_month"))
     if v > month_of(today()):
-        raise ApiError("an entry cannot be counted for a month that has not started")
+        raise ApiError(t("month.not_started"))
     return v
 
 
@@ -105,18 +105,18 @@ def pot(con, body, key="pot"):
     r = db.one(con, "SELECT name, active FROM account "
                     "WHERE kind IN ('cash', 'float') AND name = ?", (name,))
     if not r:
-        raise ApiError(f"there is no pot called {name}")
+        raise ApiError(t("pot.none", name))
     if not r["active"]:
-        raise ApiError(f"{name} has been retired. Bring it back in Setup first.")
+        raise ApiError(t("pot.retired", name))
     return r["name"]
 
 
 def name_of(body, key="name"):
     v = str(body.get(key) or "").strip()
     if not v:
-        raise ApiError("a name is needed")
+        raise ApiError(t("name.needed"))
     if len(v) > 80:
-        raise ApiError("that name is too long")
+        raise ApiError(t("name.too_long"))
     return v
 
 
@@ -124,14 +124,12 @@ def who(con, body, kind, key="who"):
     """A member of staff, supplier or partner that exists."""
     name = str(body.get(key) or "").strip()
     if not name:
-        raise ApiError({"staff": "pick a member of staff",
-                        "supplier": "pick a supplier",
-                        "partner": "pick a partner"}.get(kind, "pick who"))
+        raise ApiError(t(f"who.pick.{kind}"))
     r = db.one(con, "SELECT name FROM account WHERE kind = ? AND name = ?", (kind, name))
     if not r or (kind == "partner" and not db.one(
             con, "SELECT 1 FROM account WHERE kind='partner' AND name = ? "
                  "AND code LIKE 'prt:%'", (name,))):
-        raise ApiError(f"there is no {kind} called {name}")
+        raise ApiError(t(f"who.none.{kind}", name))
     return r["name"]
 
 
@@ -178,14 +176,14 @@ def describe_entry(con, entry_id):
     rows = queries.entries(con, ids=[entry_id])
     if not rows:
         r = db.one(con, "SELECT kind, detail FROM entry WHERE id = ?", (entry_id,))
-        return f"{kinds.label(r['kind'])} {r['detail'] or ''}".strip() if r else "entry"
+        return f"{kinds.label(r['kind'])} {r['detail'] or ''}".strip() if r else t("change.entry")
     e = rows[0]
     bits = [e["label"]]
     if e["detail"] and e["kind"] != "daily_sales":
         bits.append(e["detail"])
     bits.append(money_words(e["amount"]))
     if e["tagged"]:
-        bits.append(f"for {e['period']}")
+        bits.append(t("change.for", e["period"]))
     return " · ".join(bits)
 
 
@@ -210,21 +208,18 @@ def _not_long_before(con, body):
         except (ValueError, TypeError):
             continue                      # not a date: the action says so itself
         if len(month) == 7 and month[:4].isdigit() and month < limit:
-            raise ApiError(f"{value} is long before the books begin "
-                           f"({month_name(first)}). Check the year.")
+            raise ApiError(t("date.long_before", value, *month_words(first)))
 
 
 def run(con, name, body):
     spec = ACTIONS.get(name)
     if not spec:
-        raise ApiError(f"no such action: {name}", 404)
+        raise ApiError(t("action.none", name), 404)
     body = body or {}
     from . import accruals
     jump = accruals.clock_jump(con)
     if jump and name != "clock_ok":
-        raise ApiError(f"This computer's date says {month_name(jump['now'])}, but the books "
-                       f"were last used in {month_name(jump['last'])}. Check the computer's "
-                       "clock. If the date is right, say so at the top of the page.")
+        raise ApiError(t("clock.wrong", *month_words(jump["now"]), *month_words(jump["last"])))
     _not_long_before(con, body)
     try:
         if not spec["in_tx"]:
@@ -237,8 +232,7 @@ def run(con, name, body):
                 if short:
                     s = short[0]
                     raise ApiError(
-                        f"{s['pot']} does not hold that much. This would leave it "
-                        f"{money_words(s['short_by'])} short on {s['on']}.",
+                        t("pot.short", s["pot"], money_words(s["short_by"]), s["on"]),
                         status=409, overdraw=short)
             view = body.get("view_month") or month_of(today())
             accruals.ensure(con, view)
@@ -259,10 +253,9 @@ def run(con, name, body):
             spec["after"]()
         return out
     except KeyError as exc:
-        raise ApiError(f"{exc.args[0]} is needed") from exc
+        raise ApiError(t("field.needed", exc.args[0])) from exc
     except (ValueError, db.LedgerError) as exc:
         raise ApiError(str(exc)) from exc
     except sqlite3.IntegrityError as exc:
         # whatever the action forgot to check, the database did not
-        raise ApiError("that would put the same thing in the books twice, so nothing "
-                       "was changed") from exc
+        raise ApiError(t("entry.twice")) from exc

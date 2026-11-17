@@ -20,13 +20,17 @@ import re
 
 from .. import db
 from ..registry import ApiError
+from ..words import t
 
 ACCOUNT_KINDS = {"staff": ("staff",), "partner": ("partner",),
                  "supplier": ("supplier",), "pot": ("cash", "float")}
 LIST_KINDS = {"expense": "expense", "income": "income"}
-WORDS = {"expense": "Expense", "income": "Other income", "staff": "Staff",
-         "partner": "Partner", "supplier": "Supplier", "pot": "Pot",
-         "ignore": "Left out"}
+AS = ("expense", "income", "staff", "partner", "supplier", "pot", "ignore")
+
+
+def word(as_what):
+    """What a SambaPOS account is in the books, said (in the words, link.*)."""
+    return t(f"link.{as_what}")
 
 
 def plain(name):
@@ -52,7 +56,7 @@ def refresh(con, tables, at):
             "VALUES (?,?,?,?,?,0) ON CONFLICT(pos_id) DO UPDATE SET name = excluded.name, "
             "type_id = excluded.type_id, type_name = excluded.type_name, "
             "seen_at = excluded.seen_at, gone = 0",
-            (a["Id"], a.get("Name") or f"account {a['Id']}", a.get("AccountTypeId"),
+            (a["Id"], a.get("Name") or t("link.unnamed", a["Id"]), a.get("AccountTypeId"),
              types.get(a.get("AccountTypeId")), at))
     marks = ",".join("?" * len(accounts))
     con.execute(f"UPDATE pos_account SET gone = 1 WHERE pos_id NOT IN ({marks})",
@@ -74,16 +78,16 @@ def targets(con):
         return db.all_(con, f"SELECT id, name FROM account WHERE kind IN ({marks}) "
                             "AND active = 1 ORDER BY sort, name", kinds)
     return [
-        {"group": "Expense", "options": [[f"expense:{v}", v] for v in lists["expense"]]},
-        {"group": "Staff", "options": [[f"staff:{a['id']}", a["name"]]
-                                       for a in accounts(("staff",))]},
-        {"group": "Partner", "options": [[f"partner:{a['id']}", a["name"]]
-                                         for a in accounts(("partner",))]},
-        {"group": "Supplier", "options": [[f"supplier:{a['id']}", a["name"]]
-                                          for a in accounts(("supplier",))]},
-        {"group": "Other income", "options": [[f"income:{v}", v] for v in lists["income"]]},
-        {"group": "Pot", "options": [[f"pot:{a['id']}", a["name"]]
-                                     for a in accounts(("cash", "float"))]},
+        {"group": word("expense"), "options": [[f"expense:{v}", v] for v in lists["expense"]]},
+        {"group": word("staff"), "options": [[f"staff:{a['id']}", a["name"]]
+                                             for a in accounts(("staff",))]},
+        {"group": word("partner"), "options": [[f"partner:{a['id']}", a["name"]]
+                                               for a in accounts(("partner",))]},
+        {"group": word("supplier"), "options": [[f"supplier:{a['id']}", a["name"]]
+                                                for a in accounts(("supplier",))]},
+        {"group": word("income"), "options": [[f"income:{v}", v] for v in lists["income"]]},
+        {"group": word("pot"), "options": [[f"pot:{a['id']}", a["name"]]
+                                           for a in accounts(("cash", "float"))]},
     ]
 
 
@@ -107,7 +111,7 @@ def _described(con, link):
     else:
         name = link["detail"]
     out["name"] = name
-    out["label"] = WORDS[link["as_what"]] + (f" · {name}" if name else "")
+    out["label"] = word(link["as_what"]) + (f" · {name}" if name else "")
     return out
 
 
@@ -120,7 +124,7 @@ def parse(con, value, pos_name):
     if value == "new-expense":
         name = re.sub(r"\s+", " ", str(pos_name or "")).strip()[:80]
         if not name:
-            raise ApiError("this account has no name to use")
+            raise ApiError(t("link.no_name"))
         sort = db.scalar(con, "SELECT COALESCE(MAX(sort), 0) + 1 FROM pick_list "
                               "WHERE list = 'expense'")
         con.execute("INSERT INTO pick_list(list, value, sort) VALUES ('expense', ?, ?) "
@@ -130,25 +134,25 @@ def parse(con, value, pos_name):
     if kind in LIST_KINDS:
         if not db.one(con, "SELECT 1 FROM pick_list WHERE list = ? AND value = ?",
                       (LIST_KINDS[kind], rest)):
-            raise ApiError(f"{rest} is not on the {WORDS[kind].lower()} list")
+            raise ApiError(t("link.not_on_list", rest, word(kind).lower()))
         return kind, None, rest
     if kind in ACCOUNT_KINDS:
         try:
             aid = int(rest)
         except ValueError:
-            raise ApiError("pick what this is in the books") from None
+            raise ApiError(t("link.pick")) from None
         a = db.one(con, "SELECT kind FROM account WHERE id = ?", (aid,))
         if not a or a["kind"] not in ACCOUNT_KINDS[kind]:
-            raise ApiError("that is not in the books")
+            raise ApiError(t("link.not_in_books"))
         return kind, aid, None
-    raise ApiError("pick what this is in the books")
+    raise ApiError(t("link.pick"))
 
 
 def link(con, pos_id, value):
     """Say once what a SambaPOS account is in the books, or change it."""
     acct = account(con, pos_id)
     if acct is None:
-        raise ApiError("SambaPOS has no such account in anything kept here")
+        raise ApiError(t("link.no_account"))
     as_what, aid, detail = parse(con, value, acct["name"])
     con.execute(
         "INSERT INTO pos_link(pos_id, as_what, account_id, detail, name_then) "

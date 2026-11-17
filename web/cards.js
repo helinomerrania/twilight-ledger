@@ -4,8 +4,8 @@
    disagreed. */
 
 import {
-  S, args, card, cls, empty, esc, field, money, monthName,
-  options, pct, potOptions, signed, table, tile, tiles,
+  S, args, card, cls, empty, esc, field, money, monthName, monthWords,
+  options, pct, potOptions, signed, t, table, th, tile, tiles,
 } from './lib.js';
 
 /** The months that are closed, as a set. */
@@ -14,7 +14,7 @@ const closedMonths = () =>
 import { BATCH, texts } from './i18n.js';
 
 // c.go is a screen, or a page of one ('books/cash'); the button names the screen
-const go = c => (c.go ? ` <button class="mini link" data-go="${esc(c.go)}">Open ${esc(c.go.split('/')[0])}</button>` : '');
+const go = c => (c.go ? ` <button class="mini link" data-go="${esc(c.go)}">${th(`go.${c.go.split('/')[0]}`)}</button>` : '');
 /* A box for an amount of money shows its commas as it is typed (1,250,000);
    the screens read it without them. */
 const MONEY = 'type="text" inputmode="numeric" autocomplete="off" data-money';
@@ -28,7 +28,7 @@ const amountInput = (id, value = '', extra = '') =>
 const findAttrs = (name, brand, of) => ` data-name="${esc(String(name || '').toLowerCase())}"`
   + (brand ? ` data-brand="${brand}"` : '') + (of ? ` data-of="${of}"` : '');
 const findBox = key => `<input type="search" class="find" id="find-${key}" data-find="${key}"
-    value="${esc((S.draft.find || {})[key] || '')}" placeholder="Find an item" autocomplete="off"
+    value="${esc((S.draft.find || {})[key] || '')}" placeholder="${th('find.item')}" autocomplete="off"
     spellcheck="false">`;
 
 /* ============================================================ needs a look */
@@ -38,19 +38,17 @@ export function needsALook() {
   if (!bad.length) return '';
   const show = bad.slice(0, 4);
   // one line until it is opened, so it does not push tonight's job down the page
-  return `<details class="banner${bad.some(b => b.label === 'The books balance') ? ' bad' : ''}"${S.draft.lookOpen ? ' open' : ''}>
-    <summary data-act="lookToggle">${bad.length === 1 ? '1 thing needs a look.' : `${bad.length} things need a look.`}</summary>
+  return `<details class="banner${bad.some(b => b.serious) ? ' bad' : ''}"${S.draft.lookOpen ? ' open' : ''}>
+    <summary data-act="lookToggle">${bad.length === 1 ? th('look.one', 1) : th('look.many', bad.length)}</summary>
     <ul>${show.map(c => `<li><strong>${esc(c.label)}</strong>${c.detail ? ' — ' + esc(c.detail) : ''}
       <br><span class="quiet">${esc(c.fix || '')}</span>${go(c)}</li>`).join('')}</ul>
     ${bad.length > show.length
-      ? `<p style="margin:8px 0 0"><button class="btn" data-go="month/close">See all
-           ${bad.length}</button></p>` : ''}
+      ? `<p style="margin:8px 0 0"><button class="btn" data-go="month/close">${th('look.see_all', bad.length)}</button></p>` : ''}
   </details>`;
 }
 
 export function allChecks() {
-  return card(`<h2>Checks</h2><p class="sub">Each one is a question with a yes or
-      no answer, and says what to do about a no.</p>
+  return card(`<h2>${th('checks.title')}</h2><p class="sub">${th('checks.sub')}</p>
     ${S.data.checks.map(c => `<div class="check ${c.ok ? 'ok' : 'no'}">
       <span class="mark">${c.ok ? '✓' : '!'}</span>
       <span><span class="label">${esc(c.label)}</span>
@@ -62,17 +60,11 @@ export function allChecks() {
 /* ================================================================== tonight */
 
 /* What can leave or come back to the box at night, in the order they are
-   most used. Each says what it does to the books, because the difference
-   between an expense and an advance is the whole difference to profit. */
-export const NIGHT = [
-  ['expense', 'Expense', 'A cost of running tonight. It comes straight off this month’s profit.'],
-  ['staff_advance', 'Staff advance', 'Money a member of staff takes against their salary. It never touches profit — it comes off what they are paid.'],
-  ['partner_draw', 'Partner took cash', 'A partner taking money out. It comes off their share of the profit, not off the profit itself.'],
-  ['pay_salary', 'Salary', 'Handing over a salary. The salary is already charged to the month, so this is only cash leaving.'],
-  ['pay_supplier', 'Supplier', 'Paying down what a supplier is owed. The goods are already in the cost of goods, so profit does not change.'],
-  ['pay_fixed', 'Rent', 'Paying rent. It is charged to every month already, so this is only cash leaving.'],
-  ['staff_repay', 'Money back', 'A member of staff handing money back. Cash comes in and their advances go down.'],
-];
+   most used. Each says what it does to the books (night_kind.*_note in the
+   words), because the difference between an expense and an advance is the
+   whole difference to profit. */
+export const NIGHT = ['expense', 'staff_advance', 'partner_draw', 'pay_salary', 'pay_supplier',
+                      'pay_fixed', 'staff_repay'];
 
 /** Who can still be paid, or hand money back: everyone here now, and anyone
     who has left or been retired with the account not yet square. `sign` is
@@ -116,88 +108,84 @@ export function closingUp() {
     const pos = p.name === dr.pot && dr.pos && !blind ? dr.pos : null;
     return `<div class="pot">
       <div class="nm">${esc(p.name)}</div>
-      ${blind ? '<div class="bal quiet">?</div><div class="sub">count it first</div>'
-        : `<div class="bal">${money(books)}</div><div class="sub">the books say</div>`}
-      <input ${MONEY} placeholder="count it"
+      ${blind ? `<div class="bal quiet">?</div><div class="sub">${th('closing.count_it_first')}</div>`
+        : `<div class="bal">${money(books)}</div><div class="sub">${th('closing.books_say')}</div>`}
+      <input ${MONEY} placeholder="${th('closing.count_it')}"
              data-pot="${esc(p.name)}" value="${got === undefined ? '' : esc(commas(got))}">
       ${diff === null ? '' : `<div class="sub ${cls(diff)}" style="margin-top:6px">
-         ${diff === 0 ? 'ties exactly' : signed(diff)}</div>`}
-      ${pos ? `<div class="sub" style="margin-top:6px" title="What SambaPOS says went
-          into and out of its drawer this night">SambaPOS: cash ${money(pos.cash)}${pos.out
-          ? `, out ${money(pos.out)}` : ''}${pos.in ? `, in ${money(pos.in)}` : ''}${pos.expected
-          !== undefined ? `<br>with the float: ${money(pos.expected)}` : ''}</div>` : ''}
+         ${diff === 0 ? th('closing.ties_exactly') : signed(diff)}</div>`}
+      ${pos ? `<div class="sub" style="margin-top:6px" title="${th('closing.pos_title')}">${th('closing.pos_cash', money(pos.cash))}${pos.out
+          ? th('closing.pos_out', money(pos.out)) : ''}${pos.in ? th('closing.pos_in', money(pos.in)) : ''}${pos.expected
+          !== undefined ? `<br>${th('closing.pos_float', money(pos.expected))}` : ''}</div>` : ''}
     </div>`;
   }).join('');
   const sd = dr.sales_differ;
   const hidden = sd && !blind
-    ? `<p class="note warnc">The books' sales this night are ${money(sd.books)}, but SambaPOS took
-         ${money(sd.pos)}. If the sales were worked out from the count, a
-         ${sd.gap > 0 ? 'shortage' : 'surplus'} of ${money(Math.abs(sd.gap))} is hidden in them.
-         Use SambaPOS's figure in step 1, and let the count show the difference.</p>` : '';
+    ? `<p class="note warnc">${sd.gap > 0
+        ? th('closing.hidden_shortage', money(sd.books), money(sd.pos), money(Math.abs(sd.gap)))
+        : th('closing.hidden_surplus', money(sd.books), money(sd.pos), money(Math.abs(sd.gap)))}</p>` : '';
   const there = counted[dr.pot];
   const rest = there === undefined ? 0 : there - (dr.float || 0);
   const move = !dr.float || !lastCount || there === undefined ? ''
-    : dr.moved ? `<p class="note">Moved ${money(dr.moved)} out of ${esc(dr.pot)} today.</p>`
+    : dr.moved ? `<p class="note">${th('closing.moved_today', money(dr.moved), esc(dr.pot))}</p>`
       : rest > 0 ? `<div class="row" style="margin-top:12px">
-          <span>Leave the float of ${money(dr.float)} in ${esc(dr.pot)} and move the rest,
-            <strong>${money(rest)}</strong>, to</span>
+          <span>${th('closing.leave_float', money(dr.float), esc(dr.pot), `<strong>${money(rest)}</strong>`)}</span>
           <select id="restTo" style="max-width:180px">${options(
             S.data.pots.filter(p => p.active && p.name !== dr.pot).map(p => p.name), dr.rest_to)}</select>
-          <button class="btn" data-act="moveRest" data-amount="${rest}">Move it</button></div>` : '';
+          <button class="btn" data-act="moveRest" data-amount="${rest}">${th('closing.move_it')}</button></div>` : '';
 
   return card(`
     <div class="cardhead">
-      <h2>Closing up</h2>
+      <h2>${th('closing.title')}</h2>
       <div class="right"><input type="date" id="nightDate" value="${esc(d.on)}"
            max="${esc(S.data.today)}" data-act="setDay" style="width:auto"></div>
     </div>
     <div class="steps">
 
       <div class="step"><div class="no">1</div><div>
-        <h3>Tonight's sales</h3>
-        <p>The one figure from the till. Saving it again replaces it.</p>
+        <h3>${th('tonight.sales')}</h3>
+        <p>${th('closing.sales_help')}</p>
         <div class="row">
           ${amountInput('nSales', d.sales || '', 'class="big" style="max-width:220px"')}
-          <button class="btn primary" data-act="sales">${d.sales ? 'Replace' : 'Save'}</button>
-          ${d.sales ? `<span class="quiet">recorded ${money(d.sales)}</span>` : ''}
+          <button class="btn primary" data-act="sales">${d.sales ? th('common.replace') : th('common.save')}</button>
+          ${d.sales ? `<span class="quiet">${th('closing.recorded', money(d.sales))}</span>` : ''}
         </div>
         ${posLine()}${missingNights()}</div></div>
 
       <div class="step"><div class="no">2</div><div>
-        <h3>What went out</h3>
+        <h3>${th('closing.step_out')}</h3>
         <div class="chips kinds">
-          ${NIGHT.map(([k, label]) => `<button data-act="nKind" data-k="${k}"
-             aria-pressed="${k === kind}">${esc(label)}</button>`).join('')}
+          ${NIGHT.map(k => `<button data-act="nKind" data-k="${k}"
+             aria-pressed="${k === kind}">${th(`night_kind.${k}`)}</button>`).join('')}
         </div>
         <div class="chips">
           ${chips.map(c => `<button data-act="nWho" data-who="${esc(c)}"
              aria-pressed="${c === pick}">${esc(c)}</button>`).join('')
-            || `<span class="quiet">Nothing set up for this yet — add it in Setup.</span>`}
+            || `<span class="quiet">${th('closing.nothing_set_up')}</span>`}
         </div>
         <div class="row">
           <select id="nWho" style="max-width:220px">${options(names, pick)}</select>
           ${amountInput('nAmt', '', 'style="max-width:140px"')}
-          <select id="nPot" style="max-width:150px" title="${kind === 'staff_repay' ? 'into' : 'paid from'}">
+          <select id="nPot" style="max-width:150px" title="${kind === 'staff_repay' ? th('closing.into') : th('closing.paid_from')}">
             ${potOptions(S.draft.nPot)}</select>
-          <button class="btn primary" data-act="nAdd">Add</button>
-          ${d.paid_out ? `<span class="quiet">${money(d.paid_out)} out so far</span>` : ''}
+          <button class="btn primary" data-act="nAdd">${th('common.add')}</button>
+          ${d.paid_out ? `<span class="quiet">${th('closing.out_so_far', money(d.paid_out))}</span>` : ''}
         </div>
-        <p class="note">${esc((NIGHT.find(n => n[0] === kind) || [])[2] || '')}</p>
+        <p class="note">${NIGHT.includes(kind) ? th(`night_kind.${kind}_note`) : ''}</p>
         </div></div>
 
       <div class="step"><div class="no">3</div><div>
-        <h3>Count the cash</h3>
-        <p>Count each place the money sits. A difference then tells you which
-           pot it is in, instead of just that there is one.</p>
-        ${blind ? '<p class="note">Counting blind: what the books expect shows once the count is saved.</p>' : ''}
-        <div class="potgrid">${potCards || empty('No pots in use.')}</div>
+        <h3>${th('closing.step_count')}</h3>
+        <p>${th('closing.count_help')}</p>
+        ${blind ? `<p class="note">${th('closing.blind_note')}</p>` : ''}
+        <div class="potgrid">${potCards || empty(t('closing.no_pots'))}</div>
         ${hidden}
         <div class="row" style="margin-top:12px">
           <select id="nReason" style="max-width:260px">
-            <option value="">no reason needed</option>
+            <option value="">${th('closing.no_reason')}</option>
             ${options(S.data.lists.reason, lastCount ? lastCount.reason : '')}</select>
           <button class="btn primary" data-act="saveCount">
-            ${lastCount ? 'Update count' : 'Save count'}</button>
+            ${lastCount ? th('closing.update_count') : th('closing.save_count')}</button>
         </div>${move}</div></div>
     </div>`);
 }
@@ -206,23 +194,20 @@ export function closingUp() {
 export function cashCountingCard() {
   const c = S.data.drawer || {};
   const pots = S.data.pots.filter(p => p.active).map(p => p.name);
-  return card(`<h2>Counting the cash</h2>
-    <p class="sub">A float is left in the drawer at the end of each night, in small notes, so
-      there is change from the first sale. After the count, Tonight offers to move everything
-      above it out of ${esc(c.pot || 'the drawer')} in one click.</p>
+  return card(`<h2>${th('counting.title')}</h2>
+    <p class="sub">${th('counting.sub', esc(c.pot || t('counting.the_drawer')))}</p>
     <div class="grid-form">
-      ${field('Float left in the drawer (0 for none)', save('cash_settings', {}, 'float', commas(c.float || 0),
+      ${field(t('counting.float_left'), save('cash_settings', {}, 'float', commas(c.float || 0),
         MONEY))}
-      ${field('The rest usually goes to', `<select data-save="cash_settings" data-args="${args({})}"
-        data-field="rest_to">${options([{ value: '', label: 'choose each time' }, ...pots],
+      ${field(t('counting.rest_goes_to'), `<select data-save="cash_settings" data-args="${args({})}"
+        data-field="rest_to">${options([{ value: '', label: t('counting.choose_each_time') }, ...pots],
           c.rest_to || '')}</select>`)}
-      ${field('While counting', `<select data-save="cash_settings" data-args="${args({})}"
-        data-field="blind">${options([{ value: '0', label: 'show what the books expect' },
-          { value: '1', label: 'count blind: show it once the count is saved' }],
+      ${field(t('counting.while_counting'), `<select data-save="cash_settings" data-args="${args({})}"
+        data-field="blind">${options([{ value: '0', label: t('counting.show_expected') },
+          { value: '1', label: t('counting.count_blind') }],
           c.blind ? '1' : '0')}</select>`)}
     </div>
-    <p class="note">A blind count is a well-known control: whoever counts types what they find
-      before seeing what was expected, so nobody can count towards the answer.</p>`);
+    <p class="note">${th('counting.blind_control')}</p>`);
 }
 
 /** Each count's difference over the month, and who opened SambaPOS those nights. */
@@ -232,34 +217,37 @@ export function cashDifferences() {
   const max = Math.max(...d.rows.map(r => Math.abs(r.found)), 1);
   const bars = d.rows.map(r => {
     const h = Math.round(Math.abs(r.found) / max * 44);
-    return `<div class="dday" title="${esc(r.on)}: ${r.found ? signed(r.found) : 'ties'}${
-        r.opened_by ? ` · opened by ${esc(r.opened_by)}` : ''}">
+    return `<div class="dday" title="${esc(r.on)}: ${r.found ? signed(r.found) : th('diffs.ties')}${
+        r.opened_by ? th('diffs.opened_by', esc(r.opened_by)) : ''}">
       <span class="up">${r.found > 0 ? `<span class="good" style="height:${h}px"></span>` : ''}</span>
       <span class="down">${r.found < 0 ? `<span class="bad" style="height:${h}px"></span>` : ''}</span>
       <span class="quiet">${Number(r.on.slice(8))}</span></div>`;
   }).join('');
-  const known = d.by_who.filter(g => g.who !== 'not known');
-  const who = known.length ? table('<th>Opened SambaPOS</th><th class="num">Nights</th><th class="num">Short</th><th class="num">Over</th><th class="num">Net</th>',
+  const known = d.by_who.filter(g => g.who !== t('cash.not_known'));
+  const who = known.length ? table(`<th>${th('diffs.opened_sambapos')}</th><th class="num">${th('diffs.nights')}</th>
+      <th class="num">${th('diffs.short')}</th><th class="num">${th('diffs.over')}</th>
+      <th class="num">${th('diffs.net')}</th>`,
     d.by_who.map(g => `<tr><td><bdi>${esc(g.who)}</bdi></td><td class="num">${g.nights}</td>
       <td class="num">${g.short || ''}</td><td class="num">${g.over || ''}</td>
       <td class="num ${cls(g.net)}">${g.net ? signed(g.net) : '0'}</td></tr>`).join('')) : '';
-  return card(`<h2>Cash differences</h2>
-    <p class="sub">What each night's count added to the difference with the books. A shortage
-      nobody explained counts on the night it appeared, not again every night after. Small ups
-      and downs are normal; a steady shortage on certain nights or shifts is not.</p>
+  return card(`<h2>${th('diffs.title')}</h2>
+    <p class="sub">${th('diffs.sub')}</p>
     <div class="ddays">${bars}</div>
-    <p class="note">${d.rows.length} count${d.rows.length === 1 ? '' : 's'}: ${money(-d.short)} short,
-      ${money(d.over)} over, ${d.net ? signed(d.net) : 'nothing'} in all. A difference written off
-      becomes a cost of its month.</p>${who}`);
+    <p class="note">${d.rows.length === 1
+      ? th('diffs.note_one', 1, money(-d.short), money(d.over), d.net ? signed(d.net) : th('diffs.nothing'))
+      : th('diffs.note_many', d.rows.length, money(-d.short), money(d.over),
+           d.net ? signed(d.net) : th('diffs.nothing'))}</p>${who}`);
 }
 
-const hhmm = t => String(t || '').slice(11, 16);
+const hhmm = at => String(at || '').slice(11, 16);
 
-/** A time the database wrote in UTC, as the clock on the wall shows it. */
+/** A time the database wrote in UTC, as the clock on the wall shows it:
+    "17 Nov, 07:26", the month in the words whatever the PC's own language. */
 export const localTime = at => {
   const d = new Date(String(at || '').replace(' ', 'T') + 'Z');
-  return isNaN(d) ? String(at || '') : d.toLocaleString('en-GB', {
-    day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit' });
+  if (isNaN(d)) return String(at || '');
+  const two = n => String(n).padStart(2, '0');
+  return `${d.getDate()} ${t(`month.short.${two(d.getMonth() + 1)}`)}, ${two(d.getHours())}:${two(d.getMinutes())}`;
 };
 
 /** What SambaPOS kept for this night, and the one click that uses it. */
@@ -271,29 +259,27 @@ function posLine() {
     const on = S.data.day.on;
     const auto = pos.auto || {};
     const live = pos.can_read_live
-      ? ' <button class="mini link" data-act="posLive">Read SambaPOS now</button>' : '';
+      ? ` <button class="mini link" data-act="posLive">${th('tonight_pos.read_now')}</button>` : '';
     if (auto.on && (auto.waiting || auto.reading)) {
-      return '<p class="note quiet">Reading SambaPOS’s backups…</p>';
+      return `<p class="note quiet">${th('tonight_pos.reading')}</p>`;
     }
     if (auto.on) {
       return on >= S.data.tonight
-        ? `<p class="note quiet">SambaPOS backs the night up when it is reset, and it
-             comes in here by itself after that.${live}</p>`
-        : `<p class="note">No SambaPOS backup has the night of ${esc(on)}.${live}</p>`;
+        ? `<p class="note quiet">${th('tonight_pos.auto_tonight')}${live}</p>`
+        : `<p class="note">${th('tonight_pos.no_backup', esc(on))}${live}</p>`;
     }
-    if (live) return `<p class="note">SambaPOS has not been kept for ${esc(on)}.${live}</p>`;
-    return `<p class="note quiet">Tell the app where SambaPOS puts its backups, and each
-      night comes in by itself. <button class="mini link" data-go="setup/sambapos">Open setup</button></p>`;
+    if (live) return `<p class="note">${th('tonight_pos.not_kept', esc(on))}${live}</p>`;
+    return `<p class="note quiet">${th('tonight_pos.tell_folder')} <button class="mini link" data-go="setup/sambapos">${th('go.setup')}</button></p>`;
   }
   const same = night.takings === S.data.day.sales;
-  return `<p class="note">SambaPOS kept <strong>${money(night.takings)}</strong> paid over
-      ${night.tickets} tickets${night.unpaid
-        ? `, and <span class="warnc">${money(night.unpaid)} still unpaid on
-             ${night.open_tickets} open ticket${night.open_tickets === 1 ? '' : 's'}</span>` : ''}.
-      ${night.ended ? '' : `<span class="quiet">(as it stood at ${esc(hhmm(night.seen_to))})</span>`}
-      ${same ? '<span class="pos">The books match.</span>'
+  return `<p class="note">${th('tonight_pos.kept', `<strong>${money(night.takings)}</strong>`, night.tickets)}${night.unpaid
+        ? th('tonight_pos.and_unpaid', `<span class="warnc">${night.open_tickets === 1
+          ? th('tonight_pos.unpaid_one', money(night.unpaid), 1)
+          : th('tonight_pos.unpaid_many', money(night.unpaid), night.open_tickets)}</span>`) : ''}.
+      ${night.ended ? '' : `<span class="quiet">${th('tonight_pos.as_it_stood', esc(hhmm(night.seen_to)))}</span>`}
+      ${same ? `<span class="pos">${th('tonight_pos.books_match')}</span>`
              : `<button class="mini link" data-act="usePos" data-amount="${night.takings}">
-                  Use ${money(night.takings)}</button>`}</p>`;
+                  ${th('tonight_pos.use', money(night.takings))}</button>`}</p>`;
 }
 
 /** A nudge when nights have been skipped, because the books are usually
@@ -306,25 +292,25 @@ function missingNights() {
   next.setUTCDate(next.getUTCDate() + 1);
   const first = next.toISOString().slice(0, 10);
   if (first >= d.on) return '';
-  return `<p class="note warnc">No sales are entered after ${esc(last)}.
-    <button class="mini link" data-act="setDay" data-on="${first}">Go to ${esc(first)}</button></p>`;
+  return `<p class="note warnc">${th('tonight.no_sales_after', esc(last))}
+    <button class="mini link" data-act="setDay" data-on="${first}">${th('tonight.go_to', esc(first))}</button></p>`;
 }
 
 export function todayFigures() {
   const d = S.data.day;
   const floats = S.data.people.float.length > 0;
   return tiles([
-    tile("Tonight's sales", money(d.sales)),
-    tile('Paid out', money(d.paid_out), 'everything that left a pot'),
-    tile('Cash on hand', money(d.cash), 'your own pots, end of the day'),
-    floats ? tile("In people's hands", money(d.floats), 'floats') : '',
+    tile(t('tonight.sales'), money(d.sales)),
+    tile(t('tonight.paid_out'), money(d.paid_out), t('tonight.paid_out_note')),
+    tile(t('common.cash_on_hand'), money(d.cash), t('tonight.cash_on_hand_note')),
+    floats ? tile(t('common.in_hands'), money(d.floats), t('common.floats')) : '',
   ]);
 }
 
 export function todayEntries() {
   const rows = S.data.day.entries;
-  return card(`<h2>Everything entered for ${esc(S.data.day.on)}</h2>
-    ${rows.length ? entryTable(rows, { date: false }) : empty('Nothing entered for this day yet.')}`);
+  return card(`<h2>${th('tonight.everything_entered', esc(S.data.day.on))}</h2>
+    ${rows.length ? entryTable(rows, { date: false }) : empty(t('tonight.nothing_entered'))}`);
 }
 
 /* ============================================================ entries table */
@@ -349,16 +335,16 @@ function entryRow(e, { date = true, lines = false } = {}) {
     ${date ? `<td class="nowrap">${esc(e.happened_on)}</td>` : ''}
     <td>${esc(e.label)}</td>
     <td>${['daily_sales', 'transfer'].includes(e.kind) ? '' : esc(e.detail || '')}
-      ${e.tagged ? ` <span class="pill">for ${esc(monthName(e.period))}</span>` : ''}
+      ${e.tagged ? ` <span class="pill">${th('entries.for_month', ...monthWords(e.period))}</span>` : ''}
       ${e.memo && e.kind !== 'transfer' ? ` <span class="quiet">${esc(e.memo)}</span>` : ''}</td>
     <td class="quiet">${where}</td>
     <td class="num ${e.cash > 0 ? 'pos' : ''}">${money(e.amount)}</td>
     <td class="actions">
       ${lines && e.receipt ? `<button class="mini" data-act="receiptLines" data-id="${e.receipt.id}"
-          aria-expanded="${S.draft.rlines === e.receipt.id}">${e.lines.length
-          ? `${e.lines.length} line${e.lines.length === 1 ? '' : 's'}` : 'What came in'}</button>` : ''}
-      ${e.editable ? `<button class="mini" data-act="edit" data-id="${e.id}">Edit</button>` : ''}
-      ${e.deletable ? `<button class="mini danger" data-act="void" data-id="${e.id}">Delete</button>` : ''}
+          aria-expanded="${S.draft.rlines === e.receipt.id}">${e.lines.length === 1 ? th('entries.lines_one', 1)
+          : e.lines.length ? th('entries.lines_many', e.lines.length) : th('entries.what_came_in')}</button>` : ''}
+      ${e.editable ? `<button class="mini" data-act="edit" data-id="${e.id}">${th('common.edit')}</button>` : ''}
+      ${e.deletable ? `<button class="mini danger" data-act="void" data-id="${e.id}">${th('common.delete')}</button>` : ''}
     </td></tr>`;
 }
 
@@ -373,33 +359,33 @@ function editRow(e, { date }) {
   return `<tr class="editing" data-edit="${e.id}">
     <td colspan="${date ? 6 : 5}">
       <div class="grid-form">
-        ${field('Date', `<input type="date" data-e="on" value="${esc(e.happened_on)}" max="${esc(S.data.today)}">`)}
-        ${names ? field(isReceipt ? 'Supplier' : 'Who or what',
+        ${field(t('common.date'), `<input type="date" data-e="on" value="${esc(e.happened_on)}" max="${esc(S.data.today)}">`)}
+        ${names ? field(isReceipt ? t('entries.supplier') : t('common.who_or_what'),
             `<select data-e="detail">${options(names.includes(who) ? names : [who, ...names], who)}</select>`) : ''}
         ${e.kind === 'transfer'
-          ? field('From', `<select data-e="pot">${potOptions(e.pot)}</select>`)
-            + field('To', `<select data-e="pot_to">${potOptions(e.pot_to)}</select>`)
-          : (e.pot ? field(e.cash > 0 ? 'Into' : 'Out of', `<select data-e="pot">${potOptions(e.pot)}</select>`) : '')}
-        ${isReceipt ? field('For', `<input data-e="what" value="${esc(r.what || '')}">`)
-                      + field('Terms', `<select data-e="terms">${options([
-                          { value: 'credit', label: 'On credit' }, { value: 'cash', label: 'Paid cash' }],
+          ? field(t('common.from'), `<select data-e="pot">${potOptions(e.pot)}</select>`)
+            + field(t('common.to'), `<select data-e="pot_to">${potOptions(e.pot_to)}</select>`)
+          : (e.pot ? field(e.cash > 0 ? t('common.into') : t('common.out_of'), `<select data-e="pot">${potOptions(e.pot)}</select>`) : '')}
+        ${isReceipt ? field(t('common.for'), `<input data-e="what" value="${esc(r.what || '')}">`)
+                      + field(t('common.terms'), `<select data-e="terms">${options([
+                          { value: 'credit', label: t('entries.on_credit') }, { value: 'cash', label: t('entries.paid_cash') }],
                           r.terms || (e.kind === 'receipt_cash' ? 'cash' : 'credit'))}</select>`) : ''}
-        ${field('Amount', `<input ${MONEY} data-e="amount" value="${esc(commas(e.amount))}">`)}
-        ${field('Counts for', `<select data-e="period" data-was="${esc(e.period)}">${options(
+        ${field(t('common.amount'), `<input ${MONEY} data-e="amount" value="${esc(commas(e.amount))}">`)}
+        ${field(t('entries.counts_for'), `<select data-e="period" data-was="${esc(e.period)}">${options(
             months.map(m => ({ value: m, label: monthName(m) })), e.period)}</select>`)}
         <div class="row">
-          <button class="btn primary" data-act="saveEdit" data-id="${e.id}" data-tagged="${e.tagged ? 1 : 0}">Save</button>
-          <button class="btn" data-act="cancelEdit">Cancel</button>
+          <button class="btn primary" data-act="saveEdit" data-id="${e.id}" data-tagged="${e.tagged ? 1 : 0}">${th('common.save')}</button>
+          <button class="btn" data-act="cancelEdit">${th('common.cancel')}</button>
         </div>
       </div>
-      <p class="note">The original stays in the record as corrected, with the time it was changed.</p>
+      <p class="note">${th('entries.edit_note')}</p>
     </td></tr>`;
 }
 
 function entryTable(rows, opts = {}) {
   const date = opts.date !== false;
-  return table(`${date ? '<th>Date</th>' : ''}<th>What</th><th>Details</th><th>Pot</th>
-                <th class="num">Amount</th><th></th>`,
+  return table(`${date ? `<th>${th('common.date')}</th>` : ''}<th>${th('common.what')}</th><th>${th('common.details')}</th><th>${th('common.pot')}</th>
+                <th class="num">${th('common.amount')}</th><th></th>`,
     rows.map(e => entryRow(e, { date })).join(''));
 }
 
@@ -409,14 +395,14 @@ function entryTable(rows, opts = {}) {
 export function periodPicker() {
   const per = S.data.period;
   return `<div class="tools">
-      ${per.status === 'closed' ? '<span class="pill">closed</span>' : ''}
-      ${S.data.month === S.data.this_month ? '<span class="pill">in progress</span>' : ''}
-      <select data-act="setMonth" style="width:auto" aria-label="Month">
+      ${per.status === 'closed' ? `<span class="pill">${th('period.closed')}</span>` : ''}
+      ${S.data.month === S.data.this_month ? `<span class="pill">${th('period.in_progress')}</span>` : ''}
+      <select data-act="setMonth" style="width:auto" aria-label="${th('period.month')}">
         ${options(S.data.months.slice().reverse().map(m => ({ value: m, label: monthName(m) })), S.data.month)}
       </select>
-      <button class="btn" data-act="printMonth">Print</button>
+      <button class="btn" data-act="printMonth">${th('common.print')}</button>
       <button class="btn" data-act="printSummary"
-        title="One A4 page for your partner: print it, or save it as a PDF to send">Summary for my partner</button>
+        title="${th('period.summary_title')}">${th('period.summary')}</button>
     </div>`;
 }
 
@@ -425,12 +411,12 @@ export function monthFigures() {
   const sf = S.data.so_far;
   const dr = S.data.drawings;
   return tiles([
-    tile('Sales', money(r.rev)),
-    tile('Gross profit', money(r.gross), pct(r.grossPct), cls(r.gross)),
-    sf ? tile(`Net profit so far`, money(sf.net), `${sf.days} of ${sf.days_in_month} days`, cls(sf.net))
-       : tile('Net profit', money(r.net), pct(r.netPct), cls(r.net)),
-    tile('Taken out by partners', money(dr.taken),
-         dr.over ? `${money(dr.over)} more than the profit` : 'within the profit',
+    tile(t('result.sales'), money(r.rev)),
+    tile(t('result.gross_profit'), money(r.gross), pct(r.grossPct), cls(r.gross)),
+    sf ? tile(t('figures.net_so_far'), money(sf.net), t('common.days_of', sf.days, sf.days_in_month), cls(sf.net))
+       : tile(t('result.net_profit'), money(r.net), pct(r.netPct), cls(r.net)),
+    tile(t('figures.taken'), money(dr.taken),
+         dr.over ? t('figures.over_profit', money(dr.over)) : t('figures.within_profit'),
          dr.over ? 'neg' : ''),
   ]);
 }
@@ -441,19 +427,17 @@ export function soFarCard() {
   const line = (label, value, note, strong) => `<tr${strong ? ' class="tot"' : ''}>
       <td>${esc(label)}${note ? ` <span class="quiet">${esc(note)}</span>` : ''}</td>
       <td class="num ${strong ? cls(value) : ''}">${money(value)}</td></tr>`;
-  return card(`<h2>So far: ${sf.days} of ${sf.days_in_month} days</h2>
-    <p class="sub">Rent and salaries are charged for the whole month from the first
-      day, so part-way through, the full result looks like a loss that is not real.
-      This sets ${sf.days} days of them against ${sf.days} days of sales.</p>
-    ${table('<th>Line</th><th class="num">Amount</th>',
-      line('Sales', sf.rev, `to ${sf.through}`)
-      + line('Cost of goods', -sf.cogs, sf.cogs_note)
-      + line('Daily expenses & bills', -sf.daily)
-      + (sf.elec ? line('Electricity', -sf.elec, sf.elec_estimated ? 'estimated from last month' : `${sf.days} days' worth`) : '')
-      + line('Rent & fixed', -sf.fixed, `${sf.days} days' worth`)
-      + line('Salaries', -sf.salaries, `${sf.days} days' worth`)
-      + (sf.differences ? line('Cash written off', -sf.differences) : '')
-      + line('Net so far', sf.net, '', true))}`);
+  return card(`<h2>${th('so_far.title', sf.days, sf.days_in_month)}</h2>
+    <p class="sub">${th('so_far.sub', sf.days, sf.days)}</p>
+    ${table(`<th>${th('result.line')}</th><th class="num">${th('common.amount')}</th>`,
+      line(t('result.sales'), sf.rev, t('result.through', sf.through))
+      + line(t('result.cogs'), -sf.cogs, sf.cogs_note)
+      + line(t('result.daily'), -sf.daily)
+      + (sf.elec ? line(t('result.electricity'), -sf.elec, sf.elec_estimated ? t('result.elec_estimated') : t('result.days_worth', sf.days)) : '')
+      + line(t('result.rent'), -sf.fixed, t('result.days_worth', sf.days))
+      + line(t('result.salaries'), -sf.salaries, t('result.days_worth', sf.days))
+      + (sf.differences ? line(t('result.written_off'), -sf.differences) : '')
+      + line(t('result.net_so_far'), sf.net, '', true))}`);
 }
 
 export function resultCard() {
@@ -463,48 +447,48 @@ export function resultCard() {
       <td class="num ${strong ? cls(value) : ''}">${money(value)}</td></tr>`;
   const c = r.cogs || {};
   const inProgress = !!S.data.so_far;
-  return card(`<h2>${inProgress ? 'Full month' : 'Result'}${r.frozen ? ' <span class="pill">frozen</span>' : ''}</h2>
+  return card(`<h2>${inProgress ? th('result.full_month') : th('result.title')}${r.frozen ? ` <span class="pill">${th('result.frozen')}</span>` : ''}</h2>
     <p class="sub">${r.frozen
-      ? 'This month is closed, so these are the figures recorded at the time.'
-      : inProgress ? 'With the whole month’s rent and salaries already charged.'
-                   : 'Rent and salaries are charged to the month whether or not they have been paid.'}</p>
-    ${table(`<th>Line</th><th class="num">Amount</th>`,
-      line('Sales', r.rev)
-      + line('Cost of goods', -(c.value || 0))
-      + line('Gross profit', r.gross, true)
-      + line('Daily expenses & bills', -(r.daily || 0))
-      + (r.elec ? line('Electricity used', -(r.elec || 0)) : '')
-      + line('Rent & fixed', -(r.fixed || 0))
-      + line('Salaries', -(r.salaries || 0))
-      + (r.differences ? line('Cash written off', -(r.differences || 0)) : '')
-      + line('Net profit', r.net, true))}
-    <p class="sub" style="margin-top:10px">Stock ${money(c.opening)} at the start,
-      ${money(c.purchases)} bought, ${money(c.closing)} left
-      ${c.date ? `(counted ${esc(c.date)})` : ''}.</p>`);
+      ? th('result.closed_note')
+      : inProgress ? th('result.in_progress_note')
+                   : th('result.charged_note')}</p>
+    ${table(`<th>${th('result.line')}</th><th class="num">${th('common.amount')}</th>`,
+      line(t('result.sales'), r.rev)
+      + line(t('result.cogs'), -(c.value || 0))
+      + line(t('result.gross_profit'), r.gross, true)
+      + line(t('result.daily'), -(r.daily || 0))
+      + (r.elec ? line(t('result.elec_used'), -(r.elec || 0)) : '')
+      + line(t('result.rent'), -(r.fixed || 0))
+      + line(t('result.salaries'), -(r.salaries || 0))
+      + (r.differences ? line(t('result.written_off'), -(r.differences || 0)) : '')
+      + line(t('result.net_profit'), r.net, true))}
+    <p class="sub" style="margin-top:10px">${c.date
+      ? th('result.stock_counted', money(c.opening), money(c.purchases), money(c.closing), esc(c.date))
+      : th('result.stock', money(c.opening), money(c.purchases), money(c.closing))}</p>`);
 }
 
 export function electricityCard() {
   const e = S.data.electricity;
   if (S.data.period.status === 'closed') {
-    return e.charged ? card(`<h2>Electricity</h2>
-      <p class="sub">${money(e.charged)} was charged to this month.</p>`) : '';
+    return e.charged ? card(`<h2>${th('elec.title')}</h2>
+      <p class="sub">${th('elec.charged_closed', money(e.charged))}</p>`) : '';
   }
   const f = e.factors;
-  return card(`<h2>Electricity</h2>
-    <p class="sub">Charged to the month from the meter; paid whenever the bill is
-      actually settled. ${e.charged ? `<strong>${money(e.charged)} charged to
-      ${esc(monthName(S.data.month))}.</strong>` : 'Nothing charged to this month yet.'}
-      ${e.unpaid > 0 ? ` ${money(e.unpaid)} in all is still unpaid.` : ''}</p>
+  return card(`<h2>${th('elec.title')}</h2>
+    <p class="sub">${th('elec.sub')} ${e.charged
+        ? `<strong>${th('elec.charged_to', money(e.charged), ...monthWords(S.data.month))}</strong>`
+        : th('elec.nothing_charged')}
+      ${e.unpaid > 0 ? th('elec.unpaid', money(e.unpaid)) : ''}</p>
     <div class="grid-form">
-      ${field(`Private, price per amp (×${f.privateAmps})`,
+      ${field(t('elec.private', f.privateAmps),
         `<input ${MONEY} id="elPP" value="${esc(commas(e.private_price))}">`)}
-      ${field(`Elevator, price per amp (×${f.elevatorAmps} ÷ ${f.elevatorShare})`,
+      ${field(t('elec.elevator', f.elevatorAmps, f.elevatorShare),
         `<input ${MONEY} id="elPE" value="${esc(commas(e.elevator_price))}">`)}
-      ${field('Public meter, last reading',
+      ${field(t('elec.public_last'),
         `<input type="number" id="elLast" value="${esc(e.last_reading)}" min="0" inputmode="numeric">`)}
-      ${field(`Public meter, now (×${f.publicRate} ÷ ${f.publicShare})`,
+      ${field(t('elec.public_now', f.publicRate, f.publicShare),
         `<input type="number" id="elNow" value="${esc(e.now_reading)}" min="0" inputmode="numeric">`)}
-      <div><button class="btn primary" data-act="saveElectricity">Charge the month</button></div>
+      <div><button class="btn primary" data-act="saveElectricity">${th('elec.charge')}</button></div>
     </div>`);
 }
 
@@ -512,18 +496,15 @@ export function settleCard() {
   if (S.data.period.status === 'closed') return '';
   const lines = S.data.settle;
   if (!lines.length) {
-    return card(`<h2>Settle up</h2>
-      <p class="sub">Nothing is waiting to be paid up to the end of ${esc(monthName(S.data.month))}.</p>`);
+    return card(`<h2>${th('settle_up.title')}</h2>
+      <p class="sub">${th('settle_up.nothing', ...monthWords(S.data.month))}</p>`);
   }
-  return card(`<h2>Settle up</h2>
-    <p class="sub">Everything unpaid up to the end of <strong>${esc(monthName(S.data.month))}</strong>.
-      A salary, rent or electricity paid from here counts for ${esc(monthName(S.data.month))}
-      whatever today's date is — that is what stops a November payment counting
-      against November.</p>
-    <p class="sub">A supplier is paid for what has been used up: what is owed, less their
-      stock still on the shelves at the month's count. That is paid for the month too.</p>
-    ${table(`<th>What</th><th>Who</th><th class="num">Still to pay</th>
-             <th style="width:150px">Amount</th><th>From</th><th></th>`,
+  return card(`<h2>${th('settle_up.title')}</h2>
+    <p class="sub">${th('settle_up.everything', `<strong>${esc(monthName(S.data.month))}</strong>`,
+      ...monthWords(S.data.month))}</p>
+    <p class="sub">${th('settle_up.supplier_note')}</p>
+    ${table(`<th>${th('common.what')}</th><th>${th('common.who')}</th><th class="num">${th('settle_up.still_to_pay')}</th>
+             <th style="width:150px">${th('common.amount')}</th><th>${th('common.from')}</th><th></th>`,
       lines.map(l => l.done ? `<tr>
         <td>${esc(l.what)}</td>
         <td>${esc(l.who)}${l.note ? `<br><span class="quiet">${esc(l.note)}</span>` : ''}</td>
@@ -535,7 +516,7 @@ export function settleCard() {
         <td class="num">${money(l.amount)}</td>
         <td><input ${MONEY} data-s="amount" value="${esc(commas(l.amount))}"></td>
         <td><select data-s="pot" style="width:auto">${potOptions()}</select></td>
-        <td><button class="btn primary" data-act="settle">Pay</button></td>
+        <td><button class="btn primary" data-act="settle">${th('settle_up.pay')}</button></td>
       </tr>`).join(''))}`);
 }
 
@@ -543,69 +524,65 @@ export function payrollCard() {
   const pay = S.data.payroll;
   if (!pay.length) return '';
   const T = k => pay.reduce((a, p) => a + (p[k] || 0), 0);
-  return card(`<h2>Staff</h2>
-    <p class="sub">The salary is charged to the month in full, or for someone who started
-      or left in it, a thirtieth of it for each day they worked. Advances come off it; what
-      is left is handed over.</p>
-    ${table(`<th>Who</th><th class="num">Salary</th><th class="num">Advances</th>
-             <th class="num">Paid</th><th class="num">Still to pay</th>`,
+  return card(`<h2>${th('payroll.title')}</h2>
+    <p class="sub">${th('payroll.sub')}</p>
+    ${table(`<th>${th('common.who')}</th><th class="num">${th('payroll.salary')}</th><th class="num">${th('payroll.advances')}</th>
+             <th class="num">${th('common.paid')}</th><th class="num">${th('settle_up.still_to_pay')}</th>`,
       pay.map(p => `<tr>
-        <td>${esc(p.name)}${p.started_on ? ` <span class="pill">started ${esc(p.started_on)}</span>` : ''}${
+        <td>${esc(p.name)}${p.started_on ? ` <span class="pill">${th('payroll.started', esc(p.started_on))}</span>` : ''}${
           p.active ? '' : p.left_on
-            ? ` <span class="pill">left ${esc(p.left_on)}</span>` : ' <span class="pill">no longer here</span>'}</td>
+            ? ` <span class="pill">${th('payroll.left', esc(p.left_on))}</span>` : ` <span class="pill">${th('payroll.no_longer')}</span>`}</td>
         <td class="num">${money(p.gross)}${p.part
-          ? `<br><span class="quiet">${p.part.days} of ${p.part.of} days</span>` : ''}</td>
+          ? `<br><span class="quiet">${th('common.days_of', p.part.days, p.part.of)}</span>` : ''}</td>
         <td class="num">${money(p.advances)}</td>
         <td class="num">${money(p.paid)}</td>
         <td class="num">${p.overpaid
-          ? `<span class="neg">${money(p.overpaid)} ahead</span>`
+          ? `<span class="neg">${th('payroll.ahead', money(p.overpaid))}</span>`
           : `<span class="${p.still_to_pay ? '' : 'pos'}">${money(p.still_to_pay)}</span>`}
-          ${p.from_earlier ? `<br><span class="quiet">${money(p.from_earlier)} from earlier</span>` : ''}</td>
+          ${p.from_earlier ? `<br><span class="quiet">${th('payroll.from_earlier', money(p.from_earlier))}</span>` : ''}</td>
       </tr>`).join(''),
-      `<tr class="tot"><td>Total</td><td class="num">${money(T('gross'))}</td>
+      `<tr class="tot"><td>${th('common.total')}</td><td class="num">${money(T('gross'))}</td>
         <td class="num">${money(T('advances'))}</td><td class="num">${money(T('paid'))}</td>
         <td class="num">${money(T('still_to_pay'))}</td></tr>`)}
-    ${pay.some(p => p.overpaid) ? `<p class="note">“Ahead” means they have been given
-      more than they have earned so far; it comes off their next salary.</p>` : ''}`);
+    ${pay.some(p => p.overpaid) ? `<p class="note">${th('payroll.ahead_note')}</p>` : ''}`);
 }
 
 export function partnersCard() {
   const prt = S.data.partners;
   if (!prt.length) return '';
   const dr = S.data.drawings;
-  const basis = dr.basis === 'so far' ? 'so far this month' : 'this month';
-  return card(`<h2>Partners</h2>
-    <p class="sub">Taken out ${basis}: <strong>${money(dr.taken)}</strong>,
-      against a profit ${basis} of <strong class="${cls(dr.profit)}">${money(dr.profit)}</strong>.
-      ${dr.over ? `<br><span class="neg">That is ${money(dr.over)} more than the business has made.
-        It is coming out of stock and supplier credit.</span>` : ''}</p>
-    ${table(`<th>Partner</th><th class="num">Share</th>
-             <th class="num">Share of profit${prt.some(p => p.so_far) ? ' so far' : ''}</th>
-             <th class="num">Taken</th><th class="num">Put in</th><th class="num">Balance</th>`,
+  const taken = `<strong>${money(dr.taken)}</strong>`;
+  const profit = `<strong class="${cls(dr.profit)}">${money(dr.profit)}</strong>`;
+  return card(`<h2>${th('partners.title')}</h2>
+    <p class="sub">${dr.basis === 'so_far' ? th('partners.taken_so_far', taken, profit)
+                                           : th('partners.taken_month', taken, profit)}
+      ${dr.over ? `<br><span class="neg">${th('partners.over', money(dr.over))}</span>` : ''}</p>
+    ${table(`<th>${th('partners.partner')}</th><th class="num">${th('partners.share')}</th>
+             <th class="num">${prt.some(p => p.so_far) ? th('partners.share_so_far') : th('partners.share_of_profit')}</th>
+             <th class="num">${th('partners.taken')}</th><th class="num">${th('partners.put_in')}</th><th class="num">${th('partners.balance')}</th>`,
       prt.map(p => `<tr>
         <td>${esc(p.name)}</td>
         <td class="num">${(p.share * 100).toFixed(0)}%</td>
         <td class="num ${cls(p.profit)}">${money(p.profit)}</td>
         <td class="num">${money(p.taken)}</td>
         <td class="num">${money(p.put_in)}</td>
-        <td class="num ${cls(p.balance)}">${money(p.balance)}${p.posted ? '' : ' <span class="quiet">before this month’s share</span>'}</td>
+        <td class="num ${cls(p.balance)}">${money(p.balance)}${p.posted ? '' : ` <span class="quiet">${th('partners.before_share')}</span>`}</td>
       </tr>`).join(''))}
-    <p class="note">A share is added to the balance when the month is closed.</p>`);
+    <p class="note">${th('partners.note')}</p>`);
 }
 
 export function suppliersCard() {
   const sup = S.data.suppliers;
   const total = sup.reduce((a, s) => a + Math.max(s.owed_now, 0), 0);
   const open = S.statement;
-  return card(`<div class="cardhead"><h2>Suppliers</h2>
-      <span class="pill">${money(S.data.owed)} owed</span>
-      <div class="right"><button class="btn" data-act="printSuppliers">Print</button></div>
+  return card(`<div class="cardhead"><h2>${th('suppliers.title')}</h2>
+      <span class="pill">${th('suppliers.owed', money(S.data.owed))}</span>
+      <div class="right"><button class="btn" data-act="printSuppliers">${th('common.print')}</button></div>
     </div>
-    <p class="sub">A debt list, not an expense: the goods are already in the cost
-      of goods, so paying a supplier does not change profit. Tap a name for the account.</p>
+    <p class="sub">${th('suppliers.sub')}</p>
     ${sup.length ? table(
-      `<th>Supplier</th><th class="num">Owed coming in</th><th class="num">Arrived</th>
-       <th class="num">Paid</th><th class="num">Owed at the end</th><th style="width:110px"></th>`,
+      `<th>${th('entries.supplier')}</th><th class="num">${th('suppliers.coming_in')}</th><th class="num">${th('suppliers.arrived')}</th>
+       <th class="num">${th('common.paid')}</th><th class="num">${th('suppliers.at_end')}</th><th style="width:110px"></th>`,
       sup.map(s => `<tr>
         <td><button class="mini link" data-act="statement" data-id="${s.id}">${esc(s.name)}</button></td>
         <td class="num">${money(s.brought_forward)}</td>
@@ -614,26 +591,26 @@ export function suppliersCard() {
         <td class="num ${s.closing > 0 ? 'neg' : ''}">${money(s.closing)}</td>
         <td><div class="bar"><span style="width:${total ? Math.max(0, s.owed_now) / total * 100 : 0}%"></span></div></td>
       </tr>${open && open.id === s.id ? statementRow(open) : ''}`).join(''))
-      : empty('No supplier movement.')}`);
+      : empty(t('suppliers.none'))}`);
 }
 
 function statementRow(st) {
   return `<tr class="drill"><td colspan="6">
     <div class="cardhead"><strong>${esc(st.name)} — ${esc(monthName(st.month))}</strong>
-      <div class="right"><button class="btn" data-act="printStatement">Print</button>
-      <button class="mini" data-act="closeStatement">Close</button></div></div>
-    ${table('<th>Date</th><th>What</th><th class="num">Amount</th><th class="num">Owed after</th>',
+      <div class="right"><button class="btn" data-act="printStatement">${th('common.print')}</button>
+      <button class="mini" data-act="closeStatement">${th('common.close')}</button></div></div>
+    ${table(`<th>${th('common.date')}</th><th>${th('common.what')}</th><th class="num">${th('common.amount')}</th>
+        <th class="num">${th('suppliers.owed_after')}</th>`,
       (() => {
         let run = st.opening;
-        return `<tr><td></td><td class="quiet">Owed coming in</td><td></td><td class="num">${money(run)}</td></tr>`
+        return `<tr><td></td><td class="quiet">${th('suppliers.coming_in')}</td><td></td><td class="num">${money(run)}</td></tr>`
           + st.lines.map(l => { run += l.amount; return `<tr><td>${esc(l.on)}</td><td>${esc(l.what)}</td>
               <td class="num">${signed(l.amount)}</td><td class="num">${money(run)}</td></tr>`; }).join('');
       })(),
-      `<tr class="tot"><td></td><td>Owed at the end of the month</td><td></td><td class="num">${money(st.closing)}</td></tr>`)}
-    <p class="note">${money(st.received)} arrived and ${money(st.paid)} was paid this month.
-      ${st.on_shelves ? ` Of what is owed, ${money(st.on_shelves)} worth of their goods
-        was still on the shelves at the count on ${esc(st.count_date)}.` : ''}
-      ${st.owed_now !== st.closing ? ` Owed today: ${money(st.owed_now)}.` : ''}</p>
+      `<tr class="tot"><td></td><td>${th('suppliers.end_of_month')}</td><td></td><td class="num">${money(st.closing)}</td></tr>`)}
+    <p class="note">${th('stmt.arrived_paid', money(st.received), money(st.paid))}
+      ${st.on_shelves ? th('stmt.on_shelves', money(st.on_shelves), esc(st.count_date)) : ''}
+      ${st.owed_now !== st.closing ? th('stmt.owed_today', money(st.owed_now)) : ''}</p>
   </td></tr>`;
 }
 
@@ -648,8 +625,8 @@ export function moneyFlow() {
         <span class="track"><span class="fill" style="width:${total ? g.total / total * 100 : 0}%"></span></span>
         <span class="num">${money(g.total)}</span></summary>
       <div class="row" style="justify-content:flex-end"><button class="mini" data-act="printKind"
-        data-k="${esc(g.kind)}" data-side="${side}">Print</button></div>
-      ${table('<th>Who or what</th><th class="num">Amount</th>',
+        data-k="${esc(g.kind)}" data-side="${side}">${th('common.print')}</button></div>
+      ${table(`<th>${th('common.who_or_what')}</th><th class="num">${th('common.amount')}</th>`,
         g.rows.map(([n, v]) => {
           const shown = open && pick.name === n;
           return `<tr><td><button class="mini link" data-act="flowName" data-k="${esc(g.kind)}"
@@ -658,15 +635,13 @@ export function moneyFlow() {
         }).join(''))}
     </details>`;
   };
-  return card(`<div class="cardhead"><h2>Where the cash went</h2>
-      <div class="right"><button class="btn" data-act="printFlow">Print all</button></div></div>
-    <p class="sub">Cash that physically left or came into a pot between
-      ${esc(f.from)} and ${esc(f.to)}, by what it was for. Moving money between your
-      own pots is left out. Open a line for the detail.</p>
+  return card(`<div class="cardhead"><h2>${th('flow.title')}</h2>
+      <div class="right"><button class="btn" data-act="printFlow">${th('flow.print_all')}</button></div></div>
+    <p class="sub">${th('flow.sub', esc(f.from), esc(f.to))}</p>
     ${forEarlier(f)}
-    <h3 class="flowh">Out — ${money(f.out_total)}</h3>
+    <h3 class="flowh">${th('flow.out', money(f.out_total))}</h3>
     ${f.out.map(g => group(g, f.out_total, 'out')).join('')}
-    <h3 class="flowh">In — ${money(f.in_total)}</h3>
+    <h3 class="flowh">${th('flow.in', money(f.in_total))}</h3>
     ${f.in.map(g => group(g, f.in_total, 'in')).join('')}`);
 }
 
@@ -677,20 +652,19 @@ function forEarlier(f) {
   if (!f.earlier_total) return '';
   const names = rows => rows.map(([n, v]) => `<bdi>${esc(n)}</bdi> ${money(v)}`).join(' · ');
   return `<details class="flow">
-      <summary><span>Paid for earlier months</span>
+      <summary><span>${th('earlier.title')}</span>
         <span class="track"><span class="fill"
           style="width:${f.out_total ? f.earlier_total / f.out_total * 100 : 0}%"></span></span>
         <span class="num">${money(f.earlier_total)}</span></summary>
       <div class="row" style="justify-content:flex-end"><button class="mini"
-        data-act="printEarlier">Print</button></div>
-      ${table('<th>For</th><th>What</th><th class="num">Amount</th>',
+        data-act="printEarlier">${th('common.print')}</button></div>
+      ${table(`<th>${th('common.for')}</th><th>${th('common.what')}</th><th class="num">${th('common.amount')}</th>`,
         f.earlier.map(m => m.kinds.map((k, i) => `<tr>
           <td class="nowrap">${i ? '' : esc(monthName(m.month))}</td>
           <td><span>${esc(k.label)}</span><br><span class="quiet">${names(k.rows)}</span></td>
           <td class="num">${money(k.total)}</td></tr>`).join('')).join(''),
-        `<tr class="tot"><td colspan="2">Total</td><td class="num">${money(f.earlier_total)}</td></tr>`)}
-      <p class="note">Part of Out below. A payment pays what was owed from before first,
-        as Settle up counts it.</p>
+        `<tr class="tot"><td colspan="2">${th('common.total')}</td><td class="num">${money(f.earlier_total)}</td></tr>`)}
+      <p class="note">${th('earlier.note')}</p>
     </details>`;
 }
 
@@ -701,14 +675,15 @@ function nameLines(name) {
   const sum = side => lines.filter(l => l.out === side).reduce((a, l) => a + l.amount, 0);
   return `<tr class="drill"><td colspan="2">
     <div class="cardhead"><strong>${esc(name)} — ${esc(monthName(S.data.month))}</strong>
-      <div class="right"><button class="btn" data-act="printName" data-n="${esc(name)}">Print</button></div></div>
-    ${table('<th>Date</th><th>Time</th><th>What</th><th class="num">Out</th><th class="num">In</th>',
+      <div class="right"><button class="btn" data-act="printName" data-n="${esc(name)}">${th('common.print')}</button></div></div>
+    ${table(`<th>${th('common.date')}</th><th>${th('common.time')}</th><th>${th('common.what')}</th>
+        <th class="num">${th('common.out')}</th><th class="num">${th('common.in')}</th>`,
       lines.map(l => `<tr><td class="nowrap">${esc(l.on)}</td><td class="quiet">${esc(l.time || '')}</td>
-        <td><span>${esc(l.label)}</span>${(l.earlier || []).map(([m, v]) => ` <span class="pill">${
-          v === l.amount ? '' : `${money(v)} `}for ${esc(monthName(m))}</span>`).join('')}</td>
+        <td><span>${esc(l.label)}</span>${(l.earlier || []).map(([m, v]) => ` <span class="pill">${v === l.amount
+          ? th('entries.for_month', ...monthWords(m)) : th('flow.amount_for', money(v), ...monthWords(m))}</span>`).join('')}</td>
         <td class="num">${l.out ? money(l.amount) : ''}</td>
         <td class="num">${l.out ? '' : money(l.amount)}</td></tr>`).join(''),
-      `<tr class="tot"><td colspan="3">${lines.length} entr${lines.length === 1 ? 'y' : 'ies'}</td>
+      `<tr class="tot"><td colspan="3">${lines.length === 1 ? th('flow.entries_one', 1) : th('flow.entries_many', lines.length)}</td>
         <td class="num">${sum(true) ? money(sum(true)) : ''}</td>
         <td class="num">${sum(false) ? money(sum(false)) : ''}</td></tr>`)}
   </td></tr>`;
@@ -719,10 +694,10 @@ export function salesByDay() {
   if (!rows.length) return '';
   const max = Math.max(...rows.map(r => r[1]));
   const avg = rows.reduce((a, r) => a + r[1], 0) / rows.length;
-  const day = d => new Date(d + 'T12:00:00').toLocaleDateString('en-GB', { weekday: 'short' });
-  return card(`<h2>Sales by night</h2>
-    <p class="sub">${rows.length} nights, ${money(avg)} on average.</p>
-    ${table('<th>Night</th><th></th><th class="num">Sales</th>',
+  const day = d => t(`day.short.${new Date(d + 'T12:00:00').getDay() || 7}`);
+  return card(`<h2>${th('sales_night.title')}</h2>
+    <p class="sub">${th('sales_night.sub', rows.length, money(avg))}</p>
+    ${table(`<th>${th('sales_night.night')}</th><th></th><th class="num">${th('result.sales')}</th>`,
       rows.map(([d, v]) => `<tr><td class="nowrap">${esc(d)} <span class="quiet">${day(d)}</span></td>
         <td style="width:55%"><div class="bar"><span style="width:${max ? v / max * 100 : 0}%"></span></div></td>
         <td class="num">${money(v)}</td></tr>`).join(''))}`);
@@ -732,33 +707,30 @@ export function closeCard() {
   const per = S.data.period;
   if (per.status === 'closed') {
     return card(`<div class="row">
-      <div><strong>Closed ${esc(String(per.closed_at || '').slice(0, 10))}</strong>
-        <p class="sub" style="margin:2px 0 0">Stock counted ${esc(per.count_date || '—')}.
-          Nothing in Setup can move these figures now.</p></div>
-      <button class="btn" style="margin-inline-start:auto" data-act="reopen">Reopen</button>
+      <div><strong>${th('close_card.closed', esc(String(per.closed_at || '').slice(0, 10)))}</strong>
+        <p class="sub" style="margin:2px 0 0">${th('close_card.counted', esc(per.count_date || '—'))}</p></div>
+      <button class="btn" style="margin-inline-start:auto" data-act="reopen">${th('close_card.reopen')}</button>
     </div>`);
   }
   if (S.data.month === S.data.this_month) return '';
   return card(`<div class="row">
-      <div><strong>Close ${esc(monthName(S.data.month))}</strong>
-        <p class="sub" style="margin:2px 0 0">Freezes the result, posts the cost of
-          goods, splits the profit between the partners, and carries the stock into
-          the next month.</p></div>
-      <button class="btn primary" style="margin-inline-start:auto" data-act="closeAsk">Close the month</button>
+      <div><strong>${th('close_card.close_month', ...monthWords(S.data.month))}</strong>
+        <p class="sub" style="margin:2px 0 0">${th('close_card.sub')}</p></div>
+      <button class="btn primary" style="margin-inline-start:auto" data-act="closeAsk">${th('close_card.close')}</button>
     </div>`);
 }
 
 export function everyMonth() {
   const rows = (S.data.summary || []).slice().reverse();
   if (rows.length < 2) return '';
-  return card(`<h2>Every month</h2>
-    ${table(`<th>Month</th><th class="num">Net profit</th><th></th>`,
+  return card(`<h2>${th('every_month.title')}</h2>
+    ${table(`<th>${th('period.month')}</th><th class="num">${th('result.net_profit')}</th><th></th>`,
       rows.map(r => `<tr>
         <td><button class="mini link" data-act="setMonth" data-m="${esc(r.month)}">${esc(monthName(r.month))}</button></td>
         <td class="num ${cls(r.net)}">${money(r.net)}</td>
-        <td>${r.status === 'closed' ? '<span class="pill">closed</span>'
-              : r.month === S.data.this_month ? '<span class="pill">in progress</span>'
-              : '<span class="pill warn">not closed</span>'}</td>
+        <td>${r.status === 'closed' ? `<span class="pill">${th('period.closed')}</span>`
+              : r.month === S.data.this_month ? `<span class="pill">${th('period.in_progress')}</span>`
+              : `<span class="pill warn">${th('period.not_closed')}</span>`}</td>
       </tr>`).join(''))}`);
 }
 
@@ -767,15 +739,12 @@ export function everyMonth() {
 export function stockFigures() {
   const c = S.data.stock.cogs;
   return tiles([
-    tile('Stock on the shelves', money(c.closing), c.date ? 'counted ' + c.date : 'no count'),
-    tile('Stock at the start', money(c.opening), c.opening_date ? 'counted ' + c.opening_date : ''),
-    tile('Bought', money(c.purchases), 'supplier receipts in the window'),
-    tile('Cost of goods sold', money(c.value), 'start + bought − left', c.raw < 0 ? 'warnc' : ''),
-  ]) + (c.raw < 0 ? `<div class="banner"><h2>The cost of goods came out negative</h2>
-      <p style="margin:0">It works out at ${money(c.raw)}, which would mean the month
-      ended with more stock than it started with plus everything bought. Either a
-      delivery was never written down, or this count is setting the opening
-      position rather than measuring a month.</p></div>` : '');
+    tile(t('stock.on_shelves'), money(c.closing), c.date ? t('stock.counted', c.date) : t('stock.no_count')),
+    tile(t('stock.at_start'), money(c.opening), c.opening_date ? t('stock.counted', c.opening_date) : ''),
+    tile(t('stock.bought'), money(c.purchases), t('stock.receipts_window')),
+    tile(t('stock.cogs_sold'), money(c.value), t('stock.cogs_sum'), c.raw < 0 ? 'warnc' : ''),
+  ]) + (c.raw < 0 ? `<div class="banner"><h2>${th('stock.negative_title')}</h2>
+      <p style="margin:0">${th('stock.negative', money(c.raw))}</p></div>` : '');
 }
 
 /* Filling a bucket: packs of sealed tobacco into one of the mixes. Nothing
@@ -787,58 +756,54 @@ export function fillCard() {
   const f = S.draft.fill || {};
   const mix = st.mixes.find(m => m.id === f.mix);
   const items = Object.fromEntries(S.data.setup.items.map(i => [i.id, i]));
-  const head = `<div class="cardhead"><h2>Fill a bucket</h2>
+  const head = `<div class="cardhead"><h2>${th('fill.title')}</h2>
       <div class="right row"><select data-act="fillMix" style="width:auto">
-        <option value="">Which mix?</option>
+        <option value="">${th('fill.which_mix')}</option>
         ${options(st.mixes.map(m => ({ value: m.id, label: m.name })), f.mix)}</select></div></div>`;
   const recent = fillsList(st.fills);
   if (!mix) {
-    return card(`${head}<p class="sub">Packs of tobacco into one of the mixes. No money
-      moves: the packs come off their tobacco and go into the bucket at what they cost,
-      and the mix’s price follows.</p>${recent}`);
+    return card(`${head}<p class="sub">${th('fill.sub')}</p>${recent}`);
   }
   const loose = it => ((it.levels || []).find(l => l.key === 'loose') || {}).label || '';
   const rows = (f.order || []).filter(id => items[id]).map(id => {
     const it = items[id];
     return `<tr data-fill="${id}"${S.draft.found === id ? ' class="found"' : ''}>
-      <td>${esc(it.name)}<br><span class="quiet">${money(it.cost)} / kg</span></td>
+      <td>${esc(it.name)}<br><span class="quiet">${th('fill.per_kg', money(it.cost))}</span></td>
       <td class="num"><input type="number" min="0" step="1" id="fill-${id}" data-fillpack="${id}"
           value="${esc(f.packs[id] ?? '')}" placeholder="0" inputmode="decimal">
-        <span class="size">packs of ${esc(loose(it))}</span></td>
+        <span class="size">${th('fill.packs_of', esc(loose(it)))}</span></td>
       <td class="num quiet" data-fillgrams="${id}"></td>
       <td class="num" data-fillvalue="${id}"></td>
-      <td class="actions"><button class="mini" data-act="fillDrop" data-id="${id}" title="Leave it out">✕</button></td>
+      <td class="actions"><button class="mini" data-act="fillDrop" data-id="${id}" title="${th('fill.leave_out')}">✕</button></td>
     </tr>`;
   }).join('');
   const sealed = S.data.setup.items.filter(i => i.letter === 'B' && i.active);
   return card(`${head}
-    <p class="sub">${mix.usual.length ? `The usual for ${esc(mix.name)} is filled in; change any
-      figure, or scan the packs as they go in.` : `No usual batch for ${esc(mix.name)} yet: add what
-      goes in, or scan the packs as they go in, and keep it as the usual.`}
-      Its price is ${money(mix.price)} a kilo.</p>
-    ${rows ? table(`<th>Tobacco</th><th class="num">Packs</th><th class="num">Grams</th>
-        <th class="num">Cost</th><th></th>`, rows,
-        `<tr class="tot"><td>Into the bucket</td><td></td><td class="num" id="fillGrams"></td>
+    <p class="sub">${mix.usual.length ? th('fill.usual_filled', esc(mix.name)) : th('fill.no_usual', esc(mix.name))}
+      ${th('fill.price', money(mix.price))}</p>
+    ${rows ? table(`<th>${th('fill.tobacco')}</th><th class="num">${th('fill.packs')}</th><th class="num">${th('fill.grams')}</th>
+        <th class="num">${th('fill.cost')}</th><th></th>`, rows,
+        `<tr class="tot"><td>${th('fill.into_bucket')}</td><td></td><td class="num" id="fillGrams"></td>
           <td class="num" id="fillValue"></td><td></td></tr>`) : ''}
     <div class="row" style="margin-top:10px">
-      <input id="fillItem" list="sealedNames" placeholder="Tobacco or barcode" autocomplete="off"
+      <input id="fillItem" list="sealedNames" placeholder="${th('fill.tobacco_or_barcode')}" autocomplete="off"
         spellcheck="false" style="max-width:280px">
-      <button class="btn" data-act="fillAdd">Add</button>
-      ${mix.usual.length ? '<button class="mini" data-act="fillUsual">Back to the usual</button>' : ''}
+      <button class="btn" data-act="fillAdd">${th('common.add')}</button>
+      ${mix.usual.length ? `<button class="mini" data-act="fillUsual">${th('fill.back_to_usual')}</button>` : ''}
     </div>
     <datalist id="sealedNames">${sealed.map(i => `<option value="${esc(i.name)}">`).join('')}</datalist>
     <div class="grid-form" style="margin-top:12px">
-      ${field('Filled on', `<input type="date" id="fillOn" value="${esc(f.on || S.data.tonight)}" max="${esc(S.data.today)}">`)}
-      ${field('Full bucket on the scales (g), if weighed', `<input type="number" min="0" id="fillGross"
-          placeholder="not weighed" inputmode="numeric">`)}
-      ${field('Bucket', `<select id="fillTare"><option value="">no bucket</option>
-          ${options(S.data.stock.count.tares.map(t => ({ value: t.id, label: `${t.name} (${t.grams}g)` })))}</select>`)}
+      ${field(t('fill.filled_on'), `<input type="date" id="fillOn" value="${esc(f.on || S.data.tonight)}" max="${esc(S.data.today)}">`)}
+      ${field(t('fill.full_bucket'), `<input type="number" min="0" id="fillGross"
+          placeholder="${th('fill.not_weighed')}" inputmode="numeric">`)}
+      ${field(t('fill.bucket'), `<select id="fillTare"><option value="">${th('fill.no_bucket')}</option>
+          ${options(S.data.stock.count.tares.map(x => ({ value: x.id, label: t('fill.tare', x.name, x.grams) })))}</select>`)}
     </div>
     <label class="tick"><input type="checkbox" id="fillKeep"${mix.usual.length ? '' : ' checked'}>
-      Keep this as the usual for ${esc(mix.name)}</label>
+      ${th('fill.keep_usual', esc(mix.name))}</label>
     <div class="row" style="margin-top:12px">
-      <button class="btn primary" data-act="fillBucket">Fill it</button>
-      <button class="btn" data-act="fillCancel">Cancel</button>
+      <button class="btn primary" data-act="fillBucket">${th('fill.fill_it')}</button>
+      <button class="btn" data-act="fillCancel">${th('common.cancel')}</button>
       <span class="quiet" id="fillPrice"></span>
     </div>
     ${recent}`);
@@ -850,38 +815,38 @@ function fillsList(fills) {
       <td class="nowrap">${esc(f.filled_on)}</td>
       <td>${esc(f.mix)}<br><span class="quiet">${esc(f.lines.map(l =>
         `${+(l.packs_milli / 1000).toFixed(3)} × ${l.name}`).join(', '))}</span></td>
-      <td class="num">${f.grams.toLocaleString('en-US')} g</td>
+      <td class="num">${th('unit.g', f.grams.toLocaleString('en-US'))}</td>
       <td class="num">${money(Math.round(f.value * 1000 / f.grams))}</td>
       <td class="num quiet">${money(f.price_before)} → ${money(f.price_after)}</td>
       <td class="actions">${f.locked ? '' : `<button class="mini danger" data-act="deleteFill"
-          data-id="${f.id}">Delete</button>`}</td>
+          data-id="${f.id}">${th('common.delete')}</button>`}</td>
     </tr>`).join('');
-  return `<details class="fold"><summary>Recent fills (${fills.length})</summary>
-    ${table(`<th>Date</th><th>Mix</th><th class="num">Went in</th><th class="num">Cost a kilo</th>
-      <th class="num">Mix price</th><th></th>`, rows)}</details>`;
+  return `<details class="fold"><summary>${th('fills.recent', fills.length)}</summary>
+    ${table(`<th>${th('common.date')}</th><th>${th('fills.mix')}</th><th class="num">${th('fills.went_in')}</th><th class="num">${th('fills.cost_kilo')}</th>
+      <th class="num">${th('fills.mix_price')}</th><th></th>`, rows)}</details>`;
 }
 
 export function countPicker() {
   const s = S.data.stock;
   const c = s.count;
   return card(`<div class="cardhead">
-      <h2>Stock count</h2>
-      ${c.locked ? '<span class="pill">locked — closed month</span>' : ''}
+      <h2>${th('count.title')}</h2>
+      ${c.locked ? `<span class="pill">${th('count.locked')}</span>` : ''}
       <div class="right row">
         <select data-act="setCount" style="width:auto">
           ${options(s.count_dates.slice().reverse(), s.count_date)}
         </select>
         <input type="date" id="newCount" value="${esc(S.data.tonight)}" max="${esc(S.data.today)}" style="width:auto">
-        <button class="btn" data-act="openCount">Start a count</button>
-        ${c.locked || !c.date ? '' : `<button class="mini danger" data-act="deleteCount">Delete this count</button>`}
+        <button class="btn" data-act="openCount">${th('count.start')}</button>
+        ${c.locked || !c.date ? '' : `<button class="mini danger" data-act="deleteCount">${th('count.delete')}</button>`}
       </div>
     </div>
     <p class="sub">${c.locked
-      ? 'This count is what a closed month was built on, so it is locked along with the prices it was valued at.'
+      ? th('count.locked_note')
       : c.source === 'carried'
-        ? 'This figure was carried in from the Excel workbook, not counted item by item.'
-        : 'Weigh the bucket and the tare comes off. Sealed tobacco is counted in the boxes it comes in, each size said under its box, and converts to kilos. Everything else is whole packages plus loose pieces. Each box saves as you leave it. Scanning a barcode goes straight to its item.'}
-      ${c.date ? ` <strong>Valued at ${money(c.closing)}.</strong>` : ''}</p>`);
+        ? th('count.carried_note')
+        : th('count.how')}
+      ${c.date ? ` <strong>${th('count.valued', money(c.closing))}</strong>` : ''}</p>`);
 }
 
 export function countSheet() {
@@ -902,10 +867,15 @@ export function countSheet() {
     const weighed = g.letter === 'A';
     const sealed = g.letter === 'B';
     const head = weighed
-      ? `<th>Item</th><th>Bucket</th><th class="num">On the scales (g)</th><th class="num">Net</th><th class="num">Value</th>`
+      ? `<th>${th('count.item')}</th><th>${th('fill.bucket')}</th><th class="num">${th('count.on_scales')}</th>
+          <th class="num">${th('count.net')}</th><th class="num">${th('count.value')}</th>`
       : sealed
-        ? `<th>Item</th><th class="num">Cartons</th><th class="num">Blocks</th><th class="num">Packs</th><th class="num">Kilos</th><th class="num">Value</th>`
-        : `<th>Item</th><th class="num">Packages</th><th class="num">Loose</th><th class="num">Comes to</th><th class="num">Value</th>`;
+        ? `<th>${th('count.item')}</th><th class="num">${th('count.cartons')}</th>
+            <th class="num">${th('count.blocks')}</th><th class="num">${th('fill.packs')}</th>
+            <th class="num">${th('count.kilos')}</th><th class="num">${th('count.value')}</th>`
+        : `<th>${th('count.item')}</th><th class="num">${th('count.packages')}</th>
+            <th class="num">${th('count.loose')}</th><th class="num">${th('count.comes_to')}</th>
+            <th class="num">${th('count.value')}</th>`;
     const cols = sealed ? 6 : 5;
     let brand = null;
     const rows = g.items.map(i => {
@@ -918,35 +888,34 @@ export function countSheet() {
         return `<tr class="brandh"${find}><td colspan="${cols}"><strong>${esc(i.name)}</strong> ${price}</td></tr>`;
       }
       const q = (i.qty_milli || 0) / 1000;
-      const unit = weighed || sealed ? 'kg' : '';
+      const kilos = weighed || sealed;
       return `<tr data-item="${i.id}"${find} class="${[i.active ? '' : 'quiet', under ? 'flavour' : '',
                                                   S.draft.found === i.id ? 'found' : ''].join(' ').trim()}">
         <td>${esc(under ? i.flavour : i.name)}<br>${price}</td>
         ${weighed
           ? `<td><select data-k="tare_id"${ro} style="min-width:110px">
-               <option value="">no bucket</option>
-               ${options(c.tares.map(t => ({ value: t.id, label: `${t.name} (${t.grams}g)` })), i.tare_id)}</select></td>
+               <option value="">${th('fill.no_bucket')}</option>
+               ${options(c.tares.map(x => ({ value: x.id, label: t('fill.tare', x.name, x.grams) })), i.tare_id)}</select></td>
              <td class="num"><input type="number" min="0" data-k="gross_grams" value="${i.gross_grams ?? ''}"
                   placeholder="0"${ro} inputmode="numeric"></td>`
           : sealed
             ? sizes(i)
             : `<td class="num">${box('packages', i.packages_milli)}</td>
                <td class="num">${box('loose', i.loose_milli)}</td>`}
-        <td class="num quiet">${q ? q.toFixed(3).replace(/\.?0+$/, '') + (unit ? ' ' + unit : '') : ''}</td>
+        <td class="num quiet">${!q ? '' : kilos ? th('unit.kg', q.toFixed(3).replace(/\.?0+$/, ''))
+          : q.toFixed(3).replace(/\.?0+$/, '')}</td>
         <td class="num">${i.value ? money(i.value) : ''}</td>
       </tr>`;
     }).join('');
     return `<div class="findgroup"><h3 class="grouph">${esc(g.name)}</h3>
-      ${table(head, rows, `<tr class="tot"><td>Total</td>
+      ${table(head, rows, `<tr class="tot"><td>${th('common.total')}</td>
         <td colspan="${cols - 2}"></td><td class="num">${money(g.value)}</td></tr>`)}</div>`;
   }).join('');
-  return card(`<div class="cardhead"><h2>Count for ${esc(c.date)}</h2>
+  return card(`<div class="cardhead"><h2>${th('count.for', esc(c.date))}</h2>
       <div class="right">${findBox('count')}</div></div>
-    <p class="sub">Quantities only — prices and pack sizes come from Setup.
-      A count keeps the prices it was taken at.</p>
+    <p class="sub">${th('count.quantities')}</p>
     ${body}
-    <p class="sub" style="margin-top:14px"><strong>Counted value ${money(c.closing)}</strong>,
-      rounded to the note.</p>`);
+    <p class="sub" style="margin-top:14px">${th('count.rounded', `<strong>${th('count.counted_value', money(c.closing))}</strong>`)}</p>`);
 }
 
 /* What should be on the shelf, from the count before: receipts in, buckets
@@ -962,23 +931,23 @@ export function expectedCard() {
     const sign = x < 0 ? '−' : withSign ? '+' : '';
     const a = Math.abs(x);
     return sign + (['A', 'B'].includes(r.letter)
-      ? (a < 1 ? `${Math.round(a * 1000)} g` : `${+a.toFixed(3)} kg`) : `${+a.toFixed(2)}`);
+      ? (a < 1 ? t('unit.g', Math.round(a * 1000)) : t('unit.kg', +a.toFixed(3))) : `${+a.toFixed(2)}`);
   };
   const row = (r, lit) => `<tr${lit && r.flag ? ' class="found"' : ''}${findAttrs(r.name, r.parent_id ? null : r.item, r.parent_id)}>
       <td>${esc(r.name)}${r.minimum !== null && r.should < r.minimum
-        ? `<br><span class="warnc">below its minimum of ${qty(r, r.minimum)}</span>` : ''}</td>
+        ? `<br><span class="warnc">${th('shelf.below_minimum', qty(r, r.minimum))}</span>` : ''}</td>
       <td class="num quiet">${qty(r, r.was)}</td>
       <td class="num quiet">${qty(r, r.in, true)}</td>
       <td class="num quiet">${qty(r, r.buckets, true)}</td>
       <td class="num quiet">${qty(r, -r.sold, true)}</td>
       <td class="num">${qty(r, r.should)}</td>
-      <td class="num">${r.counted === null ? '<span class="quiet">not counted</span>' : qty(r, r.counted)}</td>
+      <td class="num">${r.counted === null ? `<span class="quiet">${th('shelf.not_counted')}</span>` : qty(r, r.counted)}</td>
       <td class="num ${r.flag ? (r.gap < 0 ? 'neg' : 'warnc') : 'quiet'}">${r.gap === null ? ''
         : `${qty(r, r.gap, true) || '—'}${r.flag && r.worth ? `<br>${money(r.worth)}` : ''}`}</td>
     </tr>`;
-  const head = `<th>Item</th><th class="num">At ${esc(v.from)}</th><th class="num">In</th>
-    <th class="num">Buckets</th><th class="num">Sold</th><th class="num">Should be</th>
-    <th class="num">Counted</th><th class="num">Gap</th>`;
+  const head = `<th>${th('count.item')}</th><th class="num">${th('shelf.at', esc(v.from))}</th><th class="num">${th('common.in')}</th>
+    <th class="num">${th('shelf.buckets')}</th><th class="num">${th('shelf.sold')}</th><th class="num">${th('shelf.should_be')}</th>
+    <th class="num">${th('shelf.counted')}</th><th class="num">${th('shelf.gap')}</th>`;
   const grouped = (list, lit) => {
     let last = null;
     return list.map(r => {
@@ -990,30 +959,28 @@ export function expectedCard() {
   const off = v.rows.filter(r => r.flag);
   const says = v.counted
     ? (off.length
-      ? `${off.length} item${off.length === 1 ? ' is' : 's are'} off: ${money(-v.short)} short and
-         ${money(v.over)} over, at the prices counted.`
-      : 'Everything counted is where it should be.')
-    : `There is no count on ${esc(v.to)}, so this is what should be on the shelf now.`;
+      ? (off.length === 1 ? th('shelf.off_one', 1, money(-v.short), money(v.over))
+        : th('shelf.off_many', off.length, money(-v.short), money(v.over)))
+      : th('shelf.all_well'))
+    : th('shelf.no_count', esc(v.to));
   const caveats = [
-    v.not_set.length ? `${v.not_set.length} menu item${v.not_set.length === 1 ? '' : 's'} sold
-      ${v.not_set.length === 1 ? 'is' : 'are'} not yet set to take anything (Setup → What each menu
-      item takes), so took nothing: ${v.not_set.map(n => `<bdi>${esc(n)}</bdi>`).join(', ')}.` : '',
-    v.heads_unknown ? `${+v.heads_unknown.toFixed(1)} heads were sold while the grams in a head
-      are not set (Setup → What each menu item takes), so no tobacco came off for them.` : '',
+    v.not_set.length === 1
+      ? th('shelf.not_set_one', 1, v.not_set.map(n => `<bdi>${esc(n)}</bdi>`).join(', '))
+      : v.not_set.length
+        ? th('shelf.not_set_many', v.not_set.length, v.not_set.map(n => `<bdi>${esc(n)}</bdi>`).join(', ')) : '',
+    v.heads_unknown ? th('shelf.heads_unknown', +v.heads_unknown.toFixed(1)) : '',
   ].filter(Boolean);
-  return card(`<div class="cardhead"><h2>What should be on the shelf</h2>
+  return card(`<div class="cardhead"><h2>${th('shelf.title')}</h2>
       <div class="right">${findBox('shelf')}</div></div>
-    <p class="sub">From the count on ${esc(v.from)}: what receipts brought in, what went into
-      and out of buckets, and what the nights sold, up to ${esc(v.to)}.
-      <strong>${says}</strong></p>
+    <p class="sub">${th('shelf.from_count', esc(v.from), esc(v.to), `<strong>${says}</strong>`)}</p>
     ${off.length ? table(head, grouped(off)) : ''}
-    <details class="fold"><summary>Every item (${v.rows.length})</summary>
+    <details class="fold"><summary>${th('shelf.every_item', v.rows.length)}</summary>
       ${table(head, grouped(v.rows, true))}</details>
     ${caveats.map(c => `<p class="note">${c}</p>`).join('')}
     <div class="row" style="margin-top:10px;align-items:center">
-      <label style="margin:0">Buckets may dry by up to</label>
+      <label style="margin:0">${th('shelf.may_dry')}</label>
       ${save('drying_pct', {}, 'pct', v.drying || '', 'type="number" min="0" max="50" step="0.5" inputmode="decimal" placeholder="0" style="max-width:80px"')}
-      <span class="quiet">% between counts, without being pointed out.</span>
+      <span class="quiet">${th('shelf.between_counts')}</span>
     </div>`);
 }
 
@@ -1027,44 +994,38 @@ export function ratiosCard() {
   const fmt = x => (x === null || x === undefined ? '—'
     : (+x.toFixed(x < 10 ? 1 : 0)).toLocaleString('en-US'));
   const rows = r.items.map(x => `<tr>
-      <td>${esc(x.name)}${x.dropped ? '<br><span class="neg">more is going than the sales explain</span>' : ''}</td>
-      <td class="num">${x.ratio ? fmt(x.ratio) : '<span class="quiet">not yet</span>'}</td>
+      <td>${esc(x.name)}${x.dropped ? `<br><span class="neg">${th('ratios.going')}</span>` : ''}</td>
+      <td class="num">${x.ratio ? fmt(x.ratio) : `<span class="quiet">${th('ratios.not_yet')}</span>`}</td>
       <td class="num">${x.a_night ? fmt(x.a_night) : ''}</td>
       <td class="quiet">${x.pairs.map(p => `${esc(p.to.slice(5))}: ${p.ratio ? fmt(p.ratio) : '—'}`).join(' · ')}</td>
       <td class="actions"><button class="mini" data-do="per_hookah"
-          data-args="${args({ id: x.item, on: 0 })}">Stop</button></td>
+          data-args="${args({ id: x.item, on: 0 })}">${th('ratios.stop')}</button></td>
     </tr>`).join('');
-  return card(`<h2>Used with each hookah</h2>
-    <p class="sub">Foil, coal, filters: nobody writes down each one opened, so between two
-      counts the app divides the hookahs SambaPOS sold by what was used, and learns hookahs to
-      each one — a roll, a carton, whatever the count sheet counts it in. It needs two counts in
-      a row that both counted it; then what should be on the shelf takes off what each night
-      roughly used.${r.a_night ? ` Lately about ${fmt(r.a_night)} hookahs a night.` : ''}</p>
-    ${r.hookahs_known ? '' : `<p class="note warnc">Give the hookahs on the menu their tobacco
-      first (Setup → What each menu item takes), so they can be counted.</p>`}
-    ${rows ? table(`<th>Item</th><th class="num">Hookahs to each</th><th class="num">Used a night</th>
-      <th>Count by count</th><th></th>`, rows) : ''}
+  return card(`<h2>${th('ratios.title')}</h2>
+    <p class="sub">${th('ratios.sub')}${r.a_night ? th('ratios.lately', fmt(r.a_night)) : ''}</p>
+    ${r.hookahs_known ? '' : `<p class="note warnc">${th('ratios.give_tobacco')}</p>`}
+    ${rows ? table(`<th>${th('count.item')}</th><th class="num">${th('ratios.to_each')}</th><th class="num">${th('ratios.a_night')}</th>
+      <th>${th('ratios.by_count')}</th><th></th>`, rows) : ''}
     ${candidates.length ? `<div class="row addrow">
       <select data-f="id" style="max-width:260px">${options(candidates.map(i => ({ value: i.id, label: i.name })))}</select>
-      <button class="btn" data-add="per_hookah" data-args="${args({ on: 1 })}">Goes with each hookah</button>
+      <button class="btn" data-add="per_hookah" data-args="${args({ on: 1 })}">${th('ratios.goes_with')}</button>
     </div>` : ''}`);
 }
 
 export function receiptForm() {
   const sup = S.data.people.supplier.filter(s => s.active);
-  return card(`<h2>New receipt</h2>
-    <p class="sub">The total is what moves money. Then list what came in, so the
-      stock can follow it — that part can wait.</p>
+  return card(`<h2>${th('receipt_form.title')}</h2>
+    <p class="sub">${th('receipt_form.sub')}</p>
     <div class="grid-form">
-      ${field('Date', `<input type="date" id="rDate" value="${esc(S.data.tonight)}" max="${esc(S.data.today)}">`)}
-      ${field('Supplier', `<select id="rSup">${options(sup.map(s => s.name))}</select>`)}
-      ${field('Receipt no.', '<input id="rNo" placeholder="optional">')}
-      ${field('For', '<input id="rWhat" placeholder="Several items">')}
-      ${field('Total', amountInput('rAmt'))}
-      ${field('Terms', `<select id="rTerms"><option value="credit">On credit</option>
-                        <option value="cash">Paid cash</option></select>`)}
-      ${field('Paid from', `<select id="rPot">${potOptions()}</select>`)}
-      <div><button class="btn primary" data-act="receipt">Add</button></div>
+      ${field(t('common.date'), `<input type="date" id="rDate" value="${esc(S.data.tonight)}" max="${esc(S.data.today)}">`)}
+      ${field(t('entries.supplier'), `<select id="rSup">${options(sup.map(s => s.name))}</select>`)}
+      ${field(t('receipt_form.number'), `<input id="rNo" placeholder="${th('receipt_form.optional')}">`)}
+      ${field(t('common.for'), `<input id="rWhat" placeholder="${th('receipt.several')}">`)}
+      ${field(t('common.total'), amountInput('rAmt'))}
+      ${field(t('common.terms'), `<select id="rTerms"><option value="credit">${th('entries.on_credit')}</option>
+                        <option value="cash">${th('entries.paid_cash')}</option></select>`)}
+      ${field(t('receipt_form.paid_from'), `<select id="rPot">${potOptions()}</select>`)}
+      <div><button class="btn primary" data-act="receipt">${th('common.add')}</button></div>
     </div>`);
 }
 
@@ -1074,14 +1035,14 @@ export function receiptList() {
   const older = rows.filter(r => r.period !== S.data.month);
   const open = S.draft.rlines;
   const isOpen = e => e.receipt && e.receipt.id === open;
-  const list = rs => table(`<th>Date</th><th>What</th><th>Details</th><th>Pot</th>
-      <th class="num">Amount</th><th></th>`,
+  const list = rs => table(`<th>${th('common.date')}</th><th>${th('common.what')}</th><th>${th('common.details')}</th><th>${th('common.pot')}</th>
+      <th class="num">${th('common.amount')}</th><th></th>`,
     rs.map(e => entryRow(e, { lines: true }) + (isOpen(e) ? linesRow(e) : '')).join(''));
   const names = S.data.setup.items.filter(i => i.active && i.letter !== 'A');
-  return card(`<h2>Receipts in ${esc(monthName(S.data.month))}</h2>
-    ${now.length ? list(now) : empty('No receipts this month.')}
+  return card(`<h2>${th('receipts.in_month', ...monthWords(S.data.month))}</h2>
+    ${now.length ? list(now) : empty(t('receipts.none'))}
     ${older.length ? `<details class="fold"${older.some(isOpen) ? ' open' : ''}>
-      <summary>Every other receipt (${older.length})</summary>${list(older)}</details>` : ''}
+      <summary>${th('receipts.every_other', older.length)}</summary>${list(older)}</details>` : ''}
     <datalist id="stockNames">${names.map(i => `<option value="${esc(i.name)}">`).join('')}</datalist>`);
 }
 
@@ -1096,8 +1057,9 @@ function linesRow(e) {
     .filter(id => !saved.some(l => l.item === id))
     .map(id => S.data.setup.items.find(i => i.id === id)).filter(Boolean)
     .map(i => ({ item: i.id, name: i.name, letter: i.letter, levels: i.levels, pending: true }));
-  const unit = l => (l.letter === 'B' ? ['kg', 'kg'] : l.letter === 'E' ? ['cartons', 'carton']
-    : l.levels.length > 1 ? ['packages', 'package'] : ['pieces', 'piece']);
+  // what one line is counted in: rline.many_<it> and rline.one_<it> in the words
+  const unit = l => (l.letter === 'B' ? 'kg' : l.letter === 'E' ? 'carton'
+    : l.levels.length > 1 ? 'package' : 'piece');
   const sizes = l => {
     const keys = l.levels.map(x => x.key);
     const extra = ['packages', 'blocks', 'loose'].filter(k => !keys.includes(k) && l[`${k}_milli`]);
@@ -1110,73 +1072,62 @@ function linesRow(e) {
   };
   const row = l => {
     const q = (l.qty_milli || 0) / 1000;
-    const [many, one] = unit(l);
+    const u = unit(l);
     return `<tr data-item="${l.item}" data-receipt="${rid}">
       <td>${esc(l.name)}</td>
       <td>${sizes(l)}</td>
-      <td class="num quiet">${q ? `${+q.toFixed(3)} ${many}` : ''}
-        ${q && l.amount ? `<br>${money(Math.round(l.amount / q))} / ${one}` : ''}</td>
+      <td class="num quiet">${q ? th(`rline.many_${u}`, +q.toFixed(3)) : ''}
+        ${q && l.amount ? `<br>${th(`rline.one_${u}`, money(Math.round(l.amount / q)))}` : ''}</td>
       <td class="num"><input ${MONEY} data-k="amount" value="${esc(commas(l.amount))}"
           placeholder="—"${ro}></td>
       <td class="actions">${ro ? '' : l.pending
-        ? `<button class="mini" data-act="dropRLine" data-id="${l.item}" title="Leave it out">✕</button>`
+        ? `<button class="mini" data-act="dropRLine" data-id="${l.item}" title="${th('fill.leave_out')}">✕</button>`
         : `<button class="mini" data-do="receipt_line" data-args="${args({ receipt: rid, item: l.item })}"
-             title="Take this line off">✕</button>`}</td>
+             title="${th('rline.take_off')}">✕</button>`}</td>
     </tr>`;
   };
   const priced = saved.filter(l => l.amount != null);
   const sum = priced.reduce((a, l) => a + l.amount, 0);
-  const note = !saved.length
-    ? 'Nothing listed yet. Only the total moves money; the lines are what came onto the shelves.'
+  const note = !saved.length ? th('rline.nothing')
     : priced.length < saved.length
-      ? `${saved.length - priced.length} of ${saved.length} lines have no amount${priced.length
-          ? `; the others come to ${money(sum)} of the receipt’s ${money(e.amount)}` : ''}.`
-      : sum === e.amount
-        ? `The lines come to ${money(sum)}, the receipt’s total.`
-        : `The lines come to ${money(sum)}, ${money(Math.abs(e.amount - sum))}
-           ${sum < e.amount ? 'less' : 'more'} than the receipt’s ${money(e.amount)}.`;
+      ? (priced.length
+        ? th('rline.no_amount_others', saved.length - priced.length, saved.length, money(sum), money(e.amount))
+        : th('rline.no_amount', saved.length - priced.length, saved.length))
+      : sum === e.amount ? th('rline.total', money(sum))
+        : sum < e.amount ? th('rline.less', money(sum), money(e.amount - sum), money(e.amount))
+          : th('rline.more', money(sum), money(sum - e.amount), money(e.amount));
   return `<tr class="drill"><td colspan="6">
-    <div class="cardhead"><strong>What came in</strong>
+    <div class="cardhead"><strong>${th('entries.what_came_in')}</strong>
       <span class="quiet">${esc(e.detail || '')} · ${esc(e.happened_on)}</span>
-      <div class="right"><button class="mini" data-act="receiptLines" data-id="${rid}">Close</button></div></div>
-    ${saved.length || pending.length ? table(`<th>Item</th><th>How many</th><th class="num">Comes to</th>
-        <th class="num">Amount</th><th></th>`, [...saved, ...pending].map(row).join('')) : ''}
+      <div class="right"><button class="mini" data-act="receiptLines" data-id="${rid}">${th('common.close')}</button></div></div>
+    ${saved.length || pending.length ? table(`<th>${th('count.item')}</th><th>${th('rline.how_many')}</th><th class="num">${th('count.comes_to')}</th>
+        <th class="num">${th('common.amount')}</th><th></th>`, [...saved, ...pending].map(row).join('')) : ''}
     ${ro ? '' : `<div class="row" style="margin-top:10px">
-      <input id="rlItem" list="stockNames" placeholder="Item or barcode" autocomplete="off"
+      <input id="rlItem" list="stockNames" placeholder="${th('rline.item_or_barcode')}" autocomplete="off"
         spellcheck="false" style="max-width:300px">
-      <button class="btn" data-act="addRLine">Add</button></div>`}
+      <button class="btn" data-act="addRLine">${th('common.add')}</button></div>`}
     <p class="note">${note}</p>
   </td></tr>`;
 }
 
 export function countHistory() {
   const rows = S.data.stock.counts;
-  return card(`<h2>Stock counts</h2>
+  return card(`<h2>${th('counts.title')}</h2>
     ${rows.length ? table(
-      `<th>Count date</th><th class="num">Valued at</th><th>Where it came from</th>`,
+      `<th>${th('counts.date')}</th><th class="num">${th('counts.valued_at')}</th><th>${th('counts.where_from')}</th>`,
       rows.map(r => `<tr><td>${esc(r.count_date)}</td>
         <td class="num">${money(r.closing)}</td>
-        <td class="quiet">${r.source !== 'counted' ? 'carried in from the workbook'
-          : r.has_lines || r.closing ? 'counted item by item'
-            : 'started, with nothing counted yet: not a count until something is'}</td></tr>`).join(''))
-      : empty('No counts yet.')}`);
+        <td class="quiet">${r.source !== 'counted' ? th('counts.carried')
+          : r.has_lines || r.closing ? th('counts.item_by_item')
+            : th('counts.started')}</td></tr>`).join(''))
+      : empty(t('counts.none'))}`);
 }
 
 /* =================================================================== books */
 
-const ENTRY_KINDS = [
-  { value: 'expense', label: 'Daily expense' },
-  { value: 'staff_advance', label: 'Staff advance' },
-  { value: 'staff_repay', label: 'Staff paid money back' },
-  { value: 'pay_salary', label: 'Salary payment' },
-  { value: 'partner_draw', label: 'Partner took cash' },
-  { value: 'partner_in', label: 'Partner put cash in' },
-  { value: 'pay_supplier', label: 'Supplier payment' },
-  { value: 'pay_fixed', label: 'Rent or monthly charge paid' },
-  { value: 'pay_electricity', label: 'Electricity paid' },
-  { value: 'income', label: 'Other income' },
-  { value: 'transfer', label: 'Move between pots' },
-];
+// what a new entry can be; each is called entry_kind.<it> in the words
+const ENTRY_KINDS = ['expense', 'staff_advance', 'staff_repay', 'pay_salary', 'partner_draw', 'partner_in',
+                     'pay_supplier', 'pay_fixed', 'pay_electricity', 'income', 'transfer'];
 
 export function newEntryCard() {
   const lists = S.data.lists;
@@ -1194,29 +1145,29 @@ export function newEntryCard() {
   const into = ['income', 'staff_repay', 'partner_in'].includes(kind);
   const closed = closedMonths();
   const months = S.data.months.filter(m => m <= S.data.this_month && !closed.has(m));
-  return card(`<h2>New entry</h2>
+  return card(`<h2>${th('new_entry.title')}</h2>
     <p class="sub">${isTransfer
-      ? 'A transfer moves money between your pots. It never touches profit.'
-      : 'For anything that is not part of closing up.'}</p>
+      ? th('new_entry.transfer_note')
+      : th('new_entry.note')}</p>
     <div class="grid-form">
-      ${field('Date', `<input type="date" id="eDate" value="${esc(S.data.tonight)}" max="${esc(S.data.today)}">`)}
-      ${field('What', `<select id="eKind" data-act="pickKind">${options(ENTRY_KINDS, kind)}</select>`)}
+      ${field(t('common.date'), `<input type="date" id="eDate" value="${esc(S.data.tonight)}" max="${esc(S.data.today)}">`)}
+      ${field(t('common.what'), `<select id="eKind" data-act="pickKind">${options(
+        ENTRY_KINDS.map(k => ({ value: k, label: t(`entry_kind.${k}`) })), kind)}</select>`)}
       ${isTransfer
-        ? field('From', `<select id="eFrom">${potOptions()}</select>`)
-          + field('To', `<select id="eTo">${options(S.data.pots.filter(p => p.active).map(p => p.name),
+        ? field(t('common.from'), `<select id="eFrom">${potOptions()}</select>`)
+          + field(t('common.to'), `<select id="eTo">${options(S.data.pots.filter(p => p.active).map(p => p.name),
               (S.data.pots.find(p => p.active && !p.main) || {}).name)}</select>`)
-        : (detailsFor[kind] ? field('Who or what', `<select id="eDetail">${options(detailsFor[kind])}</select>`) : '')
-          + field(into ? 'Into' : 'Out of', `<select id="ePot">${potOptions()}</select>`)}
-      ${field('Amount', amountInput('eAmt'))}
-      <div><button class="btn primary" data-act="addEntry">Add entry</button></div>
+        : (detailsFor[kind] ? field(t('common.who_or_what'), `<select id="eDetail">${options(detailsFor[kind])}</select>`) : '')
+          + field(into ? t('common.into') : t('common.out_of'), `<select id="ePot">${potOptions()}</select>`)}
+      ${field(t('common.amount'), amountInput('eAmt'))}
+      <div><button class="btn primary" data-act="addEntry">${th('new_entry.add')}</button></div>
     </div>
-    <details class="fold"><summary>Counts for another month</summary>
+    <details class="fold"><summary>${th('new_entry.another_month')}</summary>
       <div class="row" style="margin-top:8px">
         <select id="ePeriod" style="max-width:200px">
-          <option value="">the month of its date</option>
+          <option value="">${th('new_entry.its_date')}</option>
           ${options(months.slice().reverse().map(m => ({ value: m, label: monthName(m) })))}</select>
-        <span class="quiet">Only when paying an older month's salary, rent or electricity.
-          Settle up on Month does this for you.</span>
+        <span class="quiet">${th('new_entry.older_month')}</span>
       </div>
     </details>`);
 }
@@ -1225,83 +1176,83 @@ export function entryList() {
   const sr = S.search;
   const rows = sr ? sr.rows : S.data.entries;
   return card(`<div class="cardhead">
-      <h2>${sr ? `Found ${sr.rows.length}${sr.rows.length >= 300 ? '+' : ''}` : esc(monthName(S.data.month))}</h2>
-      ${sr ? '' : `<span class="pill">${rows.length} entr${rows.length === 1 ? 'y' : 'ies'}</span>`}
+      <h2>${!sr ? esc(monthName(S.data.month))
+        : sr.rows.length >= 300 ? th('entries.found_more', sr.rows.length) : th('entries.found', sr.rows.length)}</h2>
+      ${sr ? '' : `<span class="pill">${rows.length === 1 ? th('flow.entries_one', 1)
+        : th('flow.entries_many', rows.length)}</span>`}
       <div class="right row">
-        <input id="q" placeholder="Search every month: a name, an amount, a date" value="${esc(sr ? sr.q : '')}"
+        <input id="q" placeholder="${th('entries.search_hint')}" value="${esc(sr ? sr.q : '')}"
           style="width:300px">
-        <button class="btn" data-act="search">Search</button>
-        ${sr ? '<button class="mini" data-act="clearSearch">Back to the month</button>' : ''}
+        <button class="btn" data-act="search">${th('entries.search')}</button>
+        ${sr ? `<button class="mini" data-act="clearSearch">${th('entries.back_to_month')}</button>` : ''}
       </div>
     </div>
     ${rows.length ? entryTable(rows)
-      : empty(sr ? 'Nothing matches.' : `Nothing recorded for ${monthName(S.data.month)}.`)}`);
+      : empty(sr ? t('entries.nothing_matches') : t('entries.nothing_for', ...monthWords(S.data.month)))}`);
 }
 
 export function recentChanges() {
   const rows = S.data.recent;
   if (!rows.length) return '';
-  return card(`<div class="cardhead"><h2>Recent changes</h2>
-      <div class="right"><button class="btn" data-act="printChanges">Print</button></div></div>
-    <p class="sub">Everything done to the books lately, newest first. A deletion
-      can be put back while its month is open.</p>
-    ${table('<th>When</th><th>What happened</th><th></th>',
+  return card(`<div class="cardhead"><h2>${th('recent.title')}</h2>
+      <div class="right"><button class="btn" data-act="printChanges">${th('common.print')}</button></div></div>
+    <p class="sub">${th('recent.sub')}</p>
+    ${table(`<th>${th('recent.when')}</th><th>${th('recent.what_happened')}</th><th></th>`,
       rows.slice(0, 25).map(r => `<tr><td class="nowrap quiet">${esc(localTime(r.at))}</td>
         <td>${esc(r.summary)}</td>
-        <td>${r.can_put_back ? `<button class="mini" data-act="putBack" data-id="${r.entry}">Put back</button>` : ''}</td>
+        <td>${r.can_put_back ? `<button class="mini" data-act="putBack" data-id="${r.entry}">${th('recent.put_back')}</button>` : ''}</td>
       </tr>`).join(''))}`);
 }
 
 export function whereMoneyIs() {
   const pots = S.data.pots.filter(p => p.active && (p.in_use || p.balance));
   const floats = S.data.people.float.length > 0;
-  return card(`<h2>Where the money is</h2>
-    <p class="sub">Your own pots are the business's cash.${floats
-      ? ' A float is money someone is holding for the business — still yours, just not in your hand.' : ''}</p>
+  return card(`<h2>${th('pots.title')}</h2>
+    <p class="sub">${th('pots.own')}${floats
+      ? th('pots.float_note') : ''}</p>
     <div class="potgrid">${pots.map(p => `
       <div class="pot${p.kind === 'float' ? ' isfloat' : ''}">
-        <div class="nm">${esc(p.name)}${p.main ? ' <span class="pill">main</span>' : ''}</div>
+        <div class="nm">${esc(p.name)}${p.main ? ` <span class="pill">${th('pots.main')}</span>` : ''}</div>
         <div class="bal ${cls(p.balance)}">${money(p.balance)}</div>
-        <div class="sub">${p.kind === 'float' ? 'held by this person' : 'your cash'}</div>
+        <div class="sub">${p.kind === 'float' ? th('pots.held') : th('pots.your_cash')}</div>
       </div>`).join('')}</div>
     ${tiles([
-      tile('Cash on hand', money(S.data.cash), 'own pots only'),
-      floats ? tile("In people's hands", money(S.data.floats), 'floats') : '',
-      floats ? tile('Total', money(S.data.cash + S.data.floats)) : '',
+      tile(t('common.cash_on_hand'), money(S.data.cash), t('pots.own_only')),
+      floats ? tile(t('common.in_hands'), money(S.data.floats), t('common.floats')) : '',
+      floats ? tile(t('common.total'), money(S.data.cash + S.data.floats)) : '',
     ])}`);
 }
 
 export function cashCountsCard() {
   const rows = S.data.counts.slice().reverse();
   const open = rows.filter(r => r.diff !== 0);
-  const head = `<th>Date</th><th class="num">Books said</th><th class="num">Counted</th>
-       <th class="num">Out by</th><th>Where</th><th>Reason</th><th></th>`;
+  const head = `<th>${th('common.date')}</th><th class="num">${th('cash_counts.books_said')}</th><th class="num">${th('shelf.counted')}</th>
+       <th class="num">${th('cash_counts.out_by')}</th><th>${th('cash_counts.where')}</th><th>${th('cash_counts.reason')}</th><th></th>`;
   const row = r => `<tr>
         <td class="nowrap">${esc(r.on)}</td>
         <td class="num">${money(r.expected)}</td>
         <td class="num">${money(r.counted)}</td>
         <td class="num ${r.found ? cls(r.found) : ''}">${r.found ? signed(r.found) : '—'}
-          ${r.written_off ? `<br><span class="quiet">written off</span>` : ''}</td>
+          ${r.written_off ? `<br><span class="quiet">${th('cash_counts.written_off')}</span>` : ''}</td>
         <td class="quiet">${r.split
-          ? esc(r.pots.filter(p => p.found).map(p => p.name + ' ' + signed(p.found)).join(', ') || 'all tie')
+          ? esc(r.pots.filter(p => p.found).map(p => p.name + ' ' + signed(p.found)).join(', ') || t('cash_counts.all_tie'))
           : esc(r.pots.map(p => p.name).join(', '))}</td>
         <td class="quiet">${esc(r.reason || '')}</td>
         <td class="actions">
-          ${r.diff ? `<button class="mini" data-act="writeOff" data-id="${r.id}">Write off</button>` : ''}
-          ${r.written_off ? '' : `<button class="mini danger" data-act="deleteCashCount" data-id="${r.id}">Delete</button>`}
+          ${r.diff ? `<button class="mini" data-act="writeOff" data-id="${r.id}">${th('cash_counts.write_off')}</button>` : ''}
+          ${r.written_off ? '' : `<button class="mini danger" data-act="deleteCashCount" data-id="${r.id}">${th('common.delete')}</button>`}
         </td>
       </tr>`;
   // anything that does not tie stays in view however old it is
   const recent = rows.filter((r, i) => i < 14 || r.diff !== 0);
   const older = rows.filter((r, i) => i >= 14 && r.diff === 0);
-  return card(`<h2>Cash counts</h2>
-    <p class="sub">Counting is done on Tonight; this is the history.
-      ${open.length ? `<strong class="warnc">${open.length} of the last ${rows.length} do not tie.</strong>
-        Find the missing entry if there is one; if the money really is gone, write it off,
-        and it becomes a cost of that month instead of a hole in every count after it.`
-        : `Every one of the last ${rows.length} ties.`}</p>
-    ${rows.length ? table(head, recent.map(row).join('')) : empty('No counts yet.')}
-    ${older.length ? `<details class="fold"><summary>Older counts (${older.length}), all tied</summary>
+  return card(`<h2>${th('cash_counts.title')}</h2>
+    <p class="sub">${th('cash_counts.sub')}
+      ${open.length ? `<strong class="warnc">${th('cash_counts.do_not_tie', open.length, rows.length)}</strong>
+        ${th('cash_counts.find_missing')}`
+        : th('cash_counts.all_tied', rows.length)}</p>
+    ${rows.length ? table(head, recent.map(row).join('')) : empty(t('counts.none'))}
+    ${older.length ? `<details class="fold"><summary>${th('cash_counts.older', older.length)}</summary>
       ${table(head, older.map(row).join(''))}</details>` : ''}`);
 }
 
@@ -1311,7 +1262,7 @@ const save = (action, a, fieldName, value, extra = '') =>
   `<input data-save="${action}" data-args="${args(a)}" data-field="${fieldName}"
      value="${esc(value ?? '')}" ${extra}>`;
 
-const addRow = (action, fixed, fields, button = 'Add') =>
+const addRow = (action, fixed, fields, button = t('common.add')) =>
   `<div class="row addrow" style="margin-top:12px">
      ${fields.map(([f, placeholder, type, width]) =>
        `<input data-f="${f}" placeholder="${esc(placeholder)}" ${type === 'money' ? MONEY : `type="${type || 'text'}"`}
@@ -1324,24 +1275,24 @@ export function editAccounts(kind, title, note) {
   const live = list.filter(a => a.active);
   const gone = list.filter(a => !a.active);
   const sal = S.data.setup.salaries;
-  const extraHead = kind === 'staff' ? '<th class="num">Salary a month</th>'
-    : kind === 'partner' ? '<th class="num">Share %</th>' : '';
-  const balHead = { staff: 'Owed to them', supplier: 'Owed to them', partner: 'Balance',
-                    cash: 'Holds', float: 'Holds' }[kind] || 'Balance';
+  const extraHead = kind === 'staff' ? `<th class="num">${th('accounts.salary_month')}</th>`
+    : kind === 'partner' ? `<th class="num">${th('accounts.share_pct')}</th>` : '';
+  const balHead = { staff: th('accounts.owed_to_them'), supplier: th('accounts.owed_to_them'),
+                    cash: th('accounts.holds'), float: th('accounts.holds') }[kind] || th('common.balance');
   const bal = a => {
-    if (kind === 'staff' && a.balance < 0) return `<span class="warnc">${money(-a.balance)} ahead</span>`;
-    if (kind === 'supplier' && a.balance < 0) return `<span class="warnc">${money(-a.balance)} in credit</span>`;
+    if (kind === 'staff' && a.balance < 0) return `<span class="warnc">${th('payroll.ahead', money(-a.balance))}</span>`;
+    if (kind === 'supplier' && a.balance < 0) return `<span class="warnc">${th('accounts.in_credit', money(-a.balance))}</span>`;
     return `<span class="${a.balance < 0 ? 'neg' : ''}">${money(a.balance)}</span>`;
   };
   // the days someone on the staff started and left decide their first and last
   // months; each can be put right while it still changes something
   const leftDay = a => (kind !== 'staff' ? '' : (a.start_open
     ? `<br><button class="mini link" data-act="started" data-id="${a.id}" data-name="${esc(a.name)}"
-         data-on="${esc(a.meta.started_on)}">started ${esc(a.meta.started_on)}</button>` : '')
+         data-on="${esc(a.meta.started_on)}">${th('payroll.started', esc(a.meta.started_on))}</button>` : '')
     + (!a.active && !a.meta.former
       ? `<br><button class="mini link" data-act="hasLeft" data-id="${a.id}" data-name="${esc(a.name)}"
            data-on="${esc(a.meta.left_on || '')}">${a.meta.left_on
-             ? `left ${esc(a.meta.left_on)}` : 'Which day did they leave?'}</button>` : ''));
+             ? th('payroll.left', esc(a.meta.left_on)) : th('accounts.which_day')}</button>` : ''));
   const row = a => `<tr>
       <td>${save('account_rename', { id: a.id }, 'name', a.name)}${leftDay(a)}</td>
       ${kind === 'staff' ? `<td class="num">${save('set_salary', { id: a.id }, 'amount', commas(sal[a.id] || ''),
@@ -1351,35 +1302,33 @@ export function editAccounts(kind, title, note) {
       <td class="num">${bal(a)}</td>
       <td>${a.active
         ? (kind === 'staff'
-          ? `<button class="mini" data-act="hasLeft" data-id="${a.id}" data-name="${esc(a.name)}">Has left</button>`
-          : `<button class="mini" data-do="account_active" data-args="${args({ id: a.id, active: 0 })}">Retire</button>`)
+          ? `<button class="mini" data-act="hasLeft" data-id="${a.id}" data-name="${esc(a.name)}">${th('accounts.has_left')}</button>`
+          : `<button class="mini" data-do="account_active" data-args="${args({ id: a.id, active: 0 })}">${th('accounts.retire')}</button>`)
         : (kind === 'staff' && a.meta.left_on
           ? `<button class="mini" data-act="cameBack" data-id="${a.id}" data-name="${esc(a.name)}"
-               data-on="${esc(a.meta.left_on)}">Bring back</button>`
-          : `<button class="mini" data-do="account_active" data-args="${args({ id: a.id, active: 1 })}">Bring back</button>`)}</td>
+               data-on="${esc(a.meta.left_on)}">${th('accounts.bring_back')}</button>`
+          : `<button class="mini" data-do="account_active" data-args="${args({ id: a.id, active: 1 })}">${th('accounts.bring_back')}</button>`)}</td>
     </tr>`;
-  const fields = [['name', 'Name']];
-  if (kind === 'staff') fields.push(['salary', 'Salary', 'money', 140]);
-  if (kind === 'partner') fields.push(['share', 'Share %', 'number', 100]);
-  const head = `<th>Name</th>${extraHead}<th class="num">${balHead}</th><th></th>`;
+  const fields = [['name', t('accounts.name')]];
+  if (kind === 'staff') fields.push(['salary', t('payroll.salary'), 'money', 140]);
+  if (kind === 'partner') fields.push(['share', t('accounts.share_pct'), 'number', 100]);
+  const head = `<th>${th('accounts.name')}</th>${extraHead}<th class="num">${balHead}</th><th></th>`;
   const shares = kind === 'partner'
-    ? Math.round(live.reduce((t, a) => t + (a.meta.share || 0), 0) * 1000) / 10 : 100;
+    ? Math.round(live.reduce((n, a) => n + (a.meta.share || 0), 0) * 1000) / 10 : 100;
   return card(`<h2>${esc(title)}</h2>${note ? `<p class="sub">${esc(note)}</p>` : ''}
-    ${shares !== 100 ? `<p class="note warnc">The shares add up to ${shares}%, not 100%.
-      A month closed like this would not hand out all of its profit.</p>` : ''}
-    ${live.length ? table(head, live.map(row).join('')) : empty('None yet.')}
-    ${gone.length ? `<details class="fold"><summary>${kind === 'staff' ? 'Have left' : 'Retired'} (${gone.length})</summary>
+    ${shares !== 100 ? `<p class="note warnc">${th('accounts.shares_off', shares)}</p>` : ''}
+    ${live.length ? table(head, live.map(row).join('')) : empty(t('accounts.none_yet'))}
+    ${gone.length ? `<details class="fold"><summary>${kind === 'staff' ? th('accounts.have_left', gone.length) : th('accounts.retired', gone.length)}</summary>
       ${table(head, gone.map(row).join(''))}</details>` : ''}
     ${addRow('account_add', { kind }, fields)}`);
 }
 
 export function floatsCard() {
   const list = S.data.people.float;
-  if (list.length) return editAccounts('float', 'Floats', 'Money someone is holding for the business.');
-  return card(`<details class="fold"><summary>Floats — money someone holds for the business (none)</summary>
-    <p class="sub">A float is cash handed to someone to spend for the business — still
-      yours, just not in your hand. Counted separately from cash on hand.</p>
-    ${addRow('account_add', { kind: 'float' }, [['name', 'Who holds it']])}</details>`);
+  if (list.length) return editAccounts('float', t('floats.title'), t('floats.note'));
+  return card(`<details class="fold"><summary>${th('floats.none')}</summary>
+    <p class="sub">${th('floats.sub')}</p>
+    ${addRow('account_add', { kind: 'float' }, [['name', t('floats.who_holds')]])}</details>`);
 }
 
 export function editFixed() {
@@ -1387,27 +1336,25 @@ export function editFixed() {
       <td>${esc(f.name)}</td>
       <td class="num">${save('fixed_set', { name: f.name }, 'amount', commas(f.amount),
         `${MONEY} style="max-width:150px"`)}</td>
-      <td class="quiet">${f.from_month ? 'since ' + esc(monthName(f.from_month)) : ''}</td>
+      <td class="quiet">${f.from_month ? th('fixed.since', ...monthWords(f.from_month)) : ''}</td>
       <td><button class="mini" data-do="fixed_remove" data-args="${args({ name: f.name })}"
-            data-confirm="Stop charging ${esc(f.name)}?"
-            data-confirm-body="From ${esc(monthName(S.data.month))} on, ${esc(f.name)} is no longer charged. Months before keep what they were charged."
-            data-yes="Stop charging">Stop charging</button></td>
+            data-confirm="${th('fixed.stop_ask', esc(f.name))}"
+            data-confirm-body="${th('fixed.stop_body', ...monthWords(S.data.month), esc(f.name))}"
+            data-yes="${th('fixed.stop')}">${th('fixed.stop')}</button></td>
     </tr>`).join('');
-  return card(`<h2>Charged every month</h2>
-    <p class="sub">Rent and anything else a month owes whether or not it has been
-      paid. A change applies from ${esc(monthName(S.data.month))} on; earlier months
-      keep what they were charged.</p>
-    ${rows ? table('<th>What</th><th class="num">A month</th><th></th><th></th>', rows) : empty('Nothing.')}
-    ${addRow('fixed_set', {}, [['name', 'What'], ['amount', 'Amount a month', 'money', 150]])}`);
+  return card(`<h2>${th('fixed.title')}</h2>
+    <p class="sub">${th('fixed.sub', ...monthWords(S.data.month))}</p>
+    ${rows ? table(`<th>${th('common.what')}</th><th class="num">${th('fixed.a_month')}</th><th></th><th></th>`, rows) : empty(t('fixed.nothing'))}
+    ${addRow('fixed_set', {}, [['name', t('common.what')], ['amount', t('fixed.amount_month'), 'money', 150]])}`);
 }
 
 export function editList(name, title, note) {
   const list = S.data.lists[name] || [];
   return card(`<h2>${esc(title)}</h2>${note ? `<p class="sub">${esc(note)}</p>` : ''}
-    <div class="chips">${list.map(v => `<button data-do="list_remove" title="Remove"
+    <div class="chips">${list.map(v => `<button data-do="list_remove" title="${th('lists.remove')}"
         data-args="${args({ list: name, value: v })}">${esc(v)} ✕</button>`).join('')
-        || '<span class="quiet">Nothing yet.</span>'}</div>
-    ${addRow('list_add', { list: name }, [['value', 'Add one']])}`);
+        || `<span class="quiet">${th('lists.nothing_yet')}</span>`}</div>
+    ${addRow('list_add', { list: name }, [['value', t('lists.add_one')]])}`);
 }
 
 export function editItems() {
@@ -1416,15 +1363,15 @@ export function editItems() {
   const whole = 'type="number" min="0" inputmode="numeric"';
   const codes = i => `<div class="codes">${(i.barcodes || []).map(c => `<button class="mini"
         data-do="item_update" data-args="${args({ id: i.id, barcode_remove: c })}"
-        title="Take this barcode off">${esc(c)} ✕</button>`).join('')}
+        title="${th('items.barcode_off')}">${esc(c)} ✕</button>`).join('')}
       ${save('item_update', { id: i.id }, 'barcode_add', '',
-        'placeholder="Scan or type" autocomplete="off" spellcheck="false" data-scan')}</div>`;
+        `placeholder="${th('items.scan_or_type')}" autocomplete="off" spellcheck="false" data-scan`)}</div>`;
   const groups = s.categories.map(c => {
     const items = s.items.filter(i => i.letter === c.letter);
     if (!items.length) return '';
     const sealed = c.letter === 'B';
     const packs = !['A', 'B', 'E'].includes(c.letter);
-    const unit = { A: 'kg', B: 'kg', E: 'cartons' }[c.letter] || 'packages';
+    const unit = { A: th('items.kg'), B: th('items.kg'), E: th('items.cartons') }[c.letter] || th('items.packages');
     const byId = Object.fromEntries(items.map(i => [i.id, i]));
     const flavours = id => items.filter(f => f.parent_id === id && f.active).length;
     const rows = list => {
@@ -1448,69 +1395,64 @@ export function editItems() {
           <td>${codes(i)}</td>
           <td><select data-save="item_supplier" data-args="${args(u)}" data-field="supplier_id"
               style="min-width:140px">
-            <option value="">${b ? 'as the brand' : '—'}</option>${options(sups, i.supplier_id)}</select></td>
+            <option value="">${b ? th('items.as_brand') : '—'}</option>${options(sups, i.supplier_id)}</select></td>
           <td class="actions"><button class="mini" data-do="item_update" data-args="${args({ id: i.id, active: i.active ? 0 : 1 })}"
-            ${i.active && n ? `data-confirm="${esc(`Stop stocking ${i.name} and its ${n} flavour${n === 1 ? '' : 's'}?`)}"
-              data-yes="Stop stocking"` : ''}>
-            ${i.active ? 'Stop stocking' : 'Bring back'}</button></td>
+            ${i.active && n ? `data-confirm="${esc(n === 1 ? t('items.stop_one', i.name, 1) : t('items.stop_many', i.name, n))}"
+              data-yes="${th('items.stop')}"` : ''}>
+            ${i.active ? th('items.stop') : th('accounts.bring_back')}</button></td>
         </tr>`;
       }).join('');
     };
     const live = items.filter(i => i.active);
     const gone = items.filter(i => !i.active);
     const brands = live.filter(i => !i.parent_id).map(i => ({ value: i.id, label: i.name }));
-    const head = `<th>Item</th><th class="num">Price</th>${sealed ? '<th>Comes as</th>' : ''}
-      ${packs ? '<th class="num">Pieces a package</th>' : ''}<th class="num">Warn below</th>
-      <th>Barcodes</th><th>From</th><th></th>`;
+    const head = `<th>${th('count.item')}</th><th class="num">${th('items.price')}</th>${sealed ? `<th>${th('items.comes_as')}</th>` : ''}
+      ${packs ? `<th class="num">${th('items.pieces')}</th>` : ''}<th class="num">${th('items.warn_below')}</th>
+      <th>${th('items.barcodes')}</th><th>${th('common.from')}</th><th></th>`;
     return `<div class="findgroup"><h3 class="grouph">${esc(c.name)}</h3>
       ${live.length ? table(head, rows(live)) : ''}
       ${sealed && brands.length ? `<div class="row addrow">
         <select data-f="brand" data-keep style="max-width:220px">${options(brands)}</select>
-        <input data-f="name" placeholder="Flavour" style="max-width:200px">
-        <button class="btn" data-add="item_add" data-args="{}">Add a flavour</button></div>` : ''}
-      ${gone.length ? `<details class="fold"><summary>No longer stocked (${gone.length})</summary>
+        <input data-f="name" placeholder="${th('items.flavour')}" style="max-width:200px">
+        <button class="btn" data-add="item_add" data-args="{}">${th('items.add_flavour')}</button></div>` : ''}
+      ${gone.length ? `<details class="fold"><summary>${th('items.no_longer', gone.length)}</summary>
         ${table(head, rows(gone))}</details>` : ''}</div>`;
   }).join('');
-  return card(`<div class="cardhead"><h2>Stock items</h2>
+  return card(`<div class="cardhead"><h2>${th('items.title')}</h2>
       <div class="right">${findBox('items')}</div></div>
-    <p class="sub">A new price values the next count; counts already taken keep the
-      price they were counted at. “From” is the supplier, used on their statement.
-      Sealed tobacco “comes as” the box says it: 12×10×50 g, 3×1 kg, 250 g.
-      A flavour comes as its brand and costs what its brand does, unless it says otherwise.
-      “Warn below” is for the shortage warnings to come.</p>
+    <p class="sub">${th('items.sub')}</p>
     ${groups}
     <div class="row addrow" style="margin-top:14px">
-      <input data-f="name" placeholder="New item" style="max-width:200px">
+      <input data-f="name" placeholder="${th('items.new')}" style="max-width:200px">
       <select data-f="letter" style="max-width:220px">
         ${options(s.categories.map(c => ({ value: c.letter, label: c.name })))}</select>
-      <input data-f="price" placeholder="Price" ${MONEY} style="max-width:120px">
-      <input data-f="pack_size" placeholder="Pieces a package" type="number" min="0" inputmode="numeric" style="max-width:150px">
-      <button class="btn" data-add="item_add" data-args="{}">Add</button>
+      <input data-f="price" placeholder="${th('items.price')}" ${MONEY} style="max-width:120px">
+      <input data-f="pack_size" placeholder="${th('items.pieces')}" type="number" min="0" inputmode="numeric" style="max-width:150px">
+      <button class="btn" data-add="item_add" data-args="{}">${th('common.add')}</button>
     </div>`);
 }
 
 export function editTares() {
-  const rows = S.data.setup.tares.map(t => `<tr><td>${esc(t.name)}</td>
-      <td class="num">${save('tare_set', { id: t.id }, 'grams', t.grams,
+  const rows = S.data.setup.tares.map(x => `<tr><td>${esc(x.name)}</td>
+      <td class="num">${save('tare_set', { id: x.id }, 'grams', x.grams,
         'type="number" min="0" inputmode="numeric" style="max-width:120px"')}</td></tr>`).join('');
-  return card(`<h2>Buckets</h2>
-    <p class="sub">What each empty bucket weighs, so it can come off the scales.</p>
-    ${rows ? table('<th>Bucket</th><th class="num">Grams empty</th>', rows) : empty('None.')}
-    ${addRow('tare_set', {}, [['name', 'Bucket name'], ['grams', 'Grams', 'number', 120]])}`);
+  return card(`<h2>${th('tares.title')}</h2>
+    <p class="sub">${th('tares.sub')}</p>
+    ${rows ? table(`<th>${th('fill.bucket')}</th><th class="num">${th('tares.grams_empty')}</th>`, rows) : empty(t('tares.none'))}
+    ${addRow('tare_set', {}, [['name', t('tares.name')], ['grams', t('tares.grams'), 'number', 120]])}`);
 }
 
 export function editConversions() {
   const c = S.data.setup.conversions || {};
   const f = (key, label, def) => field(label, save('conversions_set', {}, key, c[key] ?? def,
     'type="number" min="1" inputmode="numeric"'));
-  return card(`<details class="fold"><summary>How sealed tobacco and ice cream convert</summary>
-    <p class="sub">Applies to lines counted from now on; lines already counted keep
-      the quantity they had.</p>
+  return card(`<details class="fold"><summary>${th('conversions.title')}</summary>
+    <p class="sub">${th('conversions.sub')}</p>
     <div class="grid-form">
-      ${f('gramsPerPack', 'Grams in a pack', 50)}
-      ${f('packsPerBlock', 'Packs in a block', 10)}
-      ${f('blocksPerCarton', 'Blocks in a carton', 12)}
-      ${f('bucketsPerCarton', 'Ice cream buckets in a carton', 2)}
+      ${f('gramsPerPack', t('conversions.pack'), 50)}
+      ${f('packsPerBlock', t('conversions.block'), 10)}
+      ${f('blocksPerCarton', t('conversions.carton'), 12)}
+      ${f('bucketsPerCarton', t('conversions.ice_cream'), 2)}
     </div></details>`);
 }
 
@@ -1518,22 +1460,22 @@ export function editElecFactors() {
   const f = S.data.setup.elec_factors;
   const box = (key, label) => field(label, save('elec_factors_set', {}, key, f[key],
     'type="number" min="0" inputmode="numeric"'));
-  return card(`<details class="fold"><summary>How the electricity bill is worked out</summary>
+  return card(`<details class="fold"><summary>${th('factors.title')}</summary>
     <div class="grid-form">
-      ${box('privateAmps', 'Private: amps the lounge takes')}
-      ${box('elevatorAmps', 'Elevator: amps')}
-      ${box('elevatorShare', 'Elevator: shops sharing it')}
-      ${box('publicRate', 'Public: price per unit')}
-      ${box('publicShare', 'Public: shops sharing the meter')}
+      ${box('privateAmps', t('factors.private'))}
+      ${box('elevatorAmps', t('factors.elevator'))}
+      ${box('elevatorShare', t('factors.elevator_share'))}
+      ${box('publicRate', t('factors.public_rate'))}
+      ${box('publicShare', t('factors.public_share'))}
     </div></details>`);
 }
 
 export function businessCard() {
   const b = S.data.business || {};
-  return card(`<h2>The business</h2>
+  return card(`<h2>${th('business.title')}</h2>
     <div class="grid-form">
-      ${field('Name on slips', save('business_set', {}, 'name', b.name))}
-      ${field('Smallest note (amounts round to it)', save('business_set', {}, 'note', b.note || S.data.note,
+      ${field(t('business.name'), save('business_set', {}, 'name', b.name))}
+      ${field(t('business.smallest_note'), save('business_set', {}, 'note', b.note || S.data.note,
         'type="number" min="1" inputmode="numeric"'))}
     </div>`);
 }
@@ -1543,86 +1485,81 @@ export function businessCard() {
     It lives in the books, never in the app's code. */
 export function languageCard() {
   const L = S.data.lang;
-  const names = L.languages || { en: 'English', ckb: 'Kurdish' };
+  const names = L.languages || { en: t('language.en'), ckb: t('language.ckb') };
   const total = L.done + L.todo;
   const batches = Math.ceil(L.todo / BATCH);
   const q = (S.draft.langFind || '').trim();
   const found = q ? [...texts()].filter(([k, v]) => k.toLowerCase().includes(q.toLowerCase())
                                                  || v.includes(q)).slice(0, 30) : [];
-  return card(`<h2>Language</h2>
-    <p class="sub">The screens in English, or in Kurdish (Sorani) from right to left. The Kurdish
-      is yours: Gemini writes it from a prompt copied here, and its answer is pasted back. Names,
-      numbers and dates stay as they are.</p>
+  return card(`<h2>${th('lang.title')}</h2>
+    <p class="sub">${th('lang.sub')}</p>
     <div class="chips" translate="no">${Object.entries(names).map(([k, label]) =>
       `<button data-act="langPick" data-lang="${esc(k)}" aria-pressed="${L.language === k}">${esc(label)}</button>`).join('')}</div>
-    <p class="note">${money(L.done)} of ${money(total)} pieces of text have Kurdish.
-      ${L.todo ? `${money(L.todo)} still to do: about ${batches} more ${batches === 1 ? 'batch' : 'batches'}.` : 'Nothing left to do.'}</p>
+    <p class="note">${th('lang.done', money(L.done), money(total))}
+      ${!L.todo ? th('lang.all_done') : batches === 1 ? th('lang.todo_one', money(L.todo), 1)
+        : th('lang.todo_many', money(L.todo), batches)}</p>
     <div class="steps" style="margin-top:14px">
       <div class="step"><div class="no">1</div><div>
-        <h3>Copy the next batch</h3>
-        <p>Then open gemini.google.com, start a new chat, paste it and send.</p>
-        <button class="btn primary" data-act="langCopy"${L.todo ? '' : ' disabled'}>Copy ${Math.min(BATCH, L.todo)} for Gemini</button>
+        <h3>${th('lang.copy_next')}</h3>
+        <p>${th('lang.open_gemini')}</p>
+        <button class="btn primary" data-act="langCopy"${L.todo ? '' : ' disabled'}>${th('lang.copy', Math.min(BATCH, L.todo))}</button>
         ${S.draft.langPrompt ? `<textarea readonly rows="6" style="margin-top:8px">${esc(S.draft.langPrompt)}</textarea>` : ''}
       </div></div>
       <div class="step"><div class="no">2</div><div>
-        <h3>Paste Gemini's answer</h3>
-        <p>All of it. A line that loses a <code>{0}</code> or <code>{1}</code> on the way is left
-          out and asked again next time.</p>
+        <h3>${th('lang.paste')}</h3>
+        <p>${th('lang.all_of_it', `<code>{0}</code>`, `<code>{1}</code>`)}</p>
         <textarea id="langAnswer" rows="4" spellcheck="false" placeholder='{"1": "…", "2": "…"}'></textarea>
-        <div class="row" style="margin-top:8px"><button class="btn" data-act="langSave">Save the Kurdish</button></div>
+        <div class="row" style="margin-top:8px"><button class="btn" data-act="langSave">${th('lang.save')}</button></div>
       </div></div>
       <div class="step"><div class="no">3</div><div>
-        <h3>Choose ${esc(names.ckb)} above</h3>
-        <p>Text with no Kurdish yet stays in English. New text is added as the screens show it, so
-          later batches ask for it too.</p>
+        <h3>${th('lang.choose', esc(names.ckb))}</h3>
+        <p>${th('lang.stays_english')}</p>
       </div></div>
     </div>
-    <details class="fold"${q ? ' open' : ''}><summary>Change a piece of Kurdish</summary>
+    <details class="fold"${q ? ' open' : ''}><summary>${th('lang.change')}</summary>
       <div class="row" style="margin-top:8px">
-        <input id="langFind" value="${esc(q)}" placeholder="A word, in English or Kurdish" style="max-width:320px">
-        <button class="btn" data-act="langFind">Find</button></div>
-      ${!q ? '' : found.length ? table('<th>English</th><th>Kurdish</th><th></th>', found.map(([k, v]) => `<tr>
+        <input id="langFind" value="${esc(q)}" placeholder="${th('lang.find_hint')}" style="max-width:320px">
+        <button class="btn" data-act="langFind">${th('lang.find')}</button></div>
+      ${!q ? '' : found.length ? table(`<th>${th('lang.english')}</th><th>${th('lang.kurdish')}</th><th></th>`, found.map(([k, v]) => `<tr>
           <td translate="no">${esc(k)}</td>
-          <td><input value="${esc(v)}" dir="rtl" lang="ckb" style="min-width:260px" aria-label="Kurdish"></td>
-          <td class="actions"><button class="mini" data-act="langFix" data-key="${esc(k)}">Save</button></td></tr>`).join(''))
-        : empty('No Kurdish has that in it.')}
+          <td><input value="${esc(v)}" dir="rtl" lang="ckb" style="min-width:260px" aria-label="${th('lang.kurdish')}"></td>
+          <td class="actions"><button class="mini" data-act="langFix" data-key="${esc(k)}">${th('common.save')}</button></td></tr>`).join(''))
+        : empty(t('lang.none_found'))}
     </details>`);
 }
 
 export function backupCard() {
   const b = S.data.backup;
   const last = b.last || {};
-  const when = last.at ? last.at.replace('T', ' ') : 'never';
-  return card(`<h2>Backups</h2>
-    <p class="sub">A copy is made the first time the books are used each day and
-      before anything risky. ${b.copies} cop${b.copies === 1 ? 'y is' : 'ies are'} on this PC.
-      A copy on the same disk does nothing if the PC dies, so choose a second folder:
-      a USB stick, or a folder Google Drive or OneDrive keeps in step.</p>
+  const when = last.at ? last.at.replace('T', ' ') : t('backup_card.never');
+  return card(`<h2>${th('backup_card.title')}</h2>
+    <p class="sub">${b.copies === 1 ? th('backup_card.sub_one', 1) : th('backup_card.sub_many', b.copies)}</p>
     <div class="grid-form">
-      ${field('Second folder (the whole path)', save('backup_folder', {}, 'folder', b.second || '',
-        'placeholder="for example G:\\My Drive\\Twilight" style="min-width:320px"'))}
-      <div><button class="btn primary" data-act="backupNow">Back up now</button></div>
+      ${field(t('backup_card.second'), save('backup_folder', {}, 'folder', b.second || '',
+        `placeholder="${th('backup_card.example', esc(t('backup.example_path')))}" style="min-width:320px"`))}
+      <div><button class="btn primary" data-act="backupNow">${th('backup_card.now')}</button></div>
     </div>
-    <p class="note">Last copy: ${esc(when)}${last.entries ? `, ${money(last.entries)} entries, checked` : ''}.
-      ${b.second ? (b.second_ok ? `<span class="pos">Also copied to ${esc(b.second)}.</span>`
-                                : `<span class="neg">Could not copy to ${esc(b.second)}${last.second_error ? ': ' + esc(last.second_error) : ''}.</span>`)
-                 : '<span class="warnc">No second folder yet.</span>'}
-      <br><span class="quiet">On this PC: ${esc(b.local_folder)}</span></p>`);
+    <p class="note">${last.entries ? th('backup_card.last_entries', esc(when), money(last.entries))
+      : th('backup_card.last', esc(when))}
+      ${b.second ? (b.second_ok ? `<span class="pos">${th('backup_card.also', esc(b.second))}</span>`
+                                : `<span class="neg">${last.second_error
+                                  ? th('backup_card.failed_why', esc(b.second), esc(last.second_error))
+                                  : th('backup_card.failed', esc(b.second))}</span>`)
+                 : `<span class="warnc">${th('backup_card.no_second')}</span>`}
+      <br><span class="quiet">${th('backup_card.on_this_pc', esc(b.local_folder))}</span></p>`);
 }
 
 export function updateCard() {
   const u = S.draft.update;
-  return card(`<h2>This app</h2>
-    <p class="sub">Version ${esc(S.data.version)}. An update replaces the app and never
-      the books: they are copied aside first, and the old version is kept so it can
-      be put back.</p>
+  return card(`<h2>${th('update_card.title')}</h2>
+    <p class="sub">${th('update_card.sub', esc(S.data.version))}</p>
     <div class="row">
-      <button class="btn" data-act="checkUpdate">Check for updates</button>
-      ${u && u.newer ? `<button class="btn primary" data-act="installUpdate">Install ${esc(u.latest)}</button>` : ''}
-      <button class="btn" data-act="health">Check the books</button>
+      <button class="btn" data-act="checkUpdate">${th('update_card.check')}</button>
+      ${u && u.newer ? `<button class="btn primary" data-act="installUpdate">${th('update_card.install', esc(u.latest))}</button>` : ''}
+      <button class="btn" data-act="health">${th('update_card.health')}</button>
     </div>
     ${u ? `<p class="note">${u.error ? `<span class="neg">${esc(u.error)}</span>`
-      : u.newer ? `Version ${esc(u.latest)} is available.` : 'This is the newest version.'}</p>` : ''}`);
+      : u.newer ? th('update_card.available', esc(u.latest)) : th('update_card.newest')}</p>` : ''}`);
 }
 
 /* ================================================================ sambapos */
@@ -1636,24 +1573,24 @@ function soldTable(items, limit = 0) {
   const qty = q => (Number.isInteger(q) ? String(q) : q.toFixed(2).replace(/\.?0+$/, ''));
   const row = it => `<tr><td><bdi>${esc(it.item)}</bdi>${it.portion && it.portion !== 'Normal'
       ? ` <span class="quiet"><bdi>${esc(it.portion)}</bdi></span>` : ''}</td>
-    <td class="num">${qty(it.qty)}${it.free ? ` <span class="quiet">+${qty(it.free)} free</span>` : ''}</td>
+    <td class="num">${qty(it.qty)}${it.free ? ` <span class="quiet">${th('sold.free', '+' + qty(it.free))}</span>` : ''}</td>
     <td class="num">${money(it.value)}</td></tr>`;
-  const head = '<th>Item</th><th class="num">How many</th><th class="num">Came to</th>';
+  const head = `<th>${th('count.item')}</th><th class="num">${th('rline.how_many')}</th><th class="num">${th('sold.came_to')}</th>`;
   const blocks = [...groups.entries()]
-    .map(([g, list]) => [g, list, list.reduce((t, i) => t + i.value, 0)])
+    .map(([g, list]) => [g, list, list.reduce((n, i) => n + i.value, 0)])
     .sort((a, b) => b[2] - a[2])
     .map(([g, list, total]) => {
       const shown = limit ? list.slice(0, limit) : list;
       const rest = list.slice(shown.length);
-      return `<h3 class="grouph"><bdi>${esc(g || 'Other')}</bdi>
+      return `<h3 class="grouph"><bdi>${esc(g || t('sold.other'))}</bdi>
           <span class="quiet">· ${money(total)}</span></h3>
         ${table(head, shown.map(row).join(''))}
-        ${rest.length ? `<details class="fold"><summary>${rest.length} more</summary>
+        ${rest.length ? `<details class="fold"><summary>${th('common.more', rest.length)}</summary>
           ${table(head, rest.map(row).join(''))}</details>` : ''}`;
     });
   // the biggest groups open, the rest folded away
   return blocks.slice(0, 3).join('') + (blocks.length > 3
-    ? `<details class="fold"><summary>${blocks.length - 3} more groups</summary>
+    ? `<details class="fold"><summary>${th('sold.more_groups', blocks.length - 3)}</summary>
          ${blocks.slice(3).join('')}</details>` : '');
 }
 
@@ -1662,13 +1599,13 @@ export function nightSold() {
   const n = S.data.pos && S.data.pos.night;
   if (!n || !n.tickets) return '';
   const max = Math.max(...n.hours.map(h => h[1]), 1);
-  return card(`<h2>What sold on ${esc(n.night)}</h2>
-    <p class="sub">From SambaPOS: ${n.tickets} tickets between ${esc(hhmm(n.first_at))} and
-      ${esc(hhmm(n.last_at))}, ${money(n.total)} in all${n.discounts ? `, after ${money(n.discounts)} of discounts` : ''}.
-      ${n.by_kind.length > 1 ? 'Paid as ' + n.by_kind.map(([k, v]) => `${esc(k)} ${money(v)}`).join(', ') + '.' : ''}</p>
+  return card(`<h2>${th('sold.what_sold', esc(n.night))}</h2>
+    <p class="sub">${th('sold.from_pos', n.tickets, esc(hhmm(n.first_at)), esc(hhmm(n.last_at)), money(n.total))}${
+      n.discounts ? th('sold.after_discounts', money(n.discounts)) : ''}.
+      ${n.by_kind.length > 1 ? th('sold.paid_as', n.by_kind.map(([k, v]) => `${esc(k)} ${money(v)}`).join(', ')) : ''}</p>
     <div class="sold">${soldTable(n.items, 8)}</div>
-    <h3 class="grouph">Through the night</h3>
-    <div class="hours">${n.hours.map(([h, c, t]) => `<div class="hour" title="${c} tickets, ${money(t)}">
+    <h3 class="grouph">${th('sold.through_night')}</h3>
+    <div class="hours">${n.hours.map(([h, c, v]) => `<div class="hour" title="${th('sold.hour', c, money(v))}">
         <span class="bar v"><span style="height:${c / max * 100}%"></span></span>
         <span class="quiet">${String(h).padStart(2, '0')}</span></div>`).join('')}</div>`);
 }
@@ -1681,27 +1618,28 @@ export function monthWhen() {
   const w = m && m.when;
   if (!w || !w.hours.length) return '';
   const max = Math.max(...w.hours.map(h => h[1]));
-  const hours = `<div class="hours">${w.hours.map(([h, c, t]) => `<div class="hour"
-      title="${c} tickets, ${money(t)}"><span class="bar v"><span style="height:${c / max * 100}%"></span></span>
+  const hours = `<div class="hours">${w.hours.map(([h, c, v]) => `<div class="hour"
+      title="${th('sold.hour', c, money(v))}"><span class="bar v"><span style="height:${c / max * 100}%"></span></span>
       <span class="quiet">${String(h).padStart(2, '0')}</span></div>`).join('')}</div>`;
   const best = Math.max(...w.days.map(d => d.average), 1);
-  const days = table('<th>Night</th><th class="num">Nights</th><th class="num">Takings on average</th><th></th>',
+  const days = table(`<th>${th('sales_night.night')}</th><th class="num">${th('diffs.nights')}</th><th class="num">${th('when.takings_average')}</th><th></th>`,
     w.days.map(d => `<tr><td>${esc(d.day)}</td><td class="num">${d.nights}</td>
       <td class="num">${money(d.average)}</td><td style="width:38%"><div class="track"><span class="fill"
       style="width:${d.average / best * 100}%"></span></div></td></tr>`).join(''));
-  const row = t => `<tr><td><bdi>${esc(t.place)}</bdi></td><td class="num">${t.tickets}</td>
-      <td class="num">${money(t.total)}</td>
-      <td class="num quiet">${t.minutes === null ? '' : `${t.minutes} min`}</td></tr>`;
-  const head = '<th>Table</th><th class="num">Tickets</th><th class="num">Came to</th><th class="num">Stayed, on average</th>';
+  const row = x => `<tr><td><bdi>${esc(x.place)}</bdi></td><td class="num">${x.tickets}</td>
+      <td class="num">${money(x.total)}</td>
+      <td class="num quiet">${x.minutes === null ? '' : th('when.minutes', x.minutes)}</td></tr>`;
+  const head = `<th>${th('when.table')}</th><th class="num">${th('when.tickets')}</th>
+      <th class="num">${th('sold.came_to')}</th><th class="num">${th('when.stayed')}</th>`;
   const n = m.nights.length;
-  return card(`<h2>When it sells</h2>
-    <p class="sub">${m.tickets} tickets over ${n} night${n === 1 ? '' : 's'} kept: about
-      ${Math.round(m.tickets / n)} a night${w.minutes ? `, staying ${w.minutes} minutes on average
-      from opening the ticket to paying it` : ''}.</p>
-    <h3 class="grouph">Tickets opened, through the night</h3>${hours}
-    <h3 class="grouph">Nights of the week</h3>${days}
-    <h3 class="grouph">Tables</h3>${table(head, w.tables.slice(0, 10).map(row).join(''))}
-    ${w.tables.length > 10 ? `<details class="fold"><summary>${w.tables.length - 10} more</summary>
+  return card(`<h2>${th('when.title')}</h2>
+    <p class="sub">${n === 1 ? th('when.tickets_one', m.tickets, 1, Math.round(m.tickets / n))
+      : th('when.tickets_many', m.tickets, n, Math.round(m.tickets / n))}${
+      w.minutes ? th('when.staying', w.minutes) : ''}.</p>
+    <h3 class="grouph">${th('when.opened')}</h3>${hours}
+    <h3 class="grouph">${th('when.week')}</h3>${days}
+    <h3 class="grouph">${th('when.tables')}</h3>${table(head, w.tables.slice(0, 10).map(row).join(''))}
+    ${w.tables.length > 10 ? `<details class="fold"><summary>${th('common.more', w.tables.length - 10)}</summary>
       ${table(head, w.tables.slice(10).map(row).join(''))}</details>` : ''}`);
 }
 
@@ -1713,33 +1651,34 @@ export function monthMakes() {
     .sort((a, b) => b.makes - a.makes);
   const unknown = moved.filter(i => i.makes === null || i.makes === undefined);
   if (!known.length) {
-    return card(`<h2>What each item made</h2>
-      <p class="sub">Once the menu items are given what they take (Setup → What each menu item
-        takes), every item sold shows what it cost to make and what it made.</p>`);
+    return card(`<h2>${th('makes.title')}</h2>
+      <p class="sub">${th('makes.once_given')}</p>`);
   }
   const qty = q => (Number.isInteger(q) ? String(q) : q.toFixed(2).replace(/\.?0+$/, ''));
   const name = i => `<bdi>${esc(i.item)}</bdi>${i.portion ? ` <span class="quiet"><bdi>${esc(i.portion)}</bdi></span>` : ''}`;
   const row = i => `<tr><td>${name(i)}</td>
-      <td class="num">${qty(i.qty)}${i.took > i.qty ? ` <span class="quiet">+${qty(i.took - i.qty)} given</span>` : ''}</td>
+      <td class="num">${qty(i.qty)}${i.took > i.qty ? ` <span class="quiet">${th('makes.given', '+' + qty(i.took - i.qty))}</span>` : ''}</td>
       <td class="num">${money(i.value)}</td>
       <td class="num quiet">${money(i.cost)}</td>
       <td class="num ${cls(i.makes)}">${money(i.makes)}</td>
       <td class="num quiet">${i.value ? `${Math.round(i.makes / i.value * 100)}%` : ''}</td></tr>`;
-  const head = `<th>Item</th><th class="num">Sold</th><th class="num">Came to</th><th class="num">Stock it took</th>
-    <th class="num">Made</th><th class="num">Of the price</th>`;
-  const sum = k => known.reduce((t, i) => t + i[k], 0);
+  const head = `<th>${th('count.item')}</th><th class="num">${th('shelf.sold')}</th>
+      <th class="num">${th('sold.came_to')}</th><th class="num">${th('makes.stock_took')}</th>
+    <th class="num">${th('makes.made')}</th><th class="num">${th('makes.of_price')}</th>`;
+  const sum = k => known.reduce((n, i) => n + i[k], 0);
   const names = list => list.map(name).join(', ');
-  return card(`<h2>What each item made</h2>
-    <p class="sub">${known.length} item${known.length === 1 ? '' : 's'} came to ${money(sum('value'))}
-      and took ${money(sum('cost'))} of stock, so made ${money(sum('makes'))} before rent, salaries
-      and the rest. Made the most: ${names(known.slice(0, 3))}.${known.length > 3
-        ? ` Made the least: ${names(known.slice(-3).reverse())}.` : ''}</p>
+  return card(`<h2>${th('makes.title')}</h2>
+    <p class="sub">${known.length === 1
+      ? th('makes.sum_one', 1, money(sum('value')), money(sum('cost')), money(sum('makes')), names(known.slice(0, 3)))
+      : th('makes.sum_many', known.length, money(sum('value')), money(sum('cost')), money(sum('makes')),
+           names(known.slice(0, 3)))}${known.length > 3 ? th('makes.least', names(known.slice(-3).reverse())) : ''}</p>
     ${table(head, known.slice(0, 10).map(row).join(''))}
-    ${known.length > 10 ? `<details class="fold"><summary>${known.length - 10} more</summary>
+    ${known.length > 10 ? `<details class="fold"><summary>${th('common.more', known.length - 10)}</summary>
       ${table(head, known.slice(10).map(row).join(''))}</details>` : ''}
-    ${unknown.length ? `<details class="fold"><summary>${unknown.length} item${unknown.length === 1 ? '' : 's'}
-      with no cost yet</summary><p class="note">Not yet given what it takes, or what it takes has
-      no price, or the grams in a head are not set (Setup → What each menu item takes).</p><ul class="note">${unknown.map(i => `<li>${name(i)}</li>`).join('')}</ul></details>` : ''}`);
+    ${unknown.length ? `<details class="fold"><summary>${unknown.length === 1 ? th('makes.no_cost_one', 1)
+      : th('makes.no_cost_many', unknown.length)}</summary>
+      <p class="note">${th('makes.not_given')}</p>
+      <ul class="note">${unknown.map(i => `<li>${name(i)}</li>`).join('')}</ul></details>` : ''}`);
 }
 
 export function monthSold() {
@@ -1751,24 +1690,27 @@ export function monthSold() {
     const diff = b - n.takings;
     return `<tr><td class="nowrap">${esc(n.night)}</td>
       <td class="num">${n.tickets}</td>
-      <td class="num">${money(n.takings)}${n.unpaid ? ` <span class="warnc">+${money(n.unpaid)} unpaid</span>` : ''}</td>
-      <td class="num">${b ? money(b) : '<span class="quiet">not entered</span>'}</td>
-      <td class="num ${diff ? 'warnc' : 'quiet'}">${b ? (diff ? signed(diff) : 'same') : ''}</td></tr>`;
+      <td class="num">${money(n.takings)}${n.unpaid ? ` <span class="warnc">${th('pos_month.unpaid', '+' + money(n.unpaid))}</span>` : ''}</td>
+      <td class="num">${b ? money(b) : `<span class="quiet">${th('pos_month.not_entered')}</span>`}</td>
+      <td class="num ${diff ? 'warnc' : 'quiet'}">${b ? (diff ? signed(diff) : th('pos_month.same')) : ''}</td></tr>`;
   }).join('');
-  return card(`<h2>SambaPOS this month</h2>
-    <p class="sub">${m.nights.length} night${m.nights.length === 1 ? '' : 's'} kept from SambaPOS,
-      ${m.tickets} tickets, ${money(m.takings)} paid. Each night beside what the books say it took.</p>
-    ${table('<th>Night</th><th class="num">Tickets</th><th class="num">SambaPOS paid</th><th class="num">In the books</th><th class="num">Difference</th>', rows)}
-    <details class="fold"><summary>What sold across the month</summary>
+  return card(`<h2>${th('pos_month.title')}</h2>
+    <p class="sub">${m.nights.length === 1 ? th('pos_month.sub_one', 1, m.tickets, money(m.takings))
+      : th('pos_month.sub_many', m.nights.length, m.tickets, money(m.takings))}</p>
+    ${table(`<th>${th('sales_night.night')}</th><th class="num">${th('when.tickets')}</th>
+        <th class="num">${th('pos_month.pos_paid')}</th><th class="num">${th('pos_month.in_books')}</th>
+        <th class="num">${th('pos_month.difference')}</th>`, rows)}
+    <details class="fold"><summary>${th('pos_month.across')}</summary>
       <div class="sold">${soldTable(m.items, 12)}</div></details>`);
 }
 
 /** What else is kept from SambaPOS, for later steps: its own lists. */
 function keptLists(c) {
   if (!c) return '';
-  const bits = [['menu_item', 'menu item'], ['menu_price', 'price'], ['payment_type', 'payment type']]
-    .filter(([k]) => c[k]).map(([k, w]) => `${c[k]} ${w}${c[k] === 1 ? '' : 's'}`);
-  return bits.length ? `Also kept, as SambaPOS has them now: ${bits.join(', ')}.` : '';
+  // each is kept.<it>_one or kept.<it>_many in the words
+  const bits = ['menu_item', 'menu_price', 'payment_type'].filter(k => c[k])
+    .map(k => (c[k] === 1 ? t(`kept.${k}_one`, 1) : t(`kept.${k}_many`, c[k])));
+  return bits.length ? th('kept.also', bits.join(', ')) : '';
 }
 
 /** Where SambaPOS is read from. */
@@ -1780,46 +1722,40 @@ export function sambaposCard() {
   const grant = `CREATE LOGIN [${who}] FROM WINDOWS;\nUSE [${s.database || 'twilight'}];\n`
     + `CREATE USER [${who}] FOR LOGIN [${who}];\nALTER ROLE db_datareader ADD MEMBER [${who}];`;
   const a = p.auto || {};
-  const plural = (n, word) => `${n} ${word}${n === 1 ? '' : 's'}`;
+  const kept = [esc(st.first), esc(st.last), keptLists(p.catalog), esc(localTime(st.kept_at)),
+                esc(String(st.source || '').replace(/^\w+:/, ''))];
   const reading = !a.on ? '' : a.error
     ? `<p class="note warnc">${esc(a.error)}</p>`
     : `<p class="note">${a.newest
-        ? `${plural(a.read, 'backup')} read so far. The newest, <bdi>${esc(a.newest.name)}</bdi>,
-           was made ${esc(a.newest_when)}.`
-        : a.in_folder ? 'No backup read yet.' : 'There are no SambaPOS backups in this folder yet.'}
-        ${a.waiting ? ` Reading ${plural(a.waiting, 'more backup')}…` : ''}</p>
-      ${a.failed && a.failed.length ? `<details class="fold"><summary>${plural(a.failed.length, 'backup')}
-          could not be read</summary><ul>${a.failed.map(f => `<li><bdi>${esc(f.name)}</bdi>
+        ? (a.read === 1 ? th('auto.read_one', 1, `<bdi>${esc(a.newest.name)}</bdi>`, esc(a.newest_when))
+          : th('auto.read_many', a.read, `<bdi>${esc(a.newest.name)}</bdi>`, esc(a.newest_when)))
+        : a.in_folder ? th('auto.none_read') : th('auto.none_in_folder')}
+        ${!a.waiting ? '' : a.waiting === 1 ? th('auto.reading_one', 1) : th('auto.reading_many', a.waiting)}</p>
+      ${a.failed && a.failed.length ? `<details class="fold"><summary>${a.failed.length === 1 ? th('auto.failed_one', 1)
+          : th('auto.failed_many', a.failed.length)}</summary><ul>${a.failed.map(f => `<li><bdi>${esc(f.name)}</bdi>
           — ${esc(f.note)}</li>`).join('')}</ul></details>` : ''}`;
-  return card(`<h2>SambaPOS</h2>
-    <p class="sub">The nightly reset deletes the night's tickets from SambaPOS, but SambaPOS
-      makes a backup just before it. Tell the app which folder those backups go to, and every
-      night comes in by itself: when the app starts, every few minutes while it is open, and
-      when Tonight is opened. Nothing is ever written to SambaPOS.</p>
+  return card(`<h2>${th('sambapos_card.title')}</h2>
+    <p class="sub">${th('sambapos_card.sub')}</p>
     <div class="grid-form">
-      ${field('Folder SambaPOS backs up to', save('pos_settings', {}, 'folder', s.folder,
-        'placeholder="for example C:\\Users\\you\\Documents\\SambaPOS5\\Backups"'))}
-      ${p.can_read_live ? field('SQL Server', save('pos_settings', {}, 'server', s.server))
-        + field('SambaPOS database', save('pos_settings', {}, 'database', s.database)) : ''}
+      ${field(t('sambapos_card.folder'), save('pos_settings', {}, 'folder', s.folder,
+        `placeholder="${th('backup_card.example', esc(t('pos.example_path')))}"`))}
+      ${p.can_read_live ? field(t('sambapos_card.server'), save('pos_settings', {}, 'server', s.server))
+        + field(t('sambapos_card.database'), save('pos_settings', {}, 'database', s.database)) : ''}
     </div>
     ${reading}
     <div class="row" style="margin-top:12px">
-      ${s.folder ? `<button class="btn primary" data-act="posAuto">Look in the folder now</button>
-        <button class="btn" data-act="posFolder">Read every backup there again</button>` : ''}
-      ${p.can_read_live ? `<button class="btn" data-act="posLive">Read SambaPOS now</button>
-        <button class="btn" data-act="posTest">Test the connection</button>` : ''}
+      ${s.folder ? `<button class="btn primary" data-act="posAuto">${th('sambapos_card.look_now')}</button>
+        <button class="btn" data-act="posFolder">${th('sambapos_card.read_again')}</button>` : ''}
+      ${p.can_read_live ? `<button class="btn" data-act="posLive">${th('tonight_pos.read_now')}</button>
+        <button class="btn" data-act="posTest">${th('sambapos_card.test')}</button>` : ''}
     </div>
     <p class="note">${st.nights
-      ? `${st.nights} night${st.nights === 1 ? '' : 's'} kept, from ${esc(st.first)} to ${esc(st.last)}.
-         ${keptLists(p.catalog)}
-         Last kept ${esc(localTime(st.kept_at))} from ${esc(String(st.source || '').replace(/^\w+:/, ''))}.`
-      : 'Nothing kept yet.'}
-      ${p.can_read_live ? '<br>Read SambaPOS now shows tonight before the reset, straight from its database.'
-        : '<br>Reading SambaPOS’s database directly works on the Windows PC it runs on; here, its backups are read.'}</p>
-    ${p.can_read_live ? `<details class="fold"><summary>If SQL Server will not let this PC in</summary>
-      <p class="note">Sign in to SQL Server as <code>sa</code> once — in SQL Server Management Studio,
-        or anything else that runs SQL — and run these lines. They let this Windows account
-        read SambaPOS's database, and nothing more.</p>
+      ? (st.nights === 1 ? th('sambapos_card.kept_one', 1, ...kept) : th('sambapos_card.kept_many', st.nights, ...kept))
+      : th('sambapos_card.nothing_kept')}
+      ${p.can_read_live ? `<br>${th('sambapos_card.live_note')}`
+        : `<br>${th('sambapos_card.windows_note')}`}</p>
+    ${p.can_read_live ? `<details class="fold"><summary>${th('sambapos_card.sql_help')}</summary>
+      <p class="note">${th('sambapos_card.sql_lines', `<code>sa</code>`)}</p>
       <pre class="code">${esc(grant)}</pre></details>` : ''}`);
 }
 
@@ -1833,7 +1769,7 @@ function linkPicker(posId, posName, link, suggest) {
       const o = g.options.find(x => x[0] === v);
       if (o) return `${g.group} · ${o[1]}`;
     }
-    return v === 'ignore' ? 'Leave it out' : v;
+    return v === 'ignore' ? t('fill.leave_out') : v;
   };
   const current = link ? link.value : '';
   const known = new Set(groups.flatMap(g => g.options.map(o => o[0])));
@@ -1841,29 +1777,23 @@ function linkPicker(posId, posName, link, suggest) {
   const opt = (v, text) => (v === current
     ? `<option value="${esc(v)}" selected>${esc(link.label)}</option>`
     : `<option value="${esc(v)}">${esc(text)}</option>`);
-  const exp = groups.find(g => g.group === 'Expense');
-  if (exp) exp.options.push(['new-expense', `New expense named “${posName}”`]);
+  const exp = groups.find(g => g.group === t('link.expense'));
+  if (exp) exp.options.push(['new-expense', t('link_picker.new_expense', posName)]);
   return `<select class="link" data-save="pos_link" data-args="${args({ pos_id: posId })}"
-      data-field="to" title="What this SambaPOS account is in the books">
-    ${current ? '' : '<option value="" selected disabled>What is this in the books?</option>'}
+      data-field="to" title="${th('link_picker.title')}">
+    ${current ? '' : `<option value="" selected disabled>${th('link_picker.what_is')}</option>`}
     ${current && !known.has(current) && current !== 'ignore' ? opt(current, link.label) : ''}
-    ${!current && suggest ? `<optgroup label="Suggested">${opt(suggest, label(suggest))}</optgroup>` : ''}
+    ${!current && suggest ? `<optgroup label="${th('link_picker.suggested')}">${opt(suggest, label(suggest))}</optgroup>` : ''}
     ${groups.filter(g => g.options.length).map(g => `<optgroup label="${esc(g.group)}">
         ${g.options.map(o => opt(o[0], o[1])).join('')}</optgroup>`).join('')}
-    <optgroup label="Neither">${opt('ignore', 'Leave it out')}</optgroup>
+    <optgroup label="${th('link_picker.neither')}">${opt('ignore', t('fill.leave_out'))}</optgroup>
   </select>`;
 }
 
-/* What each line of a SambaPOS night is, beside the books. */
+/* What each line of a SambaPOS night is, beside the books: the look of its
+   pill here, its word pos_status.<it> in the words. */
 const POS_STATUS = {
-  new: ['to add', ''],
-  added: ['in the books', 'pos'],
-  typed: ['typed by hand', 'pos'],
-  check: ['check', 'warn'],
-  deleted: ['deleted in the books', ''],
-  held: ['link it first', 'warn'],
-  manual: ['enter by hand', 'warn'],
-  skip: ['not added', ''],
+  new: '', added: 'pos', typed: 'pos', check: 'warn', deleted: '', held: 'warn', manual: 'warn', skip: '',
 };
 
 /** A SambaPOS account on a night: its name, a picker the first time it is
@@ -1872,8 +1802,8 @@ function posAccount(a) {
   const name = `<bdi>${esc(a.name)}</bdi>${a.type ? ` <span class="quiet"><bdi>${esc(a.type)}</bdi></span>` : ''}`;
   if (!a.link) return `${name}<br>${linkPicker(a.pos_id, a.name, null, a.suggest)}`;
   return a.link.left && !a.link.told
-    ? `${name}<br><span class="warnc">${esc(a.link.name)} has left — remove the account from SambaPOS</span>
-       <button class="mini link" data-act="posTold" data-pos="${a.pos_id}">Done</button>`
+    ? `${name}<br><span class="warnc">${th('pos_account.has_left', esc(a.link.name))}</span>
+       <button class="mini link" data-act="posTold" data-pos="${a.pos_id}">${th('pos_account.done')}</button>`
     : name;
 }
 
@@ -1886,11 +1816,13 @@ export function nightDrawer() {
   const p = pos && pos.adding;
   if (!n || !p) return '';
   const rows = p.lines.map(l => {
-    const [word, kls] = POS_STATUS[l.status] || [l.status, ''];
+    const known = l.status in POS_STATUS;
+    const kls = known ? POS_STATUS[l.status] : '';
+    const word = known ? th(`pos_status.${l.status}`) : l.status;
     const acct = l.account ? posAccount(l.account)
-      : `<span class="quiet">${n.tickets} ticket${n.tickets === 1 ? '' : 's'}</span>`;
+      : `<span class="quiet">${n.tickets === 1 ? th('drawer.tickets_one', 1) : th('drawer.tickets_many', n.tickets)}</span>`;
     const note = l.note || (l.status === 'new' && l.replaces
-      ? `replaces ${money(l.replaces)} entered by hand` : '');
+      ? t('drawer.replaces', money(l.replaces)) : '');
     return `<tr${l.status === 'skip' ? ' class="quiet"' : ''}>
       <td class="nowrap">${l.at ? esc(hhmm(l.at)) : ''}</td>
       <td><bdi>${esc(l.what || '')}</bdi></td>
@@ -1901,28 +1833,26 @@ export function nightDrawer() {
   }).join('');
   const odd = p.lines.filter(l => l.status === 'check' || l.status === 'manual').length;
   const oddWords = odd
-    ? `${odd} line${odd === 1 ? '' : 's'} marked “check” or “enter by hand” ${odd === 1 ? 'is' : 'are'}
-       not added: put ${odd === 1 ? 'it' : 'them'} right by hand, on Books or in step 1.` : '';
+    ? (odd === 1 ? th('drawer.odd_one', 1) : th('drawer.odd_many', odd)) : '';
   const foot = p.held
-    ? `<p class="note warnc">Say what the ${p.held === 1 ? 'account' : 'accounts'} marked
-         “link it first” ${p.held === 1 ? 'is' : 'are'} in the books, and the night can be added.</p>`
+    ? `<p class="note warnc">${p.held === 1 ? th('drawer.held_one') : th('drawer.held_many')}</p>`
     : p.to_add
       ? `<div class="row" style="margin-top:12px">
-           <button class="btn primary" data-act="posAddNight">Add the night</button>
-           <span class="quiet">adds ${p.to_add} entr${p.to_add === 1 ? 'y' : 'ies'} to the books</span></div>
+           <button class="btn primary" data-act="posAddNight">${th('drawer.add_night')}</button>
+           <span class="quiet">${p.to_add === 1 ? th('drawer.adds_one', 1) : th('drawer.adds_many', p.to_add)}</span></div>
          ${odd ? `<p class="note warnc">${oddWords}</p>` : ''}`
-      : odd ? `<p class="note warnc">Nothing more to add. ${oddWords}</p>`
-        : '<p class="note">Everything SambaPOS recorded that night is in the books.</p>';
+      : odd ? `<p class="note warnc">${th('drawer.nothing_more', oddWords)}</p>`
+        : `<p class="note">${th('drawer.all_in')}</p>`;
   const only = p.books_only.length
-    ? `<p class="note">Entered by hand and not in SambaPOS: ${p.books_only.map(b =>
-        `${esc(b.label)} · <bdi>${esc(b.detail || '')}</bdi> ${money(b.amount)}`).join('; ')}.</p>` : '';
-  return card(`<h2>The night in SambaPOS</h2>
-    <p class="sub">Everything SambaPOS recorded on ${esc(n.night)}, each line as the entry it
-      becomes in the books. Out of the drawer: <strong>${money(n.drawer_out)}</strong>${n.drawer_in
-        ? `; into it: <strong>${money(n.drawer_in)}</strong>` : ''}.${n.opened_by
-        ? ` Opened by <bdi>${esc(n.opened_by)}</bdi>${n.closed_by
-          ? `, closed by <bdi>${esc(n.closed_by)}</bdi>` : ', not closed yet'}.` : ''}</p>
-    ${table('<th>Time</th><th>SambaPOS</th><th>Account</th><th class="num">Amount</th><th>In the books</th>', rows)}
+    ? `<p class="note">${th('drawer.only', p.books_only.map(b =>
+        `${esc(b.label)} · <bdi>${esc(b.detail || '')}</bdi> ${money(b.amount)}`).join('; '))}</p>` : '';
+  return card(`<h2>${th('drawer.title')}</h2>
+    <p class="sub">${th('drawer.sub', esc(n.night), `<strong>${money(n.drawer_out)}</strong>`)}${n.drawer_in
+        ? th('drawer.into_it', `<strong>${money(n.drawer_in)}</strong>`) : ''}.${!n.opened_by ? ''
+        : n.closed_by ? th('drawer.opened_closed', `<bdi>${esc(n.opened_by)}</bdi>`, `<bdi>${esc(n.closed_by)}</bdi>`)
+          : th('drawer.opened_open', `<bdi>${esc(n.opened_by)}</bdi>`)}</p>
+    ${table(`<th>${th('common.time')}</th><th>${th('drawer.sambapos')}</th><th>${th('drawer.account')}</th>
+        <th class="num">${th('common.amount')}</th><th>${th('pos_month.in_books')}</th>`, rows)}
     ${foot}${only}`);
 }
 
@@ -1935,8 +1865,8 @@ export function menuUses() {
   if (!u || !u.menu.length) return '';
   const all = S.data.setup.items;
   const byId = Object.fromEntries(all.map(i => [i.id, i]));
-  const pick = r => `<option value=""${r.set ? '' : ' selected'}>— not set yet</option>
-      <option value="0"${r.set && !r.item_id ? ' selected' : ''}>takes nothing</option>`
+  const pick = r => `<option value=""${r.set ? '' : ' selected'}>${th('uses.not_set')}</option>
+      <option value="0"${r.set && !r.item_id ? ' selected' : ''}>${th('uses.nothing')}</option>`
     + S.data.setup.categories.map(c => {
       const list = all.filter(i => i.letter === c.letter && (i.active || i.id === r.item_id));
       return list.length ? `<optgroup label="${esc(c.name)}">${options(
@@ -1961,31 +1891,28 @@ export function menuUses() {
   });
   const blocks = [...groups.entries()].map(([g, list]) => {
     const unset = list.filter(r => !r.set).length;
-    return `<details class="fold"${unset ? ' open' : ''}><summary><bdi>${esc(g || 'No group')}</bdi>
-        <span class="quiet">${list.length - unset} of ${list.length} set</span></summary>
-      ${table('<th>Menu item</th><th>Takes</th><th class="num">How much</th><th></th>',
+    return `<details class="fold"${unset ? ' open' : ''}><summary><bdi>${esc(g || t('uses.no_group'))}</bdi>
+        <span class="quiet">${th('uses.how_many_set', list.length - unset, list.length)}</span></summary>
+      ${table(`<th>${th('uses.menu_item')}</th><th>${th('uses.takes')}</th><th class="num">${th('uses.how_much')}</th><th></th>`,
         list.map(row).join(''))}</details>`;
   }).join('');
-  const amount = t => {
-    const it = byId[t.item];
-    if (['A', 'B'].includes(t.letter)) return t.qty < 1 ? `${Math.round(t.qty * 1000)} g` : `${+t.qty.toFixed(2)} kg`;
+  const amount = x => {
+    const it = byId[x.item];
+    if (['A', 'B'].includes(x.letter)) return x.qty < 1 ? t('unit.g', Math.round(x.qty * 1000)) : t('unit.kg', +x.qty.toFixed(2));
     if (it && (it.pack_size || 1) > 1) {
-      const n = +(t.qty * it.pack_size).toFixed(1);
-      return `${n} piece${n === 1 ? '' : 's'}`;
+      const n = +(x.qty * it.pack_size).toFixed(1);
+      return n === 1 ? t('uses.piece_one', 1) : t('uses.piece_many', n);
     }
-    return `${+t.qty.toFixed(2)} ${t.letter === 'E' ? 'cartons' : 'packages'}`;
+    return x.letter === 'E' ? t('rline.many_carton', +x.qty.toFixed(2)) : t('rline.many_package', +x.qty.toFixed(2));
   };
-  return card(`<h2>What each menu item takes</h2>
-    <p class="sub">For each item on SambaPOS’s menu, the stock it takes from and how much: a
-      hookah takes a head from its bucket, a can of drink takes one can. Set it once, and every
-      night kept takes what was sold off the shelves — a gift takes stock, a void does not.
-      ${u.set} of ${u.menu.length} are set.</p>
+  return card(`<h2>${th('uses.title')}</h2>
+    <p class="sub">${th('uses.sub', u.set, u.menu.length)}</p>
     <div class="grid-form" style="max-width:420px">
-      ${field('Grams in a head, the same for every flavour', save('head_grams', {}, 'grams',
+      ${field(t('uses.head_grams'), save('head_grams', {}, 'grams',
         u.head_grams ?? '', 'type="number" min="1" inputmode="numeric"'))}
     </div>
-    ${u.took.length ? `<p class="note">The night of ${esc(u.last_night)} took ${u.took.map(t =>
-      `${esc(amount(t))} of <bdi>${esc(t.name)}</bdi>`).join(', ')}.</p>` : ''}
+    ${u.took.length ? `<p class="note">${th('uses.took', esc(u.last_night), u.took.map(x =>
+      th('uses.amount_of', esc(amount(x)), `<bdi>${esc(x.name)}</bdi>`)).join(', '))}</p>` : ''}
     ${blocks}`);
 }
 
@@ -1993,15 +1920,15 @@ export function sambaposMenu() {
   const m = S.data.pos && S.data.pos.menu;
   if (!m || !m.items) return '';
   const odd = m.odd.length
-    ? `<p class="note warnc">${m.odd.length} price${m.odd.length === 1 ? ' is' : 's are'} not a
-        multiple of ${money(S.data.note)}, so ${m.odd.length === 1 ? 'it needs' : 'they need'} change
-        nobody has:</p><ul class="note">${m.odd.map(o => `<li><bdi>${esc(o.item)}</bdi>${o.portion
+    ? `<p class="note warnc">${m.odd.length === 1 ? th('menu_card.odd_one', 1, money(S.data.note))
+      : th('menu_card.odd_many', m.odd.length, money(S.data.note))}</p><ul class="note">${m.odd.map(o => `<li><bdi>${esc(o.item)}</bdi>${o.portion
           && o.portion !== 'Normal' ? ` · <bdi>${esc(o.portion)}</bdi>` : ''}: ${money(o.price)}</li>`).join('')}</ul>`
-    : `<p class="note">Every price is a multiple of ${money(S.data.note)}, so change is always possible.</p>`;
-  const groups = m.groups.map(g => `<details class="fold"><summary><bdi>${esc(g.name || 'No group')}</bdi>
-      <span class="quiet">${g.items.length} item${g.items.length === 1 ? '' : 's'}</span></summary>
-      ${table(`<th>Item</th><th>Portion</th><th class="num">Price</th><th class="num">Costs to make</th>
-          <th class="num">Sold, last ${m.nights} nights</th>`,
+    : `<p class="note">${th('menu_card.all_round', money(S.data.note))}</p>`;
+  const groups = m.groups.map(g => `<details class="fold"><summary><bdi>${esc(g.name || t('uses.no_group'))}</bdi>
+      <span class="quiet">${g.items.length === 1 ? th('menu_card.items_one', 1) : th('menu_card.items_many', g.items.length)}</span></summary>
+      ${table(`<th>${th('count.item')}</th><th>${th('menu_card.portion')}</th>
+          <th class="num">${th('items.price')}</th><th class="num">${th('menu_card.costs')}</th>
+          <th class="num">${th('menu_card.sold_last', m.nights)}</th>`,
         g.items.map(i => i.portions.map((p, n) => `<tr>
           <td>${n ? '' : `<bdi>${esc(i.name)}</bdi>`}</td>
           <td class="quiet"><bdi>${esc(p.name || '')}</bdi>${p.tag ? ` · <bdi>${esc(p.tag)}</bdi>` : ''}</td>
@@ -2010,46 +1937,41 @@ export function sambaposMenu() {
             && p.price ? ` · ${Math.round(p.cost / p.price * 100)}%` : ''}</td>
           <td class="num">${n ? '' : (i.sold ? Number(i.sold).toLocaleString('en') : '<span class="quiet">0</span>')}</td>
         </tr>`).join('')).join(''))}</details>`).join('');
-  return card(`<h2>The menu, as SambaPOS has it</h2>
-    <p class="sub">${m.items} items in ${m.groups.length} groups. Names and prices are set in
-      SambaPOS, where the customer is charged; the app reads them each time SambaPOS is read,
-      ready for the TV and the QR menu later. What each costs to make is what it takes (Setup →
-      What each menu item takes) at the stock’s prices.</p>${odd}${groups}`);
+  return card(`<h2>${th('menu_card.title')}</h2>
+    <p class="sub">${th('menu_card.sub', m.items, m.groups.length)}</p>${odd}${groups}`);
 }
 
 /** Every SambaPOS account money moves through, and what it is in the books. */
 export function sambaposAccounts() {
   const p = S.data.pos;
   const rows = p.accounts || [];
-  const intro = `<h2>SambaPOS accounts</h2>
-    <p class="sub">An expense, a staff advance and an owner taking cash all look the same in
-      SambaPOS: money moved from the drawer to one of its accounts. So each account is linked
-      once to what it is in the books. The link is by SambaPOS's number for the account, so
-      renaming it in SambaPOS changes nothing.</p>`;
+  const intro = `<h2>${th('pos_accounts.title')}</h2>
+    <p class="sub">${th('pos_accounts.sub')}</p>`;
   if (!rows.length) {
-    return card(intro + empty('Once a night is kept, the accounts it used show here.'));
+    return card(intro + empty(t('pos_accounts.none')));
   }
   let type = null;
   const body = rows.map(r => {
     const head = r.type !== type
-      ? `<tr class="typeh"><td colspan="4"><strong><bdi>${esc(r.type || 'Other')}</bdi></strong></td></tr>` : '';
+      ? `<tr class="typeh"><td colspan="4"><strong><bdi>${esc(r.type || t('sold.other'))}</bdi></strong></td></tr>` : '';
     type = r.type;
     const person = r.link && ['staff', 'partner', 'supplier'].includes(r.link.as);
     const gone = r.gone
       ? (person && !r.link.left
-        ? ` <span class="pill warn">gone from SambaPOS</span><br>Has ${esc(r.link.name)} left?
+        ? ` <span class="pill warn">${th('pos_accounts.gone')}</span><br>${th('pos_accounts.has_left', esc(r.link.name))}
             <button class="mini link" data-act="posLeft" data-pos="${r.pos_id}"
-              data-name="${esc(r.link.name)}"${r.link.as === 'staff' ? ' data-staff="1"' : ''}>Mark as left</button>`
-        : ' <span class="pill">gone from SambaPOS</span>') : '';
+              data-name="${esc(r.link.name)}"${r.link.as === 'staff' ? ' data-staff="1"' : ''}>${th('pos_accounts.mark_left')}</button>`
+        : ` <span class="pill">${th('pos_accounts.gone')}</span>`) : '';
     return `${head}<tr>
-      <td><bdi>${esc(r.name)}</bdi>${r.drawer ? ' <span class="pill">drawer</span>' : ''}${gone}
+      <td><bdi>${esc(r.name)}</bdi>${r.drawer ? ` <span class="pill">${th('pos_accounts.drawer')}</span>` : ''}${gone}
         ${r.link && r.link.name_then !== r.name
-          ? `<br><span class="quiet">was <bdi>${esc(r.link.name_then)}</bdi> when linked</span>` : ''}</td>
+          ? `<br><span class="quiet">${th('pos_accounts.was', `<bdi>${esc(r.link.name_then)}</bdi>`)}</span>` : ''}</td>
       <td class="num">${r.used || '<span class="quiet">—</span>'}</td>
       <td class="nowrap quiet">${esc(String(r.last_at || '').slice(0, 10))}</td>
       <td>${linkPicker(r.pos_id, r.name, r.link, r.suggest)}</td></tr>`;
   }).join('');
   const todo = rows.filter(r => !r.link && !r.gone).length;
-  return card(intro + table('<th>SambaPOS account</th><th class="num">Used</th><th>Last</th><th>In the books</th>', body)
-    + `<p class="note">${todo ? `${todo} not linked yet.` : 'Every account is linked.'}</p>`);
+  return card(intro + table(`<th>${th('pos_accounts.account')}</th><th class="num">${th('pos_accounts.used')}</th>
+      <th>${th('pos_accounts.last')}</th><th>${th('pos_month.in_books')}</th>`, body)
+    + `<p class="note">${todo ? th('pos_accounts.not_linked', todo) : th('pos_accounts.all_linked')}</p>`);
 }

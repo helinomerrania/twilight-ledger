@@ -16,6 +16,7 @@ from fractions import Fraction
 from . import db, kinds
 from .dates import (days_in, month_of, month_range, prev_month, today, tonight)
 from .money import mround, mround_fraction, pct, split_shares
+from .words import t
 
 # --------------------------------------------------------------- balances
 
@@ -268,12 +269,12 @@ def so_far(con, month):
                           (month, c["date"]))
         extra = mround_fraction(later * ratio) if (ratio is not None and later > 0) else 0
         cost = c["value"] + extra
-        note = f"counted {c['date']}" + (", days since estimated" if extra else "")
+        note = t("estimate.counted_since" if extra else "estimate.counted", c["date"])
     elif ratio is not None:
         cost = mround_fraction(r["rev"] * ratio)
-        note = f"no count yet this month, so taken at last month's {float(ratio) * 100:.0f}%"
+        note = t("estimate.ratio", f"{float(ratio) * 100:.0f}%")
     else:
-        cost, note = c["value"], "no count to go on"
+        cost, note = c["value"], t("estimate.none")
 
     # Each estimated line is rounded to the note like every other figure, so
     # the result can be split between the partners without odd dinar.
@@ -523,7 +524,7 @@ def drawings(con, month):
     taken = sum(p["taken"] - p["put_in"] for p in prt)
     sf = so_far(con, month)
     if sf:
-        profit, basis = sf["net"], "so far"
+        profit, basis = sf["net"], "so_far"
     else:
         profit = result(con, month).get("net") or 0
         basis = "closed" if is_closed(con, month) else "month"
@@ -609,10 +610,10 @@ def supplier_lines(con, supplier_id, month):
             "ELSE m.happened_on >= ? AND m.happened_on <= ? END "
             "ORDER BY m.happened_on, m.entry_id",
             (supplier_id, month, start, end)):
-        what = {"receipt_credit": "Goods received",
-                "supplier_payment": "Paid",
-                "opening": "Owed when these books began"}.get(
-                    m["entry_kind"], kinds.label(m["entry_kind"]))
+        what = {"receipt_credit": t("statement.goods"),
+                "supplier_payment": t("statement.paid"),
+                "opening": t("statement.opening")}.get(
+                    m["entry_kind"]) or kinds.label(m["entry_kind"])
         if m["entry_kind"] == "receipt_credit" and m["memo"]:
             what += f" — {m['memo']}"
         lines.append({"on": m["happened_on"], "what": what, "amount": m["delta"]})
@@ -764,7 +765,7 @@ def entries(con, *, on=None, month=None, limit=None, q=None, kind=None, ids=None
         args.extend(ids)
     for word in str(q or "").split():
         like = f"%{word}%"
-        named = [k for k, v in kinds.LABELS.items() if word.lower() in v.lower()]
+        named = [k for k, v in kinds.labels().items() if word.lower() in v.lower()]
         # a person by the name they have now too: an entry keeps the name it
         # was written with, so a renamed person's earlier entries are found
         clause = ("(e.detail LIKE ? OR e.memo LIKE ? OR e.happened_on LIKE ? "
@@ -882,7 +883,7 @@ def money_flow(con, month):
         g = side.setdefault(r["entry_kind"], {"kind": r["entry_kind"],
                                               "label": kinds.label(r["entry_kind"]),
                                               "total": 0, "by": {}})
-        name = r["person"] or r["detail"] or "(not named)"
+        name = r["person"] or r["detail"] or t("flow.not_named")
         g["total"] += abs(r["delta"])
         g["by"][name] = g["by"].get(name, 0) + abs(r["delta"])
         # each one on its own too, for a name's entries and the slips
@@ -1054,11 +1055,10 @@ def recent(con, limit=40):
             key = d.get("on") or d.get("count_date")
             if run_of and run_of["key"] == key:
                 run_of["row"]["lines"] += 1
-                run_of["row"]["summary"] = (f"Stock count for {key}: "
-                                            f"{run_of['row']['lines']} lines saved")
+                run_of["row"]["summary"] = t("change.count_lines", key, run_of["row"]["lines"])
                 continue
             row = {"id": r["id"], "at": r["at"], "action": "count",
-                   "summary": f"Stock count for {key}: 1 line saved",
+                   "summary": t("change.count_line", key, 1),
                    "lines": 1, "entry": None, "can_put_back": False}
             run_of = {"key": key, "row": row}
             out.append(row)

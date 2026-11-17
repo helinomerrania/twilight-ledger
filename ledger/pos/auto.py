@@ -20,6 +20,7 @@ from datetime import datetime, timedelta
 from pathlib import Path
 
 from .. import db
+from ..words import t
 from . import archive, sources
 
 SETTLE = timedelta(seconds=60)   # a file this new may still be being written
@@ -38,20 +39,16 @@ _wake = threading.Event()        # look now (a screen opened, or a folder was se
 _now = threading.Event()         # ... without waiting out the gap
 _stop = threading.Event()
 
-DAYS = ("Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun")
-MONTHS = ("Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct",
-          "Nov", "Dec")
-
-
 def folder_of(con):
     return ((db.setting(con, "sambapos", {}) or {}).get("folder") or "").strip()
 
 
 def when(at):
-    """'Tue 10 Nov 03:12', in English whatever the PC's own language."""
+    """'Tue 10 Nov 03:12', in the words, whatever the PC's own language."""
     if isinstance(at, str):
         at = datetime.fromisoformat(at)
-    return f"{DAYS[at.weekday()]} {at.day} {MONTHS[at.month - 1]} {at:%H:%M}"
+    return (f"{t(f'day.short.{at.isoweekday()}')} {at.day} "
+            f"{t(f'month.short.{at.month:02d}')} {at:%H:%M}")
 
 
 # ------------------------------------------------------------------- files
@@ -59,7 +56,7 @@ def when(at):
 def files_in(folder):
     """Every backup in the folder, oldest first, with what it is known by."""
     if not Path(folder).is_dir():
-        raise sources.PosError(f"there is no folder at {folder} now")
+        raise sources.PosError(t("pos.no_folder_now", folder))
     out = []
     for p in sources.backups_in(folder):
         st = p.stat()
@@ -133,19 +130,18 @@ def run(con, *, now=None, wait=False):
                 lines = archive.keep(con, snap)
                 new = [l for l in lines if l["status"] in ("new", "updated") and l["tickets"]]
                 remember(con, f, True, "; ".join(archive.describe(l) for l in new)
-                          or "nothing new")
+                          or t("pos.nothing_new"))
             read += 1
             kept += new
         if again and todo:
             db.set_setting(con, "sambapos_reads", READS)
         if kept:
             nights = sorted({l["night"] for l in kept})
+            latest = "; ".join(archive.describe(night) for night in kept[-5:])
             with db.tx(con):
                 db.audit(con, "pos_keep", None, {
-                    "summary": "Brought in SambaPOS's backups by itself: "
-                               + "; ".join(archive.describe(l) for l in kept[-5:])
-                               + (f" (and {len(nights) - 5} earlier nights)"
-                                  if len(nights) > 5 else ""),
+                    "summary": t("change.pos_auto_more", latest, len(nights) - 5)
+                    if len(nights) > 5 else t("change.pos_auto", latest),
                     "source": "auto"})
         return {"on": True, "read": read, "kept": kept, "failed": failed}
     finally:
@@ -189,20 +185,15 @@ def problem(v, now):
     if not v.get("on"):
         return None
     if v["error"]:
-        return (v["error"], "Set the folder SambaPOS backs up to again, in Setup.")
+        return (v["error"], t("pos.fix_folder"))
     if not v["in_folder"]:
-        return ("there are no SambaPOS backups in that folder",
-                "Check it is the folder SambaPOS backs up to, in Setup.")
+        return (t("pos.no_backups"), t("pos.fix_check_folder"))
     if now - datetime.fromisoformat(v["latest"]) > STALE:
-        return (f"the newest there is from {when(v['latest'])}, more than a day ago",
-                "SambaPOS makes one just before every reset, so was the reset run? "
-                "If it was, SambaPOS may now be backing up somewhere else: set the "
-                "folder again in Setup.")
+        return (t("pos.stale", when(v["latest"])), t("pos.fix_stale"))
     newest = v["newest"]
     late = [f for f in v["failed"] if not newest or f["made_at"] >= newest["made_at"]]
     if late:
-        return (f"{late[0]['name']} could not be read: {late[0]['note']}",
-                "The nights in it are not kept until it reads. Send Claude the file.")
+        return (t("pos.unreadable", late[0]["name"], late[0]["note"]), t("pos.fix_unreadable"))
     return None
 
 
@@ -221,10 +212,10 @@ def start(db_path):
     """Look now, then every few minutes, and whenever kicked. Returns the
     thread, which stops with the app."""
     _stop.clear()
-    t = threading.Thread(target=_loop, args=(str(db_path),), daemon=True,
-                         name="sambapos-backups")
-    t.start()
-    return t
+    thread = threading.Thread(target=_loop, args=(str(db_path),), daemon=True,
+                              name="sambapos-backups")
+    thread.start()
+    return thread
 
 
 def stop():

@@ -23,6 +23,7 @@ from decimal import ROUND_HALF_UP, Decimal
 
 from .. import db
 from ..dates import NIGHT_ENDS
+from ..words import t
 from . import catalog, links
 
 
@@ -38,10 +39,10 @@ def milli(v):
 def describe(line):
     """One kept work period in words: 'the night of 2026-11-10: 85 tickets,
     350,000 paid'."""
-    bits = [f"{line['tickets']} tickets", f"{line['takings']:,} paid"]
+    bits = [t("night.tickets", line["tickets"]), t("night.paid", f"{line['takings']:,}")]
     if line.get("unpaid"):
-        bits.append(f"{line['unpaid']:,} unpaid")
-    return f"the night of {line['night']}: " + ", ".join(bits)
+        bits.append(t("night.unpaid", f"{line['unpaid']:,}"))
+    return t("night.described", line["night"], ", ".join(bits))
 
 
 def stamp(dt):
@@ -55,7 +56,7 @@ def night_of(moment):
 def _night(period, tickets):
     """The night most of the period's tickets were opened on."""
     if tickets:
-        votes = Counter(night_of(t["Date"]) for t in tickets)
+        votes = Counter(night_of(tk["Date"]) for tk in tickets)
         return max(votes.items(), key=lambda kv: (kv[1], kv[0]))[0]
     return period["StartDate"].date().isoformat()
 
@@ -68,10 +69,10 @@ def as_of(snap):
     at = snap.get("at")
     if at:
         return stamp(at) if hasattr(at, "strftime") else str(at)
-    t = snap["tables"]
-    moments = [w.get(k) for w in t["WorkPeriods"] for k in ("StartDate", "EndDate")]
-    moments += [tk.get(k) for tk in t["Tickets"] for k in ("Date", "LastPaymentDate")]
-    moments += [d.get("Date") for d in t.get("AccountTransactionDocuments") or []]
+    tables = snap["tables"]
+    moments = [w.get(k) for w in tables["WorkPeriods"] for k in ("StartDate", "EndDate")]
+    moments += [tk.get(k) for tk in tables["Tickets"] for k in ("Date", "LastPaymentDate")]
+    moments += [d.get("Date") for d in tables.get("AccountTransactionDocuments") or []]
     moments = [m for m in moments if m]
     return stamp(max(moments)) if moments else None
 
@@ -84,24 +85,24 @@ def keep(con, snap):
     that was left alone. SambaPOS's list of accounts is brought up to date
     too, if this snapshot is the newest yet.
     """
-    t = snap["tables"]
+    tables = snap["tables"]
     at = as_of(snap)
     if at:
-        links.refresh(con, t, at)
-        catalog.refresh(con, t, at)
-    periods = sorted((w for w in t["WorkPeriods"] if w.get("StartDate")),
+        links.refresh(con, tables, at)
+        catalog.refresh(con, tables, at)
+    periods = sorted((w for w in tables["WorkPeriods"] if w.get("StartDate")),
                      key=lambda w: (w["StartDate"], w["Id"]))
     if not periods:
         return []
-    menu = {m["Id"]: m for m in t["MenuItems"]}
+    menu = {m["Id"]: m for m in tables["MenuItems"]}
     orders, payments, calcs, places = (defaultdict(list) for _ in range(4))
-    for o in t["Orders"]:
+    for o in tables["Orders"]:
         orders[o.get("TicketId")].append(o)
-    for p in t["Payments"]:
+    for p in tables["Payments"]:
         payments[p.get("TicketId")].append(p)
-    for c in t["Calculations"]:
+    for c in tables["Calculations"]:
         calcs[c.get("TicketId")].append(c)
-    for e in t["TicketEntities"]:
+    for e in tables["TicketEntities"]:
         if e.get("EntityName"):
             places[e.get("Ticket_Id")].append(e["EntityName"])
 
@@ -113,12 +114,12 @@ def keep(con, snap):
         return max(bisect_right(starts, moment) - 1, 0)
 
     tickets_of = defaultdict(list)
-    for tk in t["Tickets"]:
+    for tk in tables["Tickets"]:
         if tk.get("Date"):
             tickets_of[period_of(tk["Date"])].append(tk)
 
     docs_of = defaultdict(list)
-    for d in _documents(t):
+    for d in _documents(tables):
         docs_of[period_of(d["at"])].append(d)
 
     out = []
@@ -242,7 +243,7 @@ def _fill_in(con, period_id, line, tickets, payments, orders=None):
                             (p["PaymentTypeId"], p["Id"], period_id, tk["Id"]))
 
 
-def _documents(t):
+def _documents(tables):
     """SambaPOS's account documents that are not a ticket's own, each with
     the accounts it moved money between.
 
@@ -250,24 +251,24 @@ def _documents(t):
     their payments were paid into. With no payment to learn from, SambaPOS's
     own payment account type is used.
     """
-    ticket_docs = {tk.get("TransactionDocument_Id") for tk in t["Tickets"]} - {None}
-    accounts = {a["Id"]: a for a in t["Accounts"]}
-    types = {a["Id"]: a.get("Name") for a in t["AccountTypes"]}
+    ticket_docs = {tk.get("TransactionDocument_Id") for tk in tables["Tickets"]} - {None}
+    accounts = {a["Id"]: a for a in tables["Accounts"]}
+    types = {a["Id"]: a.get("Name") for a in tables["AccountTypes"]}
     doc_types = {d["Id"]: d.get("ButtonHeader") or d.get("Name")
-                 for d in t["AccountTransactionDocumentTypes"]}
-    reversed_ = {x["Id"] for x in t["AccountTransactions"] if x.get("IsReversed")}
-    paid_tx = {p.get("AccountTransactionId") for p in t["Payments"]} - {None}
+                 for d in tables["AccountTransactionDocumentTypes"]}
+    reversed_ = {x["Id"] for x in tables["AccountTransactions"] if x.get("IsReversed")}
+    paid_tx = {p.get("AccountTransactionId") for p in tables["Payments"]} - {None}
     values = defaultdict(list)
     drawer = set()
-    for v in t["AccountTransactionValues"]:
+    for v in tables["AccountTransactionValues"]:
         values[v.get("AccountTransactionDocumentId")].append(v)
         if v.get("AccountTransactionId") in paid_tx and (v.get("Debit") or 0) > 0:
             drawer.add(v.get("AccountId"))
     if not drawer:
-        drawer = {a["Id"] for a in t["Accounts"] if a.get("AccountTypeId") == 3}
+        drawer = {a["Id"] for a in tables["Accounts"] if a.get("AccountTypeId") == 3}
 
     out = []
-    for d in t["AccountTransactionDocuments"]:
+    for d in tables["AccountTransactionDocuments"]:
         if not d.get("Date") or d["Id"] in ticket_docs or not d.get("DocumentTypeId"):
             continue
         lines = []
@@ -410,7 +411,7 @@ def month(con, month):
 
 
 WEEK = (6, 0, 1, 2, 3, 4, 5)        # strftime('%w'): Saturday first, as the week runs here
-DAYS = ("Sunday", "Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday")
+DAYS = (7, 1, 2, 3, 4, 5, 6)        # strftime('%w') to the days in the words (day.1 is Monday)
 
 
 def when(con, month):
@@ -444,11 +445,11 @@ def when(con, month):
           FROM pos_ticket t JOIN pos_period p ON p.id = t.period_id
          WHERE p.night LIKE ? AND t.paid_at IS NOT NULL AND t.paid_at > t.opened_at""",
                       (like,), default=None)
-    for t in tables:
-        t["minutes"] = round(t["minutes"]) if t["minutes"] is not None else None
+    for row in tables:
+        row["minutes"] = round(row["minutes"]) if row["minutes"] is not None else None
     return {"hours": sorted(([r["h"], r["n"], r["total"]] for r in hrs),
                             key=lambda r: (r[0] - NIGHT_ENDS) % 24),
-            "days": [{"day": DAYS[d], "nights": days[d]["nights"], "takings": days[d]["takings"],
+            "days": [{"day": t(f"day.{DAYS[d]}"), "nights": days[d]["nights"], "takings": days[d]["takings"],
                       "tickets": days[d]["tickets"],
                       "average": round(days[d]["takings"] / days[d]["nights"])}
                      for d in WEEK if d in days],

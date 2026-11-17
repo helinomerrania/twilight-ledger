@@ -23,6 +23,7 @@ from datetime import date, datetime
 from pathlib import Path
 
 from . import db
+from .words import t
 
 _last_daily = None          # the date the daily copy was last confirmed
 
@@ -43,23 +44,23 @@ def verify(path):
     try:
         con = sqlite3.connect(db.read_only(path), uri=True)
     except sqlite3.Error as exc:
-        raise db.LedgerError(f"the copy cannot be opened: {exc}") from exc
+        raise db.LedgerError(t("backup.cannot_open", exc)) from exc
     try:
         con.row_factory = sqlite3.Row
         ok = con.execute("PRAGMA integrity_check").fetchone()[0]
         if ok != "ok":
-            raise db.LedgerError(f"the copy is damaged: {ok}")
+            raise db.LedgerError(t("backup.damaged", ok))
         tables = {r[0] for r in con.execute(
             "SELECT name FROM sqlite_master WHERE type = 'table'")}
         if not {"entry", "posting", "account", "schema_migrations"} <= tables:
-            raise db.LedgerError("that file is not a set of Twilight Ledger books")
+            raise db.LedgerError(t("backup.not_books"))
         if con.execute("SELECT 1 FROM unbalanced LIMIT 1").fetchone():
-            raise db.LedgerError("the copy does not balance")
+            raise db.LedgerError(t("backup.unbalanced"))
         entries = con.execute("SELECT count(*) FROM entry").fetchone()[0]
         postings = con.execute("SELECT count(*) FROM posting").fetchone()[0]
         return entries, postings
     except sqlite3.Error as exc:
-        raise db.LedgerError(f"the copy cannot be read: {exc}") from exc
+        raise db.LedgerError(t("backup.cannot_read", exc)) from exc
     finally:
         con.close()
 
@@ -77,14 +78,13 @@ def set_folder(con, path):
         return None
     p = Path(path).expanduser()
     if not p.is_absolute():
-        raise db.LedgerError("give the whole path, for example G:\\My Drive\\Twilight")
+        raise db.LedgerError(t("backup.whole_path", t("backup.example_path")))
     if not p.exists() or not p.is_dir():
-        raise db.LedgerError(f"there is no folder at {p}. Create it first.")
+        raise db.LedgerError(t("backup.no_folder", p))
     data = db.data_dir(con.path).resolve()
     try:
         p.resolve().relative_to(data)
-        raise db.LedgerError("that is inside the folder the books already live "
-                             "in. The point is a copy somewhere else.")
+        raise db.LedgerError(t("backup.inside"))
     except ValueError:
         pass
     probe = p / ".twilight-write-test"
@@ -92,7 +92,7 @@ def set_folder(con, path):
         probe.write_text("ok", encoding="utf-8")
         probe.unlink()
     except OSError as exc:
-        raise db.LedgerError(f"that folder cannot be written to: {exc}") from exc
+        raise db.LedgerError(t("backup.not_writable", exc)) from exc
     db.set_setting(con, "backup_folder", str(p))
     return str(p)
 
@@ -102,9 +102,9 @@ def run(con, why="manual"):
     try:
         dest = db.snapshot(con.path, why=why)
     except sqlite3.Error as exc:
-        raise db.LedgerError(f"the copy could not be made: {exc}") from exc
+        raise db.LedgerError(t("backup.not_made", exc)) from exc
     if dest is None:
-        raise db.LedgerError("there are no books to copy yet")
+        raise db.LedgerError(t("backup.no_books"))
     try:
         entries, postings = verify(dest)
     except db.LedgerError:
@@ -125,7 +125,7 @@ def run(con, why="manual"):
             target = Path(second) / dest.name
             shutil.copy2(dest, target)
             if _sha(target) != _sha(dest):
-                raise OSError("the copy does not match the original")
+                raise OSError(t("backup.mismatch"))
             verify(target)
             status["second_ok"] = True
         except (OSError, db.LedgerError) as exc:
@@ -189,7 +189,7 @@ def restore(db_path, source):
     """
     source = Path(source).expanduser()
     if not source.exists():
-        raise db.LedgerError(f"there is no file at {source}")
+        raise db.LedgerError(t("backup.no_file", source))
     entries, postings = verify(source)
     target = Path(db_path).resolve()
     kept = db.snapshot(target, why="before-restore") if target.exists() else None

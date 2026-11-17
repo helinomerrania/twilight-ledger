@@ -21,6 +21,8 @@ import threading
 from datetime import datetime
 from pathlib import Path
 
+from .words import t
+
 HERE = Path(__file__).resolve().parent
 MIGRATIONS = HERE / "migrations"
 ROOT = HERE.parent
@@ -155,7 +157,7 @@ def migration_files():
     files = sorted(MIGRATIONS.glob("*.sql"))
     bad = [f.name for f in files if not re.match(r"^\d{3}_[a-z0-9_]+\.sql$", f.name)]
     if bad:
-        raise LedgerError(f"migration names must look like 001_core.sql: {bad}")
+        raise LedgerError(t("migration.bad_names", "001_core.sql", bad))
     return files
 
 
@@ -176,8 +178,7 @@ def split_sql(script):
             out.append(buf.strip())
             buf = ""
     if buf.strip():
-        raise LedgerError("the migration ends in an unfinished statement: "
-                          + buf.strip()[:80])
+        raise LedgerError(t("migration.unfinished", buf.strip()[:80]))
     return out
 
 
@@ -196,9 +197,7 @@ def run_migrations(con):
         if f.name in done:
             sha = _sha(f.read_text(encoding="utf-8"))
             if not same_migration(f.name, done[f.name], sha):
-                raise LedgerError(
-                    f"{f.name} has been edited since it was applied. "
-                    "Add a new migration instead of changing an old one.")
+                raise LedgerError(t("migration.edited", f.name))
             if done[f.name] and done[f.name] != sha:
                 # reworded in a comment only (REWORDED): record the new wording
                 con.execute("UPDATE schema_migrations SET sha = ? WHERE name = ?",
@@ -226,7 +225,7 @@ def run_migrations(con):
                 con.execute("ROLLBACK")
             except sqlite3.OperationalError:
                 pass
-            raise LedgerError(f"{f.name} failed: {exc}") from exc
+            raise LedgerError(t("migration.failed", f.name, exc)) from exc
         applied.append(f.name)
     return applied
 
@@ -276,11 +275,9 @@ def assert_balanced(con):
     except sqlite3.OperationalError:
         return  # schema not built yet
     if rows:
-        lines = ", ".join(
-            f"entry {r['entry_id']} on {r['happened_on']} out by {r['out_by']}"
-            for r in rows)
-        raise LedgerError(
-            "the books do not balance and will not be served: " + lines)
+        lines = ", ".join(t("books.out_by_on", r["entry_id"], r["happened_on"], r["out_by"])
+                          for r in rows)
+        raise LedgerError(t("books.unbalanced", lines))
 
 
 def integrity(con):
@@ -355,9 +352,8 @@ class tx:
             rows = self.con.execute("SELECT * FROM unbalanced LIMIT 3").fetchall()
             if rows:
                 self.con.execute("ROLLBACK")
-                raise LedgerError(
-                    "refused to save: " + ", ".join(
-                        f"entry {r['entry_id']} out by {r['out_by']}" for r in rows))
+                raise LedgerError(t("books.refused", ", ".join(
+                    t("books.out_by", r["entry_id"], r["out_by"]) for r in rows)))
             self.con.execute("COMMIT")
         else:
             self.con.execute("ROLLBACK")

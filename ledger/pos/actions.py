@@ -10,6 +10,7 @@ from pathlib import Path
 from .. import db
 from ..money import half_up
 from ..registry import ApiError, action, clean_date
+from ..words import t
 from . import adding, archive, auto, catalog, links, sources, uses
 
 DEFAULTS = {"folder": "", "server": "localhost", "database": "twilight"}
@@ -63,7 +64,7 @@ def keep(con, snap, why):
         kept = [l for l in lines if l["status"] in ("new", "updated") and l["tickets"]]
         if kept:
             db.audit(con, "pos_keep", None, {
-                "summary": f"Kept SambaPOS {why}: " + "; ".join(archive.describe(l) for l in kept),
+                "summary": t("change.pos_kept", why, "; ".join(archive.describe(l) for l in kept)),
                 "source": snap["source"]})
     return lines
 
@@ -75,7 +76,7 @@ def _fail(exc):
 # once saved, look in a newly chosen folder straight away — after the commit,
 # or the reader's own connection would still see the old folder
 @action("pos_settings", guard_pots=False,
-        summary=lambda con, body, out: "Changed where SambaPOS is read from",
+        summary=lambda con, body, out: t("change.pos_settings"),
         after=lambda: auto.kick(at_once=True))
 def _pos_settings(con, body):
     s = settings(con)
@@ -85,9 +86,9 @@ def _pos_settings(con, body):
     if s["folder"]:
         p = Path(s["folder"]).expanduser()
         if not p.is_absolute():
-            raise ApiError("give the whole path, for example C:\\Users\\you\\Documents\\SambaPOS5\\Backups")
+            raise ApiError(t("backup.whole_path", t("pos.example_path")))
         if not p.is_dir():
-            raise ApiError(f"there is no folder at {p}")
+            raise ApiError(t("pos.no_folder", p))
     db.set_setting(con, "sambapos", s)
     return {}
 
@@ -96,12 +97,13 @@ def _pos_id(body):
     try:
         return int(body.get("pos_id"))
     except (TypeError, ValueError):
-        raise ApiError("which SambaPOS account?") from None
+        raise ApiError(t("pos.which_account")) from None
 
 
 def _link_line(con, body, out):
     a = links.account(con, _pos_id(body))
-    return f"Linked SambaPOS's {a['name'] if a else 'account'} to {out.get('label', 'the books')}"
+    return t("change.pos_linked", a["name"] if a else t("change.pos_account"),
+             out.get("label") or t("change.pos_the_books"))
 
 
 @action("pos_link", guard_pots=False, summary=_link_line)
@@ -111,8 +113,10 @@ def _pos_link(con, body):
 
 
 def _left_line(con, body, out):
-    on = f" on {body['left_on']}" if body.get("left_on") else ""
-    return f"Marked {out.get('name', 'someone')} as left{on}, as SambaPOS no longer has them"
+    who = out.get("name") or t("change.someone")
+    if body.get("left_on"):
+        return t("change.pos_left_on", who, body["left_on"])
+    return t("change.pos_left", who)
 
 
 @action("pos_left", guard_pots=False, summary=_left_line)
@@ -121,7 +125,7 @@ def _pos_left(con, body):
     from ..setup import _account_active
     link = db.one(con, "SELECT * FROM pos_link WHERE pos_id = ?", (_pos_id(body),))
     if not link or link["as_what"] not in ("staff", "partner", "supplier"):
-        raise ApiError("that SambaPOS account is not linked to anyone")
+        raise ApiError(t("pos.not_linked"))
     out = _account_active(con, {"id": link["account_id"], "active": 0,
                                 "left_on": body.get("left_on")})
     name = db.scalar(con, "SELECT name FROM account WHERE id = ?", (link["account_id"],))
@@ -129,7 +133,7 @@ def _pos_left(con, body):
 
 
 @action("pos_told", guard_pots=False,
-        summary=lambda con, body, out: "Noted that an account is to come out of SambaPOS")
+        summary=lambda con, body, out: t("change.pos_told"))
 def _pos_told(con, body):
     """The reminder to remove someone who left from SambaPOS has been seen."""
     con.execute("UPDATE pos_link SET told = 1 WHERE pos_id = ?", (_pos_id(body),))
@@ -138,8 +142,7 @@ def _pos_told(con, body):
 
 def _night_line(con, body, out):
     n = out.get("added", 0)
-    return (f"Added the night of {out.get('night')} from SambaPOS: "
-            f"{n} entr{'y' if n == 1 else 'ies'}")
+    return t("change.pos_night_one" if n == 1 else "change.pos_night", out.get("night"), n)
 
 
 @action("pos_add_night", summary=_night_line)
@@ -149,12 +152,11 @@ def _pos_add_night(con, body):
     on = clean_date(body.get("on"))
     p = adding.plan(con, on)
     if p is None:
-        raise ApiError(f"SambaPOS has not been kept for {on}")
+        raise ApiError(t("pos.not_kept", on))
     if p["held"]:
-        raise ApiError("link every SambaPOS account on this night first: "
-                       f"{p['held']} line{'s' if p['held'] != 1 else ''} cannot be placed yet")
+        raise ApiError(t("pos.link_first_one" if p["held"] == 1 else "pos.link_first", p["held"]))
     if not p["to_add"]:
-        raise ApiError("everything SambaPOS recorded that night is in the books already")
+        raise ApiError(t("pos.all_in"))
     return {"added": adding.add(con, p), "night": on}
 
 
@@ -163,7 +165,7 @@ def _pos_auto(con, body):
     """Look in SambaPOS's backup folder now, and bring in anything not read."""
     out = auto.run(con, wait=True)
     if not out.get("on"):
-        raise ApiError("choose the folder SambaPOS backs up to first")
+        raise ApiError(t("pos.choose_folder"))
     if out.get("error"):
         raise ApiError(out["error"])
     return out
@@ -187,9 +189,9 @@ def _pos_folder(con, body):
             with db.tx(con):
                 auto.remember(con, f, False, str(exc))
             continue
-        lines += keep(con, snap, f"from {f['name']}")
+        lines += keep(con, snap, t("pos.kept_from", f["name"]))
         with db.tx(con):
-            auto.remember(con, f, True, "read again by hand")
+            auto.remember(con, f, True, t("pos.read_again"))
     return {"files": len(files), "kept": lines, "failed": failed}
 
 
@@ -201,7 +203,7 @@ def _pos_live(con, body):
         snap = sources.read_live(s["server"], s["database"])
     except sources.PosError as exc:
         _fail(exc)
-    return {"kept": keep(con, snap, "straight from its database")}
+    return {"kept": keep(con, snap, t("pos.kept_live"))}
 
 
 @action("pos_test", guard_pots=False, in_tx=False)

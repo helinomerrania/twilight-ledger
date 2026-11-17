@@ -90,7 +90,7 @@ class Server(unittest.TestCase):
         the screens came up bare, or blank."""
         with mock.patch("mimetypes.guess_type", return_value=("text/plain", None)):
             for path, kind in (("/app.css", "text/css"), ("/app.js", "text/javascript"),
-                               ("/", "text/html"), ("/lang/catalog.json", "application/json")):
+                               ("/", "text/html"), ("/lang/en.json", "application/json")):
                 c = http.client.HTTPConnection("127.0.0.1", self.port, timeout=10)
                 c.request("GET", path)
                 r = c.getresponse()

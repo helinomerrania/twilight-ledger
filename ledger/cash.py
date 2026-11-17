@@ -19,6 +19,7 @@ from .dates import month_of
 from .money import to_int
 from .pos import adding, archive, links
 from .registry import ApiError, action, clean_date, pot
+from .words import t
 
 DEFAULTS = {"float": 0, "blind": False, "rest_to": ""}
 
@@ -88,7 +89,7 @@ def differences(con, month):
                      "opened_by": night["opened_by"] if night else None})
     by = {}
     for r in rows:
-        who = r["opened_by"] or "not known"
+        who = r["opened_by"] or t("cash.not_known")
         g = by.setdefault(who, {"who": who, "nights": 0, "short": 0, "over": 0, "net": 0})
         g["nights"] += 1
         g["net"] += r["found"]
@@ -104,7 +105,7 @@ def differences(con, month):
 
 
 def _moved_line(con, body, out):
-    return f"Moved {out['amount']:,} out of {out['from']} to {out['to']}, leaving the float"
+    return t("change.moved_rest", f"{out['amount']:,}", out["from"], out["to"])
 
 
 @action("move_rest", summary=_moved_line)
@@ -115,31 +116,31 @@ def _move_rest(con, body):
     on = clean_date(body.get("on"))
     c = db.one(con, "SELECT id FROM cash_count WHERE counted_on = ?", (on,))
     if not c:
-        raise ApiError("count the cash first")
-    amount = to_int(body.get("amount"), "the amount")
+        raise ApiError(t("cash.count_first"))
+    amount = to_int(body.get("amount"), t("cash.field_amount"))
     if amount <= 0:
-        raise ApiError("there is nothing above the float to move")
+        raise ApiError(t("cash.nothing_above_float"))
     frm = drawer(con, on)["pot"]
     if not str(body.get("to") or "").strip():
-        raise ApiError("pick where the rest goes")
+        raise ApiError(t("cash.pick_rest"))
     to = pot(con, body, "to")                   # a pot still in use, nothing else
     if to == frm:
-        raise ApiError("pick a different pot to move it to")
+        raise ApiError(t("cash.pick_other_pot"))
     eid = post.transfer(con, amount, frm=frm, to=to, on=on,
                         source_ref=f"count:{c['id']}:rest")
     return {"id": eid, "amount": amount, "from": frm, "to": to}
 
 
 @action("cash_settings", guard_pots=False,
-        summary=lambda con, body, out: "Changed how the cash is counted")
+        summary=lambda con, body, out: t("change.cash_settings"))
 def _cash_settings(con, body):
     """The float left in the drawer, whether counts are blind, and where the
     rest of the drawer usually goes."""
     s = settings(con)
     if "float" in body:
-        f = to_int(body.get("float") or 0, "the float")
+        f = to_int(body.get("float") or 0, t("cash.field_float"))
         if f < 0:
-            raise ApiError("a float cannot be less than nothing")
+            raise ApiError(t("cash.float_negative"))
         s["float"] = f
     if "blind" in body:
         s["blind"] = str(body.get("blind")).strip().lower() in ("1", "true", "yes")

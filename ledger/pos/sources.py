@@ -18,6 +18,7 @@ from datetime import datetime
 from decimal import Decimal, InvalidOperation
 from pathlib import Path
 
+from ..words import t
 from . import bak
 
 # What is read, and as what. A column some version of SambaPOS does not have
@@ -86,7 +87,7 @@ def coerce(kind, v):
         try:
             return v if isinstance(v, Decimal) else Decimal(str(v))
         except InvalidOperation as exc:
-            raise PosError(f"SambaPOS sent {v!r} where a number belongs") from exc
+            raise PosError(t("pos.not_a_number", repr(v))) from exc
     if kind == "dt":
         if isinstance(v, datetime):
             return v
@@ -120,27 +121,27 @@ def read_backup(path):
     """A SambaPOS backup — the .zip SambaPOS makes, or the .bak inside it."""
     path = Path(path)
     if not path.is_file():
-        raise PosError(f"there is no file at {path}")
+        raise PosError(t("backup.no_file", path))
     if zipfile.is_zipfile(path):
         with zipfile.ZipFile(path) as z:
             baks = [i for i in z.infolist()
                     if i.filename.lower().endswith(".bak") and not i.is_dir()]
             if not baks:
-                raise PosError(f"{path.name} has no database backup in it")
+                raise PosError(t("pos.bak_none", path.name))
             info = max(baks, key=lambda i: i.file_size)
             if info.file_size > MAX_BAK:
-                raise PosError(f"{path.name} is far larger than a SambaPOS backup")
+                raise PosError(t("pos.bak_large", path.name))
             data = z.read(info)
     else:
         if path.stat().st_size > MAX_BAK:
-            raise PosError(f"{path.name} is far larger than a SambaPOS backup")
+            raise PosError(t("pos.bak_large", path.name))
         data = path.read_bytes()
     try:
         b = bak.Backup(data)
     except bak.BakError as exc:
-        raise PosError(f"{path.name} could not be read: {exc}") from exc
+        raise PosError(t("pos.unreadable", path.name, exc)) from exc
     if "Tickets" not in b.table_names():
-        raise PosError(f"{path.name} is a database backup, but not SambaPOS's")
+        raise PosError(t("pos.bak_not_pos", path.name))
     tables = {name: b.rows(name, set(cols)) for name, cols in TABLES.items()}
     return {"source": f"backup:{path.name}", "at": backup_time(path),
             "tables": normalise(tables)}
@@ -162,7 +163,7 @@ def backups_in(folder):
     """Every SambaPOS backup in a folder, oldest first."""
     folder = Path(folder or "")
     if not str(folder) or not folder.is_dir():
-        raise PosError("choose the folder SambaPOS puts its backups in, in Setup")
+        raise PosError(t("pos.choose_backups_folder"))
     files = [p for p in folder.iterdir()
              if p.is_file() and p.suffix.lower() in (".zip", ".bak")]
     return sorted(files, key=lambda p: (backup_time(p), p.name))
@@ -195,8 +196,7 @@ def run_powershell(request, timeout=180):
     signed in as whoever is running the app. Returns {name: rows}."""
     exe = powershell()
     if not exe:
-        raise PosError("reading SambaPOS directly only works on the Windows PC it "
-                       "runs on. Bring in a SambaPOS backup instead.")
+        raise PosError(t("pos.windows_only"))
     flags = getattr(subprocess, "CREATE_NO_WINDOW", 0)
     try:
         p = subprocess.run(
@@ -205,9 +205,9 @@ def run_powershell(request, timeout=180):
             input=json.dumps(request).encode("ascii"), capture_output=True,
             timeout=timeout, creationflags=flags)
     except subprocess.TimeoutExpired as exc:
-        raise PosError("SambaPOS's database took too long to answer") from exc
+        raise PosError(t("pos.too_slow")) from exc
     except OSError as exc:
-        raise PosError(f"PowerShell could not be started: {exc}") from exc
+        raise PosError(t("pos.no_powershell", exc)) from exc
     out = p.stdout.decode("utf-8", "replace")
     m = re.search(r"<<TWILIGHT>>(.*)<<END>>", out, re.S)
     if p.returncode != 0 or not m:
@@ -229,19 +229,16 @@ def explain(stderr, request):
     """Turn what went wrong into what to do about it."""
     text = re.sub(r"\x1b\[[0-9;]*m", "", _clixml(stderr))
     server, database = request.get("server"), request.get("database")
-    who = windows_user() or "this Windows account"
+    who = windows_user() or t("pos.this_account")
     if "Login failed" in text:
-        return (f"SQL Server would not let {who} into {database}. Setup shows the "
-                "three lines that give it permission to read.")
+        return t("pos.login_failed", who, database)
     if "Cannot open database" in text:
-        return (f"There is no database called {database} on {server}, or {who} "
-                "may not open it. Check the name in Setup.")
+        return t("pos.no_database", database, server, who)
     if ("network-related" in text or "was not found or was not accessible" in text
             or "error: 26" in text or "error: 40" in text):
-        return (f"No SQL Server answered at {server}. Is SambaPOS running? If it "
-                "is, check the server name in Setup.")
+        return t("pos.no_server", server)
     if "Invalid object name" in text:
-        return f"{database} is a database, but not SambaPOS's: it has no tickets."
+        return t("pos.not_pos_db", database)
     lines = [l.strip() for l in text.splitlines() if l.strip()]
     # newer PowerShell puts the message last, after a "|"; Windows PowerShell
     # puts it first, before "At line ..." and the "+ ~~~" underlining
@@ -249,8 +246,8 @@ def explain(stderr, request):
     piped = [l for l in piped if l and set(l) - set("~ ")]
     plain = [l for l in lines if not l.startswith(("At ", "+", "|", "Line ", "CategoryInfo",
                                                    "FullyQualifiedErrorId"))]
-    reason = piped[-1] if piped else (plain[0] if plain else "no reason given")
-    return "SambaPOS's database could not be read: " + reason
+    reason = piped[-1] if piped else (plain[0] if plain else t("pos.no_reason"))
+    return t("pos.db_unreadable", reason)
 
 
 def _columns_sql():
@@ -263,10 +260,10 @@ def _settings(server, database):
     server = str(server or "").strip()
     database = str(database or "").strip()
     if not server or not database:
-        raise PosError("give SambaPOS's server and database in Setup first")
+        raise PosError(t("pos.give_server"))
     if not re.fullmatch(r"[\w.\\,:() -]{1,128}", server) \
             or not re.fullmatch(r"[\w .-]{1,128}", database):
-        raise PosError("that server or database name has characters it cannot have")
+        raise PosError(t("pos.bad_name"))
     return server, database
 
 
@@ -280,7 +277,7 @@ def read_live(server, database, runner=None):
     for r in _rows(have.get("columns")):
         present.setdefault(r["t"], set()).add(r["c"])
     if "Tickets" not in present:
-        raise PosError(f"{database} is a database, but not SambaPOS's: it has no tickets.")
+        raise PosError(t("pos.not_pos_db", database))
     queries = []
     for table, cols in TABLES.items():
         use = [c for c in cols if c in present.get(table, ())]

@@ -1,7 +1,7 @@
 /* Formatting, markup helpers and the one way this app talks to the server.
    Everything here is pure except the functions that call the server. */
 
-import { localiseNow } from './i18n.js';
+import { localiseNow, useWords } from './i18n.js';
 
 export const S = {               // whatever the server last told us
   data: null,
@@ -30,13 +30,43 @@ export const pct = n => (n === null || n === undefined ? '—' : Number(n).toFix
 
 export const signed = n => (Number(n) > 0 ? '+' : '') + money(n);
 
+/* ------------------------------------------------------------------- words */
+
+/* Every sentence the screens show is in lang/en.json, by name, with {0}, {1}…
+   where its values go, shared with the server (ledger/words.py says more).
+   They are read before anything is drawn, and nothing is spelt out here. */
+let WORDS = {};
+
+export async function loadWords() {
+  const r = await fetch('lang/en.json', { cache: 'no-store' });
+  if (!r.ok) throw new Error(`lang/en.json: ${r.status}`);
+  WORDS = await r.json();
+  useWords(WORDS);
+}
+
+const fill = (s, vals) => s.replace(/\{(\d+)\}/g, (_, i) => String(vals[Number(i)] ?? ''));
+
+/** The sentence called `name`, with its values put in, as plain text. */
+export function t(name, ...vals) {
+  const s = WORDS[name];
+  if (s === undefined) { console.error(`no words called ${name}`); return name; }
+  return fill(s, vals);
+}
+
+/** The same, to go into markup: its own words made safe, its values put in as
+    they come (made safe already, or markup). */
+export function th(name, ...vals) {
+  const s = WORDS[name];
+  if (s === undefined) { console.error(`no words called ${name}`); return esc(name); }
+  return fill(esc(s), vals);
+}
+
 /* ------------------------------------------------------------------- dates */
 
-const MONTHS = ['January', 'February', 'March', 'April', 'May', 'June', 'July',
-                'August', 'September', 'October', 'November', 'December'];
+/** A month as the screens read it: its name and its year, two values. */
+export const monthWords = m => (m ? [t(`month.${m.slice(5, 7)}`), m.slice(0, 4)] : ['', '']);
 
-export const monthName = m =>
-  m ? `${MONTHS[Number(m.slice(5, 7)) - 1]} ${m.slice(0, 4)}` : '';
+export const monthName = m => (m ? monthWords(m).join(' ') : '');
 
 /* ------------------------------------------------------------------ markup */
 
@@ -85,10 +115,10 @@ export const field = (label, inner) => `<div><label>${esc(label)}</label>${inner
 async function call(path, init) {
   const r = await fetch(path, init);
   let body;
-  try { body = await r.json(); } catch { body = { error: `the server replied ${r.status}` }; }
+  try { body = await r.json(); } catch { body = { error: t('server.replied', r.status) }; }
   if (body.reload) setTimeout(() => location.reload(), 2500);   // updated under this page
   if (!r.ok || body.error) {
-    const err = new Error(body.error || `the server replied ${r.status}`);
+    const err = new Error(body.error || t('server.replied', r.status));
     err.status = r.status;
     err.extra = body;
     throw err;
@@ -148,7 +178,7 @@ export function say(text, isError = false, undo = null) {
 /** The app's own confirm box, because a destructive or unusual step should
     not be one unguarded click, and the browser's own dialog is easy to
     dismiss without reading. Resolves true for the first button. */
-export function ask(title, body, yes = 'Yes', no = 'Cancel') {
+export function ask(title, body, yes = t('common.yes'), no = t('common.cancel')) {
   return new Promise(resolve => {
     const host = document.getElementById('toast');
     const box = document.createElement('div');
@@ -181,15 +211,14 @@ export function ask(title, body, yes = 'Yes', no = 'Cancel') {
    down, answers nothing; a click, or a key once it has been read, does. */
 const meant = (e, opened) => e.detail > 0 || Date.now() - opened > 600;
 
-/** A question's title with someone's name in it. The name is kept as typed
-    in either language, even one not in the books yet, as when it is being
-    added. */
-export const withName = (before, name, after) =>
-  ({ html: `${esc(before)}<bdi>${esc(name)}</bdi>${esc(after)}` });
+/** A question's title with someone's name in it: the words called `words`,
+    with the name for their {0}. The name is kept as typed in either language,
+    even one not in the books yet, as when it is being added. */
+export const withName = (words, name) => ({ html: th(words, `<bdi>${esc(name)}</bdi>`) });
 
 /** The same question box, asking for a day as well. Resolves the day
     chosen, or null if nothing was. */
-export function askDate(title, body, value, max, yes = 'Yes', no = 'Cancel') {
+export function askDate(title, body, value, max, yes = t('common.yes'), no = t('common.cancel')) {
   return new Promise(resolve => {
     const host = document.getElementById('toast');
     const box = document.createElement('div');
@@ -235,11 +264,11 @@ export function pickItem(title, body, items) {
     box.className = 'ask';
     box.innerHTML = `<strong>${esc(title)}</strong>
       <p style="margin:6px 0 10px;white-space:pre-line">${esc(body)}</p>
-      <input list="pickNames" data-scan placeholder="Item" autocomplete="off" spellcheck="false">
+      <input list="pickNames" data-scan placeholder="${th('ask.item')}" autocomplete="off" spellcheck="false">
       <datalist id="pickNames">${items.map(i => `<option value="${esc(i.name)}">`).join('')}</datalist>
-      <p class="neg" style="margin:6px 0 0" hidden>Pick one from the list.</p>
-      <div class="row" style="margin-top:10px"><button class="btn primary" data-yes>That is it</button>
-        <button class="btn" data-no>Cancel</button></div>`;
+      <p class="neg" style="margin:6px 0 0" hidden>${th('ask.pick_from_list')}</p>
+      <div class="row" style="margin-top:10px"><button class="btn primary" data-yes>${th('ask.that_is_it')}</button>
+        <button class="btn" data-no>${th('common.cancel')}</button></div>`;
     const input = box.querySelector('input');
     const opener = document.activeElement;
     const done = answer => {

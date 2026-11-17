@@ -15,72 +15,64 @@
 
 import * as C from './cards.js';
 import {
-  BATCH, answer, prompt, setCatalog, setDict, setLanguage, setNames, watch,
+  BATCH, answer, prompt, setDict, setLanguage, setNames, watch,
 } from './i18n.js';
 import {
-  S, ask, askDate, closeCheck, empty, esc, get, load, money, monthName, pickItem, post,
-  printPage, printSlip, say, send, signed, withName,
+  S, ask, askDate, closeCheck, empty, esc, get, load, loadWords, money, monthName, monthWords, pickItem,
+  post, printPage, printSlip, say, send, signed, t, th, withName,
 } from './lib.js';
 
 /* ------------------------------------------------------------- the screens */
 
-const TABS = [
-  ['tonight', 'Tonight'],
-  ['stock', 'Stock'],
-  ['month', 'Month'],
-  ['books', 'Books'],
-  ['setup', 'Setup'],
-];
+// each is called tab.<it> in the words
+const TABS = ['tonight', 'stock', 'month', 'books', 'setup'];
 
 /* Each screen is a few pages, so nothing has to be scrolled through to find
-   it: [key, label, cards, a line under the tabs]. The first page is the one
-   a screen opens on, until another is picked; HEADS go above every page. */
+   it: [key, its label's name in the words, cards, the name of a line under
+   the tabs]. The first page is the one a screen opens on, until another is
+   picked; HEADS go above every page. */
 const PAGES = {
   tonight: [
-    ['close', 'Closing up', [C.needsALook, C.closingUp, C.nightDrawer]],
-    ['today', 'Today', [C.todayFigures, C.todayEntries]],
-    ['sold', 'Sold tonight', [C.nightSold]],
+    ['close', 'page.closing_up', [C.needsALook, C.closingUp, C.nightDrawer]],
+    ['today', 'page.today', [C.todayFigures, C.todayEntries]],
+    ['sold', 'page.sold_tonight', [C.nightSold]],
   ],
   stock: [
-    ['count', 'Count', [C.stockFigures, C.countPicker, C.countSheet]],
-    ['fill', 'Fill a bucket', [C.fillCard]],
-    ['receipts', 'Receipts', [C.receiptForm, C.receiptList]],
-    ['shelf', 'Should be there', [C.countPicker, C.expectedCard, C.ratiosCard]],
-    ['counts', 'Past counts', [C.countHistory]],
+    ['count', 'page.count', [C.stockFigures, C.countPicker, C.countSheet]],
+    ['fill', 'page.fill', [C.fillCard]],
+    ['receipts', 'page.receipts', [C.receiptForm, C.receiptList]],
+    ['shelf', 'page.shelf', [C.countPicker, C.expectedCard, C.ratiosCard]],
+    ['counts', 'page.past_counts', [C.countHistory]],
   ],
   month: [
-    ['profit', 'Profit', [C.monthFigures, C.soFarCard, C.resultCard]],
-    ['settle', 'Settle up', [C.settleCard, C.electricityCard, C.payrollCard, C.partnersCard,
-                             C.suppliersCard]],
-    ['cash', 'Cash', [C.moneyFlow, C.cashDifferences]],
-    ['sales', 'Sales', [C.salesByDay, C.monthSold, C.monthWhen, C.monthMakes]],
-    ['close', 'Checks and closing', [C.allChecks, C.closeCard, C.everyMonth]],
+    ['profit', 'page.profit', [C.monthFigures, C.soFarCard, C.resultCard]],
+    ['settle', 'page.settle', [C.settleCard, C.electricityCard, C.payrollCard, C.partnersCard,
+                               C.suppliersCard]],
+    ['cash', 'page.cash', [C.moneyFlow, C.cashDifferences]],
+    ['sales', 'page.sales', [C.salesByDay, C.monthSold, C.monthWhen, C.monthMakes]],
+    ['close', 'page.checks', [C.allChecks, C.closeCard, C.everyMonth]],
   ],
   books: [
-    ['entries', 'Entries', [C.newEntryCard, C.entryList]],
-    ['cash', 'Cash counts', [C.whereMoneyIs, C.cashCountsCard]],
-    ['changes', 'Recent changes', [C.recentChanges]],
+    ['entries', 'page.entries', [C.newEntryCard, C.entryList]],
+    ['cash', 'page.cash_counts', [C.whereMoneyIs, C.cashCountsCard]],
+    ['changes', 'page.changes', [C.recentChanges]],
   ],
   setup: [
-    ['people', 'People', [
-      () => C.editAccounts('staff', 'Staff', 'A salary change applies from the month on screen if it is open, never to a closed one.'),
-      () => C.editAccounts('supplier', 'Suppliers', 'A positive balance is what you owe them.'),
-      () => C.editAccounts('partner', 'Partners', 'Shares decide how a closed month’s profit is split.')]],
-    ['cash', 'Cash', [
-      () => C.editAccounts('cash', 'Cash pots', 'Where the business keeps its money. The first one is the main pot, used unless another is picked.'),
+    ['people', 'page.people', [
+      () => C.editAccounts('staff', t('people.staff'), t('people.staff_note')),
+      () => C.editAccounts('supplier', t('people.suppliers'), t('people.suppliers_note')),
+      () => C.editAccounts('partner', t('people.partners'), t('people.partners_note'))]],
+    ['cash', 'page.cash', [
+      () => C.editAccounts('cash', t('people.pots'), t('people.pots_note')),
       C.floatsCard, C.cashCountingCard]],
-    ['bills', 'Rent and bills', [C.editFixed, C.editElecFactors]],
-    ['stock', 'Stock', [C.editItems, C.menuUses, C.editTares, C.editConversions],
-     'What is counted and what it is worth'],
-    ['lists', 'Lists', [
-      () => C.editList('expense', 'Daily expenses', 'The first twelve show as buttons on Tonight.'),
-      () => C.editList('income', 'Other income', ''),
-      () => C.editList('reason', 'Reasons for a cash difference', '')],
-     'What the pickers offer'],
-    ['sambapos', 'SambaPOS', [C.sambaposCard, C.sambaposAccounts, C.sambaposMenu],
-     'Keeping each night before the reset deletes it'],
-    ['app', 'This app', [C.businessCard, C.languageCard, C.backupCard, C.updateCard],
-     'The business, the language, the backups, and updates'],
+    ['bills', 'page.bills', [C.editFixed, C.editElecFactors]],
+    ['stock', 'page.stock', [C.editItems, C.menuUses, C.editTares, C.editConversions], 'page.stock_note'],
+    ['lists', 'page.lists', [
+      () => C.editList('expense', t('lists.expense'), t('lists.expense_note')),
+      () => C.editList('income', t('lists.income'), ''),
+      () => C.editList('reason', t('lists.reason'), '')], 'page.lists_note'],
+    ['sambapos', 'page.sambapos', [C.sambaposCard, C.sambaposAccounts, C.sambaposMenu], 'page.sambapos_note'],
+    ['app', 'page.app', [C.businessCard, C.languageCard, C.backupCard, C.updateCard], 'page.app_note'],
   ],
 };
 
@@ -93,7 +85,7 @@ function draw(card) {
     return card() || '';
   } catch (err) {
     console.error(err);
-    return `<div class="banner bad"><strong>Part of this page could not be drawn</strong>
+    return `<div class="banner bad"><strong>${th('app.part_not_drawn')}</strong>
       <p style="margin:0">${esc(err.message)}</p></div>`;
   }
 }
@@ -120,8 +112,6 @@ const pageOf = tab => {
   return pages.find(p => p[0] === S.page[tab]) || pages[0];
 };
 const onPage = (tab, key) => S.tab === tab && pageOf(tab)[0] === key;
-
-const TITLES = { tonight: 'Tonight', stock: 'Stock', month: 'Month', books: 'Books', setup: 'Setup' };
 
 /* ----------------------------------------------- what is typed, and where */
 
@@ -166,22 +156,22 @@ function renderRail() {
     rail.append(foot);
   }
   const marks = pageMarks();
-  TABS.forEach(([key, label]) => {
+  TABS.forEach(key => {
     const b = document.createElement('button');
     b.className = 'tab';
     b.dataset.go = key;
     b.setAttribute('aria-current', String(key === S.tab));
     // Tonight counts everything that needs a look; a screen with a page that needs one shows a dot
-    b.innerHTML = `<span>${esc(label)}</span>`
-      + (key === 'tonight' && bad ? `<span class="flag" title="${bad} need a look">${bad}</span>`
-        : key !== 'tonight' && marks[key] ? `<span class="dot" title="${marks[key]} need a look"></span>` : '');
+    b.innerHTML = `<span>${th(`tab.${key}`)}</span>`
+      + (key === 'tonight' && bad ? `<span class="flag" title="${th('rail.need_look', bad)}">${bad}</span>`
+        : key !== 'tonight' && marks[key] ? `<span class="dot" title="${th('rail.need_look', marks[key])}"></span>` : '');
     rail.insertBefore(b, foot);
   });
   if (!S.data) return;
   document.getElementById('brandsub').textContent =
     (S.data.business.name || '') + ' · ' + S.data.today;
-  foot.innerHTML = `<div><strong>${money(S.data.cash)}</strong> on hand</div>
-    <span>version ${esc(S.data.version)}</span>`;
+  foot.innerHTML = `<div>${th('rail.on_hand', `<strong>${money(S.data.cash)}</strong>`)}</div>
+    <span>${th('rail.version', esc(S.data.version))}</span>`;
 }
 
 /* Drawing the screen again takes away the box being typed in, and the browser
@@ -216,38 +206,34 @@ function render({ fresh = false, skip = [] } = {}) {
     }
   }
   renderRail();
-  const title = TITLES[S.tab];
+  const title = t(`tab.${S.tab}`);
   const [key, , cards, note] = pageOf(S.tab);
   const marks = pageMarks();
   const tabs = PAGES[S.tab].map(([k, label]) => {
     const n = marks[`${S.tab}/${k}`];
     // Checks and closing says how many are not right; any other page just shows it needs a look
     const count = S.tab === 'month' && k === 'close';
-    return `<button data-go="${S.tab}/${k}" aria-current="${k === key}"><span>${esc(label)}</span>${n
-      ? `<span class="dot${count ? ' n' : ''}" title="${n} need a look">${count ? n : ''}</span>` : ''}</button>`;
+    return `<button data-go="${S.tab}/${k}" aria-current="${k === key}"><span>${th(label)}</span>${n
+      ? `<span class="dot${count ? ' n' : ''}" title="${th('rail.need_look', n)}">${count ? n : ''}</span>` : ''}</button>`;
   }).join('');
   // a date far ahead of the books is doubted before anything is charged on it
-  const clock = S.data.clock ? `<div class="banner bad"><strong>Is the computer's date right?</strong>
-      <p style="margin:6px 0 10px">It says ${esc(S.data.today)}, but the books were last used in
-      ${esc(monthName(S.data.clock.last))}. Nothing can be entered until this is settled: a
-      wrong date would charge rent and salaries for every month up to it. If the date is wrong,
-      set the computer's clock and open the app again.</p>
+  const clock = S.data.clock ? `<div class="banner bad"><strong>${th('clock.title')}</strong>
+      <p style="margin:6px 0 10px">${th('clock.says', esc(S.data.today), ...monthWords(S.data.clock.last))}</p>
       <button class="btn" data-do="clock_ok" data-args="{}"
-        data-confirm="The date is right?"
-        data-confirm-body="Every month up to now will be charged its rent and salaries."
-        data-yes="Yes, it is right">The date is right</button></div>` : '';
+        data-confirm="${th('clock.ask')}"
+        data-confirm-body="${th('clock.ask_body')}"
+        data-yes="${th('clock.yes')}">${th('clock.right')}</button></div>` : '';
   const stayed = S.stayed && S.on === S.stayed ? `<div class="banner">
-      <strong>It is past six, and a new night has begun.</strong>
-      <p style="margin:6px 0 10px">This screen is still on the night of
-        ${esc(S.stayed)}, so what is put in now is that night's.</p>
-      <button class="btn" data-act="newNight">Go to the new night</button></div>` : '';
+      <strong>${th('night.past_six')}</strong>
+      <p style="margin:6px 0 10px">${th('night.still_on', esc(S.stayed))}</p>
+      <button class="btn" data-act="newNight">${th('night.go_new')}</button></div>` : '';
   drawing = focus && kept.has(focus.key) ? document.activeElement : null;
   try {
     main.innerHTML = clock + stayed + `<h1>${esc(title)}</h1>`
       + `<div class="pagebar"><nav class="pages" aria-label="${esc(title)}">${tabs}</nav>`
       + `${HEADS[S.tab] ? draw(HEADS[S.tab]) : ''}</div>`
-      + (note ? `<p class="pagenote">${esc(note)}</p>` : '')
-      + (cards.map(draw).join('') || `<div class="card">${empty('Nothing here yet.')}</div>`);
+      + (note ? `<p class="pagenote">${th(note)}</p>` : '')
+      + (cards.map(draw).join('') || `<div class="card">${empty(t('app.nothing_here'))}</div>`);
   } finally {
     drawing = null;
   }
@@ -301,14 +287,10 @@ function carry(el) {
     language is also kept in this browser, so the next start opens the right
     way round before the books arrive. */
 let langVersion = null;
-let shipped = false;
 
 async function useLanguage(state) {
   const l = state.lang || {};
   setLanguage(l.language);
-  if (!shipped) {
-    try { setCatalog(await get('/lang/catalog.json')); shipped = true; } catch { /* next time */ }
-  }
   try { localStorage.setItem('twilight.lang', l.language || 'en'); } catch { /* not kept */ }
   if (l.version !== langVersion) {
     try {
@@ -555,10 +537,6 @@ const focusOn = id => {
   if (el) el.focus();
 };
 
-/* What the box asking the day someone started says. */
-const START_BODY = 'Their first day of work. The month they start in is charged a thirtieth '
-  + 'of the salary for each day of it they work.';
-
 /** Run one change. Returns the server's reply, or null if it failed or the
     person decided against it. */
 let sent = 0;
@@ -592,45 +570,40 @@ async function act(fn, { skip = [], onError = null } = {}) {
     a change whose answer is the one entry it wrote. */
 function done(text, out) {
   if (!out || typeof out.id !== 'number') return say(text);
-  say(text, false, { label: 'Undo', run: () => undoChange(out.id) });
+  say(text, false, { label: t('common.undo'), run: () => undoChange(out.id) });
 }
 
 async function undoChange(id) {
   const out = await act(() => send('undo', { id }));
-  if (out) say(out.put_back && out.put_back.length ? 'Taken back. What it replaced is back.' : 'Taken back.');
+  if (out) say(out.put_back && out.put_back.length ? t('undo.replaced_back') : t('undo.taken_back'));
 }
 
 /** Send a change that moves money. If it would take a pot below zero the
     server refuses with 409 and says by how much; the person is asked, and
     the change is sent again only if they say so. */
-async function sendGuarded(action, body, yes = 'Pay anyway') {
+async function sendGuarded(action, body, yes = t('guard.pay_anyway')) {
   try {
     return await send(action, body);
   } catch (err) {
     const short = err.status === 409 && err.extra && err.extra.overdraw;
     if (!short || !short.length) throw err;
     const s = short[0];
-    const hint = !S.data.day.sales
-      ? `Tonight's sales are not entered yet. If this was paid out of tonight's
-         takings, enter the sales first and it will fit.`
-      : `If it was paid from somewhere else, pick that pot instead. Going ahead
-         leaves ${s.pot} below zero until the missing money is entered.`;
-    const ok = await ask(`${s.pot} does not hold that much`,
-      `It holds ${money(s.holds)}. This would leave it ${money(s.short_by)} short `
-      + `on ${s.on}.\n\n${hint.replace(/\s+/g, ' ')}`, yes, 'Go back');
+    const hint = !S.data.day.sales ? t('guard.no_sales') : t('guard.elsewhere', s.pot);
+    const ok = await ask(t('guard.title', s.pot),
+      `${t('guard.holds', money(s.holds), money(s.short_by), s.on)}\n\n${hint}`, yes, t('guard.go_back'));
     if (!ok) return null;
     return send(action, { ...body, allow_overdraw: true });
   }
 }
 
-const nightLabel = kind => (C.NIGHT.find(n => n[0] === kind) || [kind, kind])[1];
+const nightLabel = kind => (C.NIGHT.includes(kind) ? t(`night_kind.${kind}`) : kind);
 
 /** Keep a copy of SambaPOS, and say which nights it covered. Reading a
     backup or the database takes a moment, so the button says so meanwhile. */
 async function keepPos(el, action) {
   const label = el.textContent;
   el.disabled = true;
-  el.textContent = 'Reading SambaPOS…';
+  el.textContent = t('keep.reading');
   try {
     const out = await act(() => send(action));
     if (!out) return;
@@ -642,16 +615,14 @@ async function keepPos(el, action) {
     const nights = [...new Set(fresh.map(l => l.night))];
     if (out.failed && out.failed.length) say(out.failed.join(' '), true);
     if (!kept.length) {
-      say('SambaPOS has no tickets to keep right now. If the reset has already run, '
-        + 'that night is gone from SambaPOS; enter it from the printed report.', true);
+      say(t('keep.no_tickets'), true);
     } else if (!nights.length) {
-      say('Nothing new: everything in it was already kept.');
+      say(t('keep.nothing_new'));
     } else {
-      const unpaid = [...last.values()].reduce((t, l) => t + l.unpaid, 0);
+      const unpaid = [...last.values()].reduce((n, l) => n + l.unpaid, 0);
       const live = action === 'pos_live';
-      say(`Kept ${nights.length === 1 ? 'the night of ' + nights[0] : nights.length + ' nights'} from SambaPOS.`
-        + (unpaid && live ? ` ${money(unpaid)} is still unpaid on open tickets — close them, `
-                            + 'then bring it in again before the reset.' : ''),
+      say((nights.length === 1 ? t('keep.night', nights[0]) : t('keep.nights', nights.length))
+        + (unpaid && live ? t('keep.unpaid', money(unpaid)) : ''),
         !!(unpaid && live));
     }
   } finally {
@@ -666,9 +637,9 @@ async function keepPos(el, action) {
 function slipHead(title, sub = '') {
   const n = new Date();
   const hm = `${String(n.getHours()).padStart(2, '0')}:${String(n.getMinutes()).padStart(2, '0')}`;
-  return `<div class="head"><h3>${esc(S.data.business.name || 'Twilight')}</h3>
+  return `<div class="head"><h3>${esc(S.data.business.name || t('slip.default_name'))}</h3>
     <div><strong>${esc(title)}</strong></div>${sub ? `<div>${esc(sub)}</div>` : ''}
-    <div>Printed ${esc(S.data.today)} ${hm}</div></div>
+    <div>${th('slip.printed', esc(S.data.today), hm)}</div></div>
     <div class="rule"></div>`;
 }
 
@@ -685,8 +656,8 @@ const pair = (...pieces) => pieces.filter(Boolean).map(p => `<span>${p}</span>`)
 
 /* "for October 2026", on a payment that paid what was owed from before the
    month, or "300,000 for October 2026" when it paid only part of it. */
-const forMonth = l => (l.earlier || []).map(([m, v]) =>
-  esc(`${v === l.amount ? '' : `${money(v)} `}for ${monthName(m)}`)).join(', ');
+const forMonth = l => (l.earlier || []).map(([m, v]) => esc(v === l.amount
+  ? t('entries.for_month', ...monthWords(m)) : t('flow.amount_for', money(v), ...monthWords(m)))).join(', ');
 
 /* What went out this month for earlier months: each month, what it was, and
    each name, for the Cash slips. */
@@ -762,17 +733,17 @@ const H = {
 
   async sales() {
     const amount = num('nSales');
-    if (!amount) return say('Type tonight’s figure first.', true);
-    const out = await act(() => sendGuarded('sales', { amount, on: S.on }, 'Save it anyway'),
+    if (!amount) return say(t('sales.type_first'), true);
+    const out = await act(() => sendGuarded('sales', { amount, on: S.on }, t('guard.save_anyway')),
                           { skip: ['#nSales'] });
-    if (out) done(`Sales for ${S.on}: ${money(amount)}.`, out);
+    if (out) done(t('sales.saved', S.on, money(amount)), out);
   },
 
   async usePos(el) {
     const amount = Number(el.dataset.amount);
-    const out = await act(() => sendGuarded('sales', { amount, on: S.on }, 'Save it anyway'),
+    const out = await act(() => sendGuarded('sales', { amount, on: S.on }, t('guard.save_anyway')),
                           { skip: ['#nSales'] });
-    if (out) done(`Sales for ${S.on}: ${money(amount)}, from SambaPOS.`, out);
+    if (out) done(t('sales.saved_pos', S.on, money(amount)), out);
   },
 
   async nAdd() {
@@ -780,12 +751,12 @@ const H = {
     const who = val('nWho');
     const amount = num('nAmt');
     const pot = val('nPot');
-    if (!who) return say('Pick who or what it was first.', true);
-    if (!amount) return say('Type an amount first.', true);
+    if (!who) return say(t('night_add.pick_who'), true);
+    if (!amount) return say(t('common.type_amount'), true);
     S.draft.nWho = who;
     S.draft.nPot = pot;
     const out = await act(() => sendGuarded(kind, { amount, who, detail: who, pot, on: S.on },
-                                            kind === 'staff_repay' ? 'Save it anyway' : 'Pay anyway'),
+                                            kind === 'staff_repay' ? t('guard.save_anyway') : t('guard.pay_anyway')),
                           { skip: ['#nAmt'] });
     if (!out) return;
     done(`${nightLabel(kind)}: ${who}, ${money(amount)}.`, out);
@@ -799,12 +770,12 @@ const H = {
       pots[el.dataset.pot] = plain(el);
       keys.push(fieldKey(el));
     });
-    if (!Object.values(pots).some(v => v !== '')) return say('Count at least one pot.', true);
+    if (!Object.values(pots).some(v => v !== '')) return say(t('cash_count.at_least_one'), true);
     const out = await act(() => send('cash_count', { on: S.on, reason: val('nReason'), pots }),
                           { skip: [...keys, '#nReason'] });
     if (!out) return;
-    if (!out.diff) return say('Counted, and it ties exactly.');
-    say(`Counted. Out by ${signed(out.diff)} — find the missing entry, or write it off on Books.`);
+    if (!out.diff) return say(t('cash_count.ties'));
+    say(t('cash_count.out_by', signed(out.diff)));
   },
 
   /* ------------------------------------------------------------------ books */
@@ -817,20 +788,20 @@ const H = {
   async addEntry() {
     const kind = val('eKind');
     const amount = num('eAmt');
-    if (!amount) return say('Type an amount first.', true);
+    if (!amount) return say(t('common.type_amount'), true);
     const body = { amount, on: val('eDate'), period: val('ePeriod') };
     if (kind === 'transfer') {
       body.from = val('eFrom');
       body.to = val('eTo');
-      if (body.from === body.to) return say('Pick two different pots.', true);
+      if (body.from === body.to) return say(t('new_entry.two_pots'), true);
     } else {
       body.detail = val('eDetail');
       body.who = body.detail;
       body.pot = val('ePot');
     }
-    const yes = ['income', 'staff_repay', 'partner_in'].includes(kind) ? 'Save it anyway' : 'Pay anyway';
+    const yes = ['income', 'staff_repay', 'partner_in'].includes(kind) ? t('guard.save_anyway') : t('guard.pay_anyway');
     const out = await act(() => sendGuarded(kind, body, yes), { skip: ['#eAmt', '#ePeriod'] });
-    if (out) done('Added.', out);
+    if (out) done(t('common.added'), out);
   },
 
   edit(el) {
@@ -860,23 +831,23 @@ const H = {
     const per = row.querySelector('[data-e="period"]');
     if (per && per.value !== per.dataset.was) body.period = per.value;
     S.draft.editing = null;
-    const out = await act(() => sendGuarded('edit_entry', body, 'Save it anyway'),
+    const out = await act(() => sendGuarded('edit_entry', body, t('guard.save_anyway')),
                           { onError: () => { S.draft.editing = id; } });
-    if (out) done('Corrected. The original is kept in the record, marked as corrected.', out);
+    if (out) done(t('entries.corrected'), out);
     else if (S.draft.editing === null) S.draft.editing = id;     // said no: keep the row open
   },
 
   async void(el) {
     const id = Number(el.dataset.id);
     if (S.draft.editing === id) S.draft.editing = null;
-    const out = await act(() => sendGuarded('void', { id }, 'Delete it anyway'));
-    if (out) say('Deleted.', false, { label: 'Put back', run: () => H.putBack({ dataset: { id } }) });
+    const out = await act(() => sendGuarded('void', { id }, t('entries.delete_anyway')));
+    if (out) say(t('entries.deleted'), false, { label: t('recent.put_back'), run: () => H.putBack({ dataset: { id } }) });
   },
 
   async putBack(el) {
     const out = await act(() => sendGuarded('put_back', { id: Number(el.dataset.id) },
-                                            'Put it back anyway'));
-    if (out) say('Put back.');
+                                            t('entries.put_back_anyway')));
+    if (out) say(t('entries.put_back_done'));
   },
 
   async search() {
@@ -898,62 +869,60 @@ const H = {
     const c = S.data.counts.find(x => x.id === id);
     if (!c) return;
     const short = c.diff < 0;
-    const ok = await ask(`Write off ${money(Math.abs(c.diff))} ${short ? 'short' : 'over'}?`,
-      `The count on ${c.on} found ${short ? 'less' : 'more'} than the books said. Writing it off `
-      + `sets the pot to what was counted, and the difference becomes `
-      + `${short ? 'a cost' : 'a gain'} of ${monthName(c.on.slice(0, 7))}.\n\n`
-      + 'Only do this once you are sure no entry is missing. The write-off shows '
-      + 'on Books like any entry, and can be deleted there.', 'Write it off');
+    const month = monthWords(c.on.slice(0, 7));
+    const ok = await ask(short ? t('write_off.short', money(Math.abs(c.diff))) : t('write_off.over', money(Math.abs(c.diff))),
+      `${short ? t('write_off.less', c.on, ...month) : t('write_off.more', c.on, ...month)}\n\n${t('write_off.sure')}`,
+      t('write_off.yes'));
     if (!ok) return;
     const out = await act(() => send('write_off', { id }));
-    if (out) say('Written off.');
+    if (out) say(t('write_off.done'));
   },
 
   async deleteCashCount(el) {
     const c = S.data.counts.find(x => x.id === Number(el.dataset.id));
     if (!c) return;
-    const ok = await ask(`Delete the count for ${c.on}?`,
-      'Only the count goes — no money moves. Count again on Tonight if it was wrong.',
-      'Delete it');
+    const ok = await ask(t('count.delete_ask', c.on),
+      t('cash_count.delete_body'),
+      t('common.delete_it'));
     if (!ok) return;
     const out = await act(() => send('delete_cash_count', { id: c.id }));
-    if (out) say('Count deleted.');
+    if (out) say(t('cash_count.deleted'));
   },
 
   /* ------------------------------------------------------------------ stock */
 
   async openCount() {
     const on = val('newCount');
-    if (!on) return say('Pick the date of the count.', true);
+    if (!on) return say(t('count.pick_date'), true);
     const was = S.count;
     S.count = on;
     const out = await act(() => send('open_count', { on }), { onError: () => { S.count = was; } });
-    if (out) say(`Count started for ${on}. Each box saves as you leave its line.`);
+    if (out) say(t('count.started', on));
   },
 
   async deleteCount() {
     const on = S.data.stock.count_date;
-    const ok = await ask(`Delete the count for ${on}?`,
-      'Every line typed into it goes with it, and this cannot be put back.', 'Delete it');
+    const ok = await ask(t('count.delete_ask', on),
+      t('count.delete_body'), t('common.delete_it'));
     if (!ok) return;
     const was = S.count;
     S.count = null;
     const out = await act(() => send('delete_count', { on }), { onError: () => { S.count = was; } });
-    if (out) say(`Count for ${on} deleted.`);
+    if (out) say(t('count.deleted', on));
   },
 
   async receipt() {
     const amount = num('rAmt');
-    if (!amount) return say('Type the receipt total first.', true);
+    if (!amount) return say(t('receipt_form.type_total'), true);
     const out = await act(() => sendGuarded('receipt', {
       amount, on: val('rDate'), who: val('rSup'), number: val('rNo'),
-      what: val('rWhat') || 'Several items', terms: val('rTerms'), pot: val('rPot'),
+      what: val('rWhat') || t('receipt.several'), terms: val('rTerms'), pot: val('rPot'),
     }), { skip: ['#rAmt', '#rNo', '#rWhat'] });
     if (!out) return;
     S.draft.rlines = out.receipt || null;            // what came in, while the receipt is in hand
     render();
     document.getElementById('rlItem')?.focus();
-    done('Receipt added. List what came in now, or later.', out);
+    done(t('receipt_form.added'), out);
   },
 
   receiptLines(el) {
@@ -973,7 +942,7 @@ const H = {
     const it = items.find(i => (i.barcodes || []).includes(v))
             || items.find(i => i.name.toLowerCase() === v.toLowerCase());
     if (!it) {
-      return say(`Nothing is called ${v}, and no item has that barcode. Add it in Setup → Stock items first.`, true);
+      return say(t('rline.not_found', v), true);
     }
     box.value = '';
     receiptItem(it);
@@ -1003,7 +972,7 @@ const H = {
     const sealed = S.data.setup.items.filter(i => i.letter === 'B');
     const it = sealed.find(i => (i.barcodes || []).includes(v))
             || sealed.find(i => i.name.toLowerCase() === v.toLowerCase());
-    if (!it) return say(`No sealed tobacco is called ${v}, and none has that barcode.`, true);
+    if (!it) return say(t('fill.not_found', v), true);
     box.value = '';
     fillItem(it, 0);
   },
@@ -1026,7 +995,7 @@ const H = {
     if (!f) return;
     fillValues();
     const lines = f.order.map(id => ({ item: id, packs: f.packs[id] })).filter(l => Number(l.packs) > 0);
-    if (!lines.length) return say('Say how many packs of which tobacco went in.', true);
+    if (!lines.length) return say(t('fill.say_packs_first'), true);
     const mix = S.data.stock.mixes.find(m => m.id === f.mix);
     const out = await act(() => send('bucket_fill', {
       mix: f.mix, on: val('fillOn'), lines, gross_grams: val('fillGross'),
@@ -1035,17 +1004,17 @@ const H = {
     if (!out) return;
     S.draft.fill = null;
     render();
-    say(`Filled ${mix.name}: ${out.grams.toLocaleString('en-US')} g at ${money(Math.round(out.value * 1000 / out.grams))} a kilo.`
-      + (out.price_after !== out.price_before ? ` Its price is now ${money(out.price_after)} a kilo.` : ''));
+    say(t('fill.filled', mix.name, out.grams.toLocaleString('en-US'), money(Math.round(out.value * 1000 / out.grams)))
+      + (out.price_after !== out.price_before ? t('fill.price_now', money(out.price_after)) : ''));
   },
 
   async deleteFill(el) {
-    const ok = await ask('Delete this fill?',
-      'The packs go back to their tobacco, and the mix’s price goes back to what it was if nothing has changed it since.',
-      'Delete it');
+    const ok = await ask(t('fill.delete_ask'),
+      t('fill.delete_body'),
+      t('common.delete_it'));
     if (!ok) return;
     const out = await act(() => send('bucket_fill_delete', { id: Number(el.dataset.id) }));
-    if (out) say('Fill deleted.');
+    if (out) say(t('fill.deleted'));
   },
 
   dropRLine(el) {
@@ -1062,7 +1031,7 @@ const H = {
     const line = S.data.settle.find(l => `${l.action}|${l.who}` === row.dataset.line);
     if (!line) return;
     const amount = Number(plain(row.querySelector('[data-s="amount"]'))) || 0;
-    if (!amount) return say('Type an amount first.', true);
+    if (!amount) return say(t('common.type_amount'), true);
     // whatever is paid from here belongs to the month on screen, whatever today's date is;
     // after six, while the night is still being closed up, it is paid that night
     if (nightOver()) stayOnTheNight();
@@ -1071,7 +1040,7 @@ const H = {
     const out = await act(() => sendGuarded(line.action, body),
                           { skip: [`settle:${row.dataset.line}:amount`] });
     if (out) {
-      done(`Paid ${line.who} ${money(amount)}, counted for ${monthName(S.month)}.`, out);
+      done(t('settle_up.paid', line.who, money(amount), ...monthWords(S.month)), out);
     }
   },
 
@@ -1080,7 +1049,7 @@ const H = {
       month: S.month, private_price: val('elPP'), elevator_price: val('elPE'),
       last_reading: val('elLast'), now_reading: val('elNow'),
     }), { skip: ['#elPP', '#elPE', '#elLast', '#elNow'] });
-    if (out) say(`Electricity charged to ${monthName(S.month)}: ${money(out.bill.total)}.`);
+    if (out) say(t('elec.charged_say', ...monthWords(S.month), money(out.bill.total)));
   },
 
   async statement(el) {
@@ -1102,24 +1071,19 @@ const H = {
     try { check = await closeCheck(S.month); } catch (err) { return say(err.message, true); }
     if (!check.can_close) return say(check.stops.join(' '), true);
     const warn = check.warnings.length
-      ? '\n\nWorth a look first:\n• ' + check.warnings.join('\n• ') : '';
-    const ok = await ask(`Close ${monthName(S.month)}?`,
-      `Net profit ${money(check.result.net)}, with the stock counted on ${check.count_date}. `
-      + 'Closing freezes these figures, splits the profit between the partners and '
-      + 'carries the stock into the next month. It can be reopened.' + warn,
-      'Close the month');
+      ? `\n\n${t('close_ask.worth_a_look')}\n• ${check.warnings.join('\n• ')}` : '';
+    const ok = await ask(t('close_ask.title', ...monthWords(S.month)),
+      t('close_ask.body', money(check.result.net), check.count_date) + warn, t('close_card.close'));
     if (!ok) return;
     const out = await act(() => send('close_month', { month: S.month }));
-    if (out) say(`${monthName(S.month)} closed.`);
+    if (out) say(t('close_ask.closed', ...monthWords(S.month)));
   },
 
   async reopen() {
-    const ok = await ask(`Reopen ${monthName(S.month)}?`,
-      'Its entries can be changed again until it is closed again. The figures it '
-      + 'was closed with stay in the record.', 'Reopen');
+    const ok = await ask(t('reopen.title', ...monthWords(S.month)), t('reopen.body'), t('close_card.reopen'));
     if (!ok) return;
     const out = await act(() => send('reopen_month', { month: S.month }));
-    if (out) say(`${monthName(S.month)} reopened.`);
+    if (out) say(t('reopen.done', ...monthWords(S.month)));
   },
 
   /* --------------------------------------------------------------- sambapos */
@@ -1128,20 +1092,19 @@ const H = {
   async posAuto(el) {
     const label = el.textContent;
     el.disabled = true;
-    el.textContent = 'Looking…';
+    el.textContent = t('pos_auto.looking');
     try {
       const out = await act(() => send('pos_auto'));
       if (!out) return;
       const nights = [...new Set((out.kept || []).map(l => l.night))];
       const bad = out.failed || [];
       if (bad.length) {
-        say(`${bad.length === 1 ? 'One backup' : bad.length + ' backups'} could not be read: `
-          + bad[0].note, true);
+        say(bad.length === 1 ? t('pos_auto.failed_one', bad[0].note)
+          : t('pos_auto.failed_many', bad.length, bad[0].note), true);
       } else if (nights.length) {
-        say(`Kept ${nights.length === 1 ? 'the night of ' + nights[0] : nights.length + ' nights'}`
-          + ' from SambaPOS’s backups.');
+        say(nights.length === 1 ? t('pos_auto.night', nights[0]) : t('pos_auto.nights', nights.length));
       } else {
-        say(out.read ? 'Nothing new in the new backups.' : 'No new backups in the folder.');
+        say(out.read ? t('pos_auto.nothing_new') : t('pos_auto.no_new'));
       }
     } finally {
       el.disabled = false;
@@ -1152,43 +1115,39 @@ const H = {
 
   async moveRest(el) {
     const to = document.getElementById('restTo').value;
-    if (!to) return say('Pick where the rest goes.', true);
+    if (!to) return say(t('closing.pick_rest'), true);
     const out = await act(() => sendGuarded('move_rest', {
       amount: Number(el.dataset.amount), to, on: S.on }));
-    if (out) done(`Moved ${money(Number(el.dataset.amount))} to ${to}.`, out);
+    if (out) done(t('closing.moved', money(Number(el.dataset.amount)), to), out);
   },
 
   async posAddNight(el) {
     el.disabled = true;
     try {
-      const out = await act(() => sendGuarded('pos_add_night', { on: S.on }, 'Add it anyway'));
-      if (out) say(`Added ${out.added} entr${out.added === 1 ? 'y' : 'ies'} from SambaPOS for ${out.night}.`);
+      const out = await act(() => sendGuarded('pos_add_night', { on: S.on }, t('drawer.add_anyway')));
+      if (out) say(out.added === 1 ? t('pos_add.one', 1, out.night) : t('pos_add.many', out.added, out.night));
     } finally {
       el.disabled = false;
     }
   },
 
   async posLeft(el) {
-    const name = el.dataset.name || 'They';
+    const name = el.dataset.name || t('pos_left.they');
     const body = { pos_id: Number(el.dataset.pos) };
     if (el.dataset.staff) {
-      body.left_on = await askDate(withName('When did ', name, ' leave?'),
-        'SambaPOS no longer has an account for them. Their last day of work: the month '
-        + 'they leave in is charged a thirtieth of the salary for each day of it they '
-        + 'worked, and the months after it nothing.', S.data.tonight, S.data.today, 'Mark as left');
+      body.left_on = await askDate(withName('ask.when_leave', name), t('pos_left.staff_body'),
+        S.data.tonight, S.data.today, t('pos_accounts.mark_left'));
       if (!body.left_on) return;
-    } else if (!await ask(`Mark ${name} as left?`,
-      'SambaPOS no longer has an account for them. Their history in the books stays; '
-      + 'they stop being offered for new entries.', 'Mark as left')) {
+    } else if (!await ask(t('pos_left.title', name), t('pos_left.body'), t('pos_accounts.mark_left'))) {
       return;
     }
     const out = await act(() => send('pos_left', body));
-    if (out) say(out.note || `${out.name} is marked as left.`, Boolean(out.note));
+    if (out) say(out.note || t('pos_left.marked', out.name), Boolean(out.note));
   },
 
   async posTold(el) {
     const out = await act(() => send('pos_told', { pos_id: Number(el.dataset.pos) }));
-    if (out) say('Noted. Remove the account from SambaPOS when you can.');
+    if (out) say(t('pos_account.noted'));
   },
 
   async posTest(el) {
@@ -1196,8 +1155,8 @@ const H = {
     try {
       const out = await send('pos_test');
       const p = out.probe || {};
-      say(`Connected to ${p.db} as ${p.who}: ${p.tickets} tickets in SambaPOS now, `
-        + `${p.open_periods} work period${p.open_periods === 1 ? '' : 's'} open.`);
+      say(p.open_periods === 1 ? t('pos_test.one', p.db, p.who, p.tickets, 1)
+        : t('pos_test.many', p.db, p.who, p.tickets, p.open_periods));
     } catch (err) { say(err.message, true); }
     finally { el.disabled = false; }
   },
@@ -1208,16 +1167,14 @@ const H = {
      month: it is charged for the days they worked of it. */
   async hasLeft(el) {
     const name = el.dataset.name;
-    const on = await askDate(withName('When did ', name, ' leave?'),
-      'Their last day of work. The month they leave in is charged a thirtieth of the '
-      + 'salary for each day of it they worked, and the months after it nothing.',
-      el.dataset.on || S.data.tonight, S.data.today, el.dataset.on ? 'Save the day' : 'They have left');
+    const on = await askDate(withName('ask.when_leave', name), t('staff_day.leave_body'),
+      el.dataset.on || S.data.tonight, S.data.today, el.dataset.on ? t('staff_day.save') : t('staff_day.has_left'));
     if (!on || on === el.dataset.on) return;
     const out = await act(() => send('account_active',
       { id: Number(el.dataset.id), active: 0, left_on: on }));
     if (!out) return;
     if (out.note) say(out.note, true);
-    else say(el.dataset.on ? 'Saved.' : `${name} has left. Their history stays in the books.`);
+    else say(el.dataset.on ? t('common.saved') : t('staff_day.left', name));
   },
 
   /* Someone who left is back. The days they were away are not paid for;
@@ -1226,32 +1183,30 @@ const H = {
     const next = new Date(`${el.dataset.on}T12:00:00Z`);
     next.setUTCDate(next.getUTCDate() + 1);
     const never = next.toISOString().slice(0, 10);
-    const on = await askDate(withName('When did ', el.dataset.name, ' come back?'),
-      `Their first day back at work. The days they were away are not charged. `
-      + `If they never left, pick ${never}, the day after their last day.`,
-      S.data.tonight, S.data.today, 'They are back');
+    const on = await askDate(withName('ask.when_back', el.dataset.name), t('staff_day.back_body', never),
+      S.data.tonight, S.data.today, t('staff_day.are_back'));
     if (!on) return;
     const out = await act(() => send('account_active',
       { id: Number(el.dataset.id), active: 1, back_on: on }));
-    if (out) say(out.note || 'Saved.', Boolean(out.note));
+    if (out) say(out.note || t('common.saved'), Boolean(out.note));
   },
 
   /* The day someone on the staff started, put right. */
   async started(el) {
-    const on = await askDate(withName('When did ', el.dataset.name, ' start?'), START_BODY,
-      el.dataset.on, S.data.today, 'Save the day');
+    const on = await askDate(withName('ask.when_start', el.dataset.name), t('staff_day.start_body'),
+      el.dataset.on, S.data.today, t('staff_day.save'));
     if (!on || on === el.dataset.on) return;
     const out = await act(() => send('staff_started', { id: Number(el.dataset.id), on }));
-    if (out) say(out.note || 'Saved.', Boolean(out.note));
+    if (out) say(out.note || t('common.saved'), Boolean(out.note));
   },
 
   async backupNow() {
     const out = await act(() => send('backup_now'));
     if (!out) return;
     const b = out.backup;
-    if (!b.second) say('Copied and checked on this PC. Choose a second folder so a copy lives somewhere else too.');
-    else if (b.second_ok) say(`Copied and checked, here and in ${b.second}.`);
-    else say(`Copied here, but not to ${b.second}: ${b.second_error}`, true);
+    if (!b.second) say(t('backup_now.no_second'));
+    else if (b.second_ok) say(t('backup_now.both', b.second));
+    else say(t('backup_now.not_second', b.second, b.second_error), true);
   },
 
   async checkUpdate() {
@@ -1262,13 +1217,10 @@ const H = {
 
   async installUpdate() {
     const u = S.draft.update;
-    const ok = await ask(`Install version ${u.latest}?`,
-      'The books are copied aside first and this version is kept, so it can be put '
-      + 'back. The app restarts by itself, and this page reloads when it is back.',
-      'Install');
+    const ok = await ask(t('install.title', u.latest), t('install.body'), t('install.yes'));
     if (!ok) return;
     try { await post('/api/update'); } catch (err) { return say(err.message, true); }
-    say('Installing… this page reloads when the app is back.');
+    say(t('install.installing'));
     const from = S.data.version;
     for (let i = 0; i < 90; i += 1) {
       await new Promise(r => setTimeout(r, 1000));
@@ -1277,7 +1229,7 @@ const H = {
         if (h.version && h.version !== from) { location.reload(); return; }
       } catch { /* still restarting */ }
     }
-    say('The app has not come back. Close its window and start it again.', true);
+    say(t('install.not_back'), true);
   },
 
   /* -------------------------------------------------------------- language */
@@ -1285,24 +1237,24 @@ const H = {
   async langPick(el) {
     const out = await act(() => send('language_set', { language: el.dataset.lang }));
     if (out && el.dataset.lang === 'ckb' && !S.data.lang.done) {
-      say('There is no Kurdish yet: copy the first batch for Gemini, below.');
+      say(t('lang.no_kurdish_yet'));
     }
   },
 
   async langCopy() {
     let keys;
     try { keys = await get(`/api/lang/todo?limit=${BATCH}`); } catch (err) { return say(err.message, true); }
-    if (!keys.length) return say('Every piece of text has its Kurdish.');
+    if (!keys.length) return say(t('lang.every_piece'));
     S.draft.langBatch = keys;
     try { localStorage.setItem('twilight.langBatch', JSON.stringify(keys)); } catch { /* not kept */ }
     const text = prompt(keys);
     try {
       await navigator.clipboard.writeText(text);
       S.draft.langPrompt = null;
-      say(`Copied ${keys.length} lines for Gemini. Paste them into a new chat there.`);
+      say(t('lang.copied', keys.length));
     } catch {
       S.draft.langPrompt = text;
-      say('Copy the prompt from the box below, all of it.');
+      say(t('lang.copy_from_box'));
     }
     render();
   },
@@ -1315,9 +1267,9 @@ const H = {
     }
     let pairs;
     try { pairs = answer(box ? box.value : '', batch || []); } catch {
-      return say('That is not Gemini’s answer. Copy all of it, from the first { to the last }.', true);
+      return say(t('lang.not_answer'), true);
     }
-    if (!Object.keys(pairs).length) return say('There is nothing in it to save.', true);
+    if (!Object.keys(pairs).length) return say(t('lang.nothing_to_save'), true);
     const out = await act(() => send('lang_set', { pairs }), { skip: ['#langAnswer'] });
     if (!out) return;
     S.draft.langBatch = null;
@@ -1325,10 +1277,8 @@ const H = {
     try { localStorage.removeItem('twilight.langBatch'); } catch { /* not kept */ }
     render({ skip: ['#langAnswer'] });
     const n = out.wrong_count;
-    say(n
-      ? `Saved ${out.saved}. ${n === 1 ? 'One line' : `${n} lines`} lost a mark in curly brackets on the way `
-        + `and ${n === 1 ? 'was' : 'were'} left out; the next batch asks again.`
-      : `Saved the Kurdish for ${out.saved} pieces of text.`, Boolean(n));
+    say(!n ? t('lang_save.saved', out.saved)
+      : n === 1 ? t('lang_save.lost_one', out.saved) : t('lang_save.lost_many', out.saved, n), Boolean(n));
   },
 
   langFind() {
@@ -1341,14 +1291,14 @@ const H = {
     const box = row && row.querySelector('input');
     if (!box) return;
     const out = await act(() => send('lang_set', { pairs: { [el.dataset.key]: box.value } }));
-    if (out) say(out.saved ? 'Saved.' : 'Not saved: the Kurdish has to keep the same marks in curly brackets as the English.', !out.saved);
+    if (out) say(out.saved ? t('common.saved') : t('lang.not_saved'), !out.saved);
   },
 
   async health() {
     try {
       const r = await get('/api/health');
-      say(r.ok ? `Sound: ${money(r.entries)} entries, every one balanced.`
-               : 'Something is wrong. Run the check from the start file and send Claude what it says.',
+      say(r.ok ? t('health.sound', money(r.entries))
+               : t('health.wrong'),
           !r.ok);
     } catch (err) { say(err.message, true); }
   },
@@ -1360,30 +1310,30 @@ const H = {
   printSuppliers() {
     const sup = S.data.suppliers;
     const end = sup.reduce((a, s) => a + s.closing, 0);
-    printSlip(slipHead('Suppliers', monthName(S.data.month))
+    printSlip(slipHead(t('suppliers.title'), monthName(S.data.month))
       + (sup.length ? `<table>${sup.map(s => slipRow(esc(s.name), money(s.closing), true)
-          + slipRow('&nbsp;&nbsp;Owed coming in', money(s.brought_forward))
-          + (s.received ? slipRow('&nbsp;&nbsp;Arrived', money(s.received)) : '')
-          + (s.paid ? slipRow('&nbsp;&nbsp;Paid', money(-s.paid)) : '')).join('')}</table>`
-        : '<div>No supplier movement.</div>')
+          + slipRow(`&nbsp;&nbsp;${th('suppliers.coming_in')}`, money(s.brought_forward))
+          + (s.received ? slipRow(`&nbsp;&nbsp;${th('suppliers.arrived')}`, money(s.received)) : '')
+          + (s.paid ? slipRow(`&nbsp;&nbsp;${th('common.paid')}`, money(-s.paid)) : '')).join('')}</table>`
+        : `<div>${th('suppliers.none')}</div>`)
       + `<div class="rule"></div>
-      <table>${slipRow('Owed at the end of the month', money(end), true)}
-        ${S.data.owed !== end ? slipRow('Owed today', money(S.data.owed)) : ''}</table>`);
+      <table>${slipRow(th('suppliers.end_of_month'), money(end), true)}
+        ${S.data.owed !== end ? slipRow(th('slip.owed_today'), money(S.data.owed)) : ''}</table>`);
   },
 
   printStatement() {
     const st = S.statement;
     if (!st) return;
     printSlip(slipHead(st.name, monthName(st.month))
-      + `<table>${slipRow('Owed coming in', money(st.opening))}</table>
+      + `<table>${slipRow(th('suppliers.coming_in'), money(st.opening))}</table>
       ${st.lines.length ? `<div class="rule"></div><table>${st.lines.map(l =>
         slipRow(pair(esc(dayMonth(l.on)), esc(l.what)), signed(l.amount))).join('')}</table>` : ''}
       <div class="rule"></div>
-      <table>${st.received ? slipRow('Arrived this month', money(st.received)) : ''}
-        ${st.paid ? slipRow('Paid this month', money(-st.paid)) : ''}
-        ${slipRow('Owed at the end of the month', money(st.closing), true)}</table>
+      <table>${st.received ? slipRow(th('slip.arrived'), money(st.received)) : ''}
+        ${st.paid ? slipRow(th('slip.paid'), money(-st.paid)) : ''}
+        ${slipRow(th('suppliers.end_of_month'), money(st.closing), true)}</table>
       ${st.on_shelves ? `<div class="rule"></div>
-        <table>${slipRow('Their goods still on the shelves', money(st.on_shelves))}</table>` : ''}`);
+        <table>${slipRow(th('slip.on_shelves'), money(st.on_shelves))}</table>` : ''}`);
   },
 
   /* Where the cash went: each kind, and each name under it. */
@@ -1392,22 +1342,22 @@ const H = {
     const part = (label, groups) => (groups.length ? `<div class="sub">${esc(label)}</div>
       <table>${groups.map(g => slipRow(esc(g.label), money(g.total), true)
         + g.rows.map(([n, v]) => slipRow(`&nbsp;&nbsp;${esc(n)}`, money(v))).join('')).join('')}</table>` : '');
-    printSlip(slipHead('Where the cash went', monthName(S.data.month))
-      + part('Out', f.out) + (f.in.length ? '<div class="rule"></div>' + part('In', f.in) : '')
+    printSlip(slipHead(t('flow.title'), monthName(S.data.month))
+      + part(t('common.out'), f.out) + (f.in.length ? '<div class="rule"></div>' + part(t('common.in'), f.in) : '')
       + `<div class="rule"></div>
-      <table>${slipRow('Out', money(f.out_total), true)}${slipRow('In', money(f.in_total), true)}</table>`
-      + (f.earlier_total ? `<div class="rule"></div><div class="sub">Of the Out, for earlier months</div>
+      <table>${slipRow(th('common.out'), money(f.out_total), true)}${slipRow(th('common.in'), money(f.in_total), true)}</table>`
+      + (f.earlier_total ? `<div class="rule"></div><div class="sub">${th('slip.of_out')}</div>
         <table>${earlierRows(f)}</table>
-        <table>${slipRow('Total', money(f.earlier_total), true)}</table>` : ''));
+        <table>${slipRow(th('common.total'), money(f.earlier_total), true)}</table>` : ''));
   },
 
   /* What went out this month for earlier months, on its own. */
   printEarlier() {
     const f = S.data.flow;
-    printSlip(slipHead('Paid for earlier months', monthName(S.data.month))
+    printSlip(slipHead(t('earlier.title'), monthName(S.data.month))
       + `<table>${earlierRows(f)}</table>
       <div class="rule"></div>
-      <table>${slipRow('Total', money(f.earlier_total), true)}</table>`);
+      <table>${slipRow(th('common.total'), money(f.earlier_total), true)}</table>`);
   },
 
   /* One kind, such as every staff advance: each name, and each of its
@@ -1423,7 +1373,7 @@ const H = {
           + lines.filter(l => l.name === n).map(l =>
             slipRow(`&nbsp;&nbsp;${pair(esc(when(l)), forMonth(l))}`, money(l.amount))).join('')).join('')}</table>
       <div class="rule"></div>
-      <table>${slipRow('Total', money(g.total), true)}</table>`);
+      <table>${slipRow(th('common.total'), money(g.total), true)}</table>`);
   },
 
   /* Everything under one name this month, whatever it was for. */
@@ -1435,14 +1385,14 @@ const H = {
       + `<table>${lines.map(l => slipRow(pair(esc(when(l)), esc(l.label), forMonth(l)),
           l.out ? money(l.amount) : `+${money(l.amount)}`)).join('')}</table>
       <div class="rule"></div>
-      <table>${sum(true) ? slipRow('Out', money(sum(true)), true) : ''}
-        ${sum(false) ? slipRow('In', money(sum(false)), true) : ''}
-        ${slipRow(`${lines.length} entr${lines.length === 1 ? 'y' : 'ies'}`, '')}</table>`);
+      <table>${sum(true) ? slipRow(th('common.out'), money(sum(true)), true) : ''}
+        ${sum(false) ? slipRow(th('common.in'), money(sum(false)), true) : ''}
+        ${slipRow(lines.length === 1 ? th('flow.entries_one', 1) : th('flow.entries_many', lines.length), '')}</table>`);
   },
 
   printChanges() {
     const rows = S.data.recent.slice(0, 40);
-    printSlip(slipHead('Recent changes')
+    printSlip(slipHead(t('recent.title'))
       + `<table>${rows.map(r => `<tr><td>${pair(esc(C.localTime(r.at)), esc(r.summary))}</td></tr>`).join('')}</table>`);
   },
 
@@ -1459,23 +1409,23 @@ const H = {
     const r = S.data.result;
     const line = (k, v) => `<tr><td>${esc(k)}</td>
       <td style="text-align:end">${money(v)}</td></tr>`;
-    printSlip(slipHead(monthName(S.data.month) + (S.data.so_far ? ' (in progress)' : ''))
+    printSlip(slipHead(S.data.so_far ? t('slip.in_progress', ...monthWords(S.data.month)) : monthName(S.data.month))
       + `<table>
-        ${line('Sales', r.rev)}
-        ${line('Cost of goods', -((r.cogs || {}).value || 0))}
-        ${line('Gross', r.gross)}
-        ${line('Expenses', -(r.daily || 0))}
-        ${r.elec ? line('Electricity', -r.elec) : ''}
-        ${line('Rent', -(r.fixed || 0))}
-        ${line('Salaries', -(r.salaries || 0))}
-        ${r.differences ? line('Cash written off', -r.differences) : ''}
+        ${line(t('result.sales'), r.rev)}
+        ${line(t('result.cogs'), -((r.cogs || {}).value || 0))}
+        ${line(t('slip.gross'), r.gross)}
+        ${line(t('slip.expenses'), -(r.daily || 0))}
+        ${r.elec ? line(t('result.electricity'), -r.elec) : ''}
+        ${line(t('slip.rent'), -(r.fixed || 0))}
+        ${line(t('result.salaries'), -(r.salaries || 0))}
+        ${r.differences ? line(t('result.written_off'), -r.differences) : ''}
       </table>
       <div class="rule"></div>
-      <table>${line('Net profit', r.net)}
-        ${S.data.so_far ? line(`So far (${S.data.so_far.days} days)`, S.data.so_far.net) : ''}</table>
+      <table>${line(t('result.net_profit'), r.net)}
+        ${S.data.so_far ? line(t('slip.so_far', S.data.so_far.days), S.data.so_far.net) : ''}</table>
       <div class="rule"></div>
-      <div>Cash on hand ${money(S.data.cash)}</div>
-      <div>Owed to suppliers ${money(S.data.owed)}</div>`);
+      <div>${th('slip.cash_on_hand', money(S.data.cash))}</div>
+      <div>${th('slip.owed_suppliers', money(S.data.owed))}</div>`);
   },
 
   /* One A4 page for the partner: the month, each partner's part of it, and
@@ -1511,43 +1461,42 @@ const H = {
     const partners = (d.partners || []).filter(x => x.share || x.taken || x.put_in);
     const stock = d.stock && d.stock.cogs ? d.stock.cogs : null;
     const title = monthName(d.month);
-    printPage(`<h1>${esc(d.business.name || 'Twilight')} — ${esc(title)}</h1>
-      <div class="meta">${sf ? `In progress: ${sf.days} of ${sf.days_in_month || 30} days, with rent and
-        salaries counted for the days gone.` : d.period.status === 'closed' ? 'The month is closed.'
-        : 'The month is over but not closed yet.'} Printed ${esc(d.today)}.</div>
-      <h2>The month</h2>
-      <table><tr><th></th><th class="n">${esc(title)}${sf ? ' so far' : ''}</th>
+    printPage(`<h1>${esc(d.business.name || t('slip.default_name'))} — ${esc(title)}</h1>
+      <div class="meta">${sf ? th('summary.in_progress', sf.days, sf.days_in_month || 30) : d.period.status === 'closed' ? th('summary.closed')
+        : th('summary.not_closed')} ${th('summary.printed', esc(d.today))}</div>
+      <h2>${th('summary.the_month')}</h2>
+      <table><tr><th></th><th class="n">${sf ? th('summary.month_so_far', ...monthWords(d.month)) : esc(title)}</th>
         ${p ? `<th class="n">${esc(monthName(d.prev.month))}</th>` : ''}</tr>
-        ${row('Sales', 'rev')}
-        ${row('Stock used', 'cogs')}
-        ${row('Gross profit', 'gross', 1, 'total')}
-        ${row('Daily expenses and bills', 'daily')}
-        ${row('Electricity', 'elec')}
-        ${row('Rent and fixed costs', 'fixed')}
-        ${row('Salaries', 'salaries')}
-        ${row('Cash written off', 'differences')}
-        ${row('Net profit', 'net', 1, 'total')}
+        ${row(t('result.sales'), 'rev')}
+        ${row(t('summary.stock_used'), 'cogs')}
+        ${row(t('result.gross_profit'), 'gross', 1, 'total')}
+        ${row(t('summary.daily'), 'daily')}
+        ${row(t('result.electricity'), 'elec')}
+        ${row(t('summary.rent'), 'fixed')}
+        ${row(t('result.salaries'), 'salaries')}
+        ${row(t('result.written_off'), 'differences')}
+        ${row(t('result.net_profit'), 'net', 1, 'total')}
       </table>
-      ${spent.length ? `<h2>Where the daily expenses went</h2>
+      ${spent.length ? `<h2>${th('summary.daily_went')}</h2>
         <table>${spent.map(([n, v]) => `<tr><td>${esc(n)}</td><td class="n">${money(v)}</td></tr>`).join('')}
         </table>` : ''}
-      ${partners.length ? `<h2>Partners</h2>
-        <table><tr><th>Partner</th><th class="n">Share</th><th class="n">Their part of the profit</th>
-          <th class="n">Taken out</th><th class="n">Put in</th><th class="n">This month</th></tr>
+      ${partners.length ? `<h2>${th('partners.title')}</h2>
+        <table><tr><th>${th('partners.partner')}</th><th class="n">${th('partners.share')}</th><th class="n">${th('summary.their_part')}</th>
+          <th class="n">${th('summary.taken_out')}</th><th class="n">${th('partners.put_in')}</th><th class="n">${th('summary.this_month')}</th></tr>
         ${partners.map(x => `<tr><td>${esc(x.name)}</td><td class="n">${Math.round(x.share * 100)}%</td>
           <td class="n">${money(x.profit)}</td><td class="n">${money(x.taken)}</td>
           <td class="n">${money(x.put_in)}</td><td class="n">${money(x.this_month)}</td></tr>`).join('')}
         </table>` : ''}
-      <h2>Where the money is</h2>
+      <h2>${th('pots.title')}</h2>
       <table>
-        <tr><td>Cash, in every pot</td><td class="n">${money(d.cash)}</td></tr>
+        <tr><td>${th('summary.cash_every_pot')}</td><td class="n">${money(d.cash)}</td></tr>
         ${(d.pots || []).filter(x => x.balance).map(x => `<tr><td style="padding-inline-start:5mm">${esc(x.name)}</td>
           <td class="n">${money(x.balance)}</td></tr>`).join('')}
-        <tr><td>Owed to suppliers</td><td class="n">${money(d.owed)}</td></tr>
-        ${stock && stock.date ? `<tr><td>Stock on the shelves, counted ${esc(stock.date)}</td>
+        <tr><td>${th('summary.owed_suppliers')}</td><td class="n">${money(d.owed)}</td></tr>
+        ${stock && stock.date ? `<tr><td>${th('summary.stock_counted', esc(stock.date))}</td>
           <td class="n">${money(stock.closing)}</td></tr>` : ''}
       </table>
-      <div class="foot">Twilight Ledger ${esc(d.version)}</div>`);
+      <div class="foot">${th('summary.foot', esc(d.version))}</div>`);
   },
 };
 
@@ -1581,11 +1530,11 @@ document.addEventListener('click', async e => {
     e.preventDefault();
     await once(`do:${doer.dataset.do}:${doer.dataset.args || ''}`, async () => {
       if (doer.dataset.confirm
-          && !await ask(doer.dataset.confirm, doer.dataset.confirmBody || '', doer.dataset.yes || 'Yes')) {
+          && !await ask(doer.dataset.confirm, doer.dataset.confirmBody || '', doer.dataset.yes || t('common.yes'))) {
         return;
       }
       const out = await act(() => send(doer.dataset.do, JSON.parse(doer.dataset.args || '{}')));
-      if (out) say(typeof out.note === 'string' ? out.note : 'Saved.', typeof out.note === 'string');
+      if (out) say(typeof out.note === 'string' ? out.note : t('common.saved'), typeof out.note === 'string');
     });
     return;
   }
@@ -1602,12 +1551,12 @@ document.addEventListener('click', async e => {
       // someone new on the staff: the day they started decides their first month
       const who = String(body.name || '').trim();
       if (adder.dataset.add === 'account_add' && body.kind === 'staff' && who) {
-        body.started_on = await askDate(withName('When did ', who, ' start?'), START_BODY,
-          S.data.tonight, S.data.today, 'Add');
+        body.started_on = await askDate(withName('ask.when_start', who), t('staff_day.start_body'),
+          S.data.tonight, S.data.today, t('common.add'));
         if (!body.started_on) return;
       }
       const out = await act(() => send(adder.dataset.add, body), { skip: keys });
-      if (out) say(out.note || 'Added.', Boolean(out.note));
+      if (out) say(out.note || t('common.added'), Boolean(out.note));
     });
     return;
   }
@@ -1631,9 +1580,9 @@ document.addEventListener('change', async e => {
                           { skip: [key], onError: () => render({ skip: [key] }) });
     if (!out) return;
     const b = out.backup;
-    if (!b) say('Saved.');
-    else if (b.second_ok) say(`Saved, and a copy is already in ${b.second}.`);
-    else say(`Saved, but a copy could not be put there: ${b.second_error}`, true);
+    if (!b) say(t('common.saved'));
+    else if (b.second_ok) say(t('save.copied', b.second));
+    else say(t('save.not_copied', b.second_error), true);
     return;
   }
   if (e.target.id === 'nWho') {
@@ -1676,7 +1625,7 @@ async function saveLine(row) {
   });
   const before = S.data.stock.count.closing;
   const out = await act(() => send('count_line', body), { skip: keys });
-  if (out && out.closing !== before) say(`Counted value now ${money(out.closing)}.`);
+  if (out && out.closing !== before) say(t('count.value_now', money(out.closing)));
 }
 
 /** A scanner types through the keyboard layout in use: with a Kurdish or
@@ -1726,13 +1675,13 @@ function fillFigures() {
     const v = g * it.cost / 1000;
     grams += g;
     value += v;
-    document.querySelector(`[data-fillgrams="${it.id}"]`).textContent = g ? `${g.toLocaleString('en-US')} g` : '';
+    document.querySelector(`[data-fillgrams="${it.id}"]`).textContent = g ? t('unit.g', g.toLocaleString('en-US')) : '';
     document.querySelector(`[data-fillvalue="${it.id}"]`).textContent = g ? money(Math.round(v)) : '';
   });
   const set = (id, text) => { const el = document.getElementById(id); if (el) el.textContent = text; };
-  set('fillGrams', grams ? `${grams.toLocaleString('en-US')} g` : '');
+  set('fillGrams', grams ? t('unit.g', grams.toLocaleString('en-US')) : '');
   set('fillValue', grams ? money(Math.round(value)) : '');
-  set('fillPrice', grams ? `${money(Math.round(value * 1000 / grams))} a kilo` : '');
+  set('fillPrice', grams ? t('fill.a_kilo', money(Math.round(value * 1000 / grams))) : '');
 }
 
 /** One more pack of a tobacco on the fill (a scan), or just its line (Add). */
@@ -1807,25 +1756,25 @@ async function scanned(raw) {
   const items = S.data.setup.items;
   let it = items.find(i => (i.barcodes || []).includes(code));
   if (!it) {
-    it = await pickItem(`${code} is new`, 'Which item is it? Once you say, every scan of it knows.',
+    it = await pickItem(t('scan.new', code), t('scan.which'),
                         items.filter(i => i.active));
     if (!it) return;
     const out = await act(() => send('item_update', { id: it.id, barcode_add: code }));
     if (!out) return;
-    say(`${code} is now ${it.name}.`);
+    say(t('scan.now_is', code, it.name));
   }
   if (onPage('stock', 'fill') && S.draft.fill && S.draft.fill.mix) {
-    if (it.letter !== 'B') return say(`Only sealed tobacco goes into a mix, not ${it.name}.`, true);
+    if (it.letter !== 'B') return say(t('scan.only_sealed', it.name), true);
     return fillItem(it, 1);
   }
   if (onPage('stock', 'receipts') && S.draft.rlines && document.getElementById('rlItem')) {
-    if (it.letter === 'A') return say(`${it.name} is a mix, made here, not bought.`, true);
+    if (it.letter === 'A') return say(t('scan.is_mix', it.name), true);
     return receiptItem(it);
   }
   const sheet = onPage('stock', 'count') && S.data.stock.count.date;
   if (sheet) {
     let row = document.querySelector(`#main tr[data-item="${it.id}"]:not([data-receipt])`);
-    if (!row) return say(`${it.name} is not on this count.`, true);
+    if (!row) return say(t('scan.not_on_count', it.name), true);
     if (row.hidden) {
       (S.draft.find || {}).count = '';
       applyFind();
@@ -1842,7 +1791,7 @@ async function scanned(raw) {
     if (box) box.focus({ preventScroll: true });
     return;
   }
-  say(`${code} is ${it.name}.`);
+  say(t('scan.is', code, it.name));
 }
 
 async function saveReceiptLine(row) {
@@ -1858,7 +1807,7 @@ async function saveReceiptLine(row) {
   if (!out) return;
   const p = (S.draft.rpending || {})[rid];
   if (p) S.draft.rpending[rid] = p.filter(i => i !== item);   // saved, so no longer waiting
-  say(out.removed ? 'Line taken off.' : 'Saved.');
+  say(out.removed ? t('rline.taken_off') : t('common.saved'));
 }
 
 document.addEventListener('keydown', e => {
@@ -1965,6 +1914,18 @@ window.addEventListener('hashchange', () => {
 /* -------------------------------------------------------------------- boot */
 
 (async function start() {
+  try {
+    await loadWords();
+  } catch (err) {
+    // without its words the app has nothing to say anything in but the reason
+    document.getElementById('main').textContent = String(err && err.message);
+    return;
+  }
+  document.title = t('app.name');
+  document.getElementById('brand').prepend(t('app.name'));
+  document.getElementById('brandsub').textContent = t('app.loading');
+  document.getElementById('rail').setAttribute('aria-label', t('app.screens'));
+  document.getElementById('main').innerHTML = `<p class="empty">${th('app.opening')}</p>`;
   const [tab, page] = location.hash.slice(1).split('/');
   if (PAGES[tab]) S.tab = tab;
   if (PAGES[tab] && page && PAGES[tab].some(p => p[0] === page)) S.page[tab] = page;
@@ -1973,10 +1934,10 @@ window.addEventListener('hashchange', () => {
   try {
     await apply(await load(), { fresh: true });
     const bad = S.data.checks.filter(c => !c.ok).length;
-    if (bad) say(`${bad} thing${bad === 1 ? '' : 's'} need${bad === 1 ? 's' : ''} a look.`);
+    if (bad) say(bad === 1 ? t('look.one', 1) : t('look.many', bad));
   } catch (err) {
     document.getElementById('main').innerHTML =
-      `<div class="banner bad"><h2>Could not open the books</h2>
+      `<div class="banner bad"><h2>${th('boot.could_not_open')}</h2>
         <p style="margin:0">${esc(err.message)}</p></div>`;
   }
 })();

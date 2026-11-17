@@ -19,13 +19,14 @@ from . import db, queries, stock
 from .dates import month_of
 from .money import half_up, to_int
 from .registry import ApiError, action, clean_date
+from .words import t
 
 
 def _mix(con, mix_id):
     mix = db.one(con, "SELECT si.*, sc.letter FROM stock_item si JOIN stock_category sc "
                       "ON sc.id = si.category_id WHERE si.id = ?", (int(mix_id),))
     if not mix or mix["letter"] != "A":
-        raise ApiError("pick one of the weighed mixes")
+        raise ApiError(t("fill.pick_mix"))
     return mix
 
 
@@ -48,9 +49,9 @@ def _lines(con, raw):
         try:
             packs = stock.to_milli(l.get("packs"))
         except (ValueError, ZeroDivisionError):
-            raise ApiError("packs are a number") from None
+            raise ApiError(t("fill.packs_number")) from None
         if packs < 0:
-            raise ApiError("packs cannot be less than nothing")
+            raise ApiError(t("fill.packs_negative"))
         if packs:
             merged[int(l["item"])] = merged.get(int(l["item"]), 0) + packs
     out = []
@@ -58,24 +59,24 @@ def _lines(con, raw):
         item = db.one(con, "SELECT si.*, sc.letter FROM stock_item si JOIN stock_category sc "
                            "ON sc.id = si.category_id WHERE si.id = ?", (item_id,))
         if not item:
-            raise ApiError("no such stock item")
+            raise ApiError(t("item.none"))
         if item["letter"] != "B":
-            raise ApiError(f"only sealed tobacco goes into a mix, not {item['name']}")
+            raise ApiError(t("fill.only_sealed", item["name"]))
         grams_per_pack, price = pack_and_price(con, item)
         exact = Fraction(packs, 1000) * grams_per_pack
         grams = half_up(exact)
         if grams <= 0:
-            raise ApiError(f"too little {item['name']} to weigh")
+            raise ApiError(t("fill.too_little", item["name"]))
         out.append({"item": item_id, "packs_milli": packs, "grams": grams, "price": price,
                     "exact": exact * price / 1000})
     if not out:
-        raise ApiError("say how many packs of which tobacco went in")
+        raise ApiError(t("fill.say_packs"))
     return out
 
 
 def _fill_said(con, body, out):
     name = db.scalar(con, "SELECT name FROM stock_item WHERE id = ?", (out["mix"],))
-    return f"Filled {name}: {out['grams']:,} g"
+    return t("change.filled", name, f"{out['grams']:,}")
 
 
 @action("bucket_fill", guard_pots=False, summary=_fill_said)
@@ -84,7 +85,7 @@ def _bucket_fill(con, body):
     mix = _mix(con, body.get("mix") or 0)
     on = clean_date(body.get("on"))
     if queries.is_closed(con, month_of(on)):
-        raise ApiError("that month is closed")
+        raise ApiError(t("month.that_closed"))
     lines = _lines(con, body.get("lines"))
     grams = sum(l["grams"] for l in lines)
     exact = sum(l["exact"] for l in lines)
@@ -98,7 +99,7 @@ def _bucket_fill(con, body):
                          (body["tare_id"],)) if body.get("tare_id") else 0
         net = gross - tare
         if net <= 0:
-            raise ApiError("the full bucket weighs no more than the bucket")
+            raise ApiError(t("fill.bucket_empty"))
     before = max(net - grams, 0) if net is not None else 0
     p0 = mix["price"] or 0
     p1 = half_up((before * p0 + exact * 1000) / (before + grams))
@@ -124,16 +125,16 @@ def _bucket_fill(con, body):
 
 
 @action("bucket_fill_delete", guard_pots=False,
-        summary=lambda con, body, out: f"Deleted a fill of {out['name']}")
+        summary=lambda con, body, out: t("change.fill_deleted", out["name"]))
 def _bucket_fill_delete(con, body):
     """Take a fill back. The mix's price goes back to what it was, unless it
     has been changed since."""
     f = db.one(con, "SELECT f.*, si.name, si.price AS now FROM bucket_fill f "
                     "JOIN stock_item si ON si.id = f.mix_id WHERE f.id = ?", (int(body["id"]),))
     if not f or f["voided_at"]:
-        raise ApiError("that fill is not in the books")
+        raise ApiError(t("fill.none"))
     if queries.is_closed(con, month_of(f["filled_on"])):
-        raise ApiError("that month is closed")
+        raise ApiError(t("month.that_closed"))
     con.execute("UPDATE bucket_fill SET voided_at = datetime('now') WHERE id = ?", (f["id"],))
     if f["now"] == f["price_after"]:
         con.execute("UPDATE stock_item SET price = ? WHERE id = ?",

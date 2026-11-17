@@ -367,11 +367,32 @@ October, and whatever Settle up pays is counted for the month on screen. When
 nothing is due the line says so, so a month whose goods are all paid for can
 be seen to be.
 
+## Every word in one file
+
+Every sentence the app says — on a screen, in a message or a question, on a
+slip, in Recent changes, in a refusal from the server, in the black window — is
+in `web/lang/en.json`, by name: `"closing.title": "Closing up"`. The code names
+a sentence and hands it its values (`th('closing.moved_today', money(n), pot)`
+on a screen, `t("check.balance")` on the server) and never spells one out.
+`{0}`, `{1}`… are where the values go, numbered in the order they are read, and
+a value is a number, a date, a name, a month (its name and its year, as two) or
+a piece of markup, not more words: a plural, or "short" against "over", is two
+whole sentences rather than one with a word put in, so each reads the way the
+screen shows it. The screens read the file before they draw anything
+(`web/lib.js`), the server when it first needs a word (`ledger/words.py`).
+
+Names are `area.thing`; the file is kept in order, one sentence to a line, so a
+changed word is a changed line. `tests/test_words.py` fails if the code uses a
+name the file does not have, if the file has a sentence nothing uses, or if a
+sentence has crept back into the code on either side. The prompt for Gemini
+(`gemini.prompt`) is the one entry taken exactly as written, because its own
+`{0}` and `{1}` are words to Gemini.
+
 ## The screens in Kurdish
 
-The screens are written in English, and Kurdish (Sorani) is laid over them as
-they are drawn (`web/i18n.js`), rather than every card asking for its text by
-name. That keeps the cards readable and means nothing in them had to change.
+The screens are drawn in English, from the words, and Kurdish (Sorani) is laid
+over them as they are drawn (`web/i18n.js`), rather than every card asking for
+its Kurdish by name. That keeps the Kurdish in Mohammed's hands, piece by piece.
 A piece of text is one element's own words, with what changes in it taken out
 as `{0}`, `{1}`…: numbers, dates, the elements inside it, anything already in
 Kurdish script, and the names in the books. The names are found in the state
@@ -384,14 +405,15 @@ The Kurdish is Mohammed's, made with Gemini, and lives in the books
 (`lang_text`); no Kurdish is written in the code, and a test keeps it that
 way. Setup → Language copies the next batch of text with no Kurdish yet as a
 prompt, and takes Gemini's answer back; a line that lost a `{0}` is refused,
-because it would lose a number or a name, and is asked again. The text the app
-ships with is listed in `web/lang/catalog.json` (made by opening every screen
-on invented books), so all of it can be asked for before any screen has shown
-it; text a screen shows that is not on the list is added as it is seen.
+because it would lose a number or a name, and is asked again. The pieces are
+made from the app's own words, each as the screens will look it up (`lang.py`
+takes out its numbers, dates and months the way `i18n.js` does), so all of it
+can be asked for before any screen has shown it; text a screen shows that is not
+among them, such as a sentence made of two, is added as it is seen.
 
 A name that is also one of the app's own words — an expense called "Ice"
 beside "Ice cream", one called "Electricity" — is taken as the word, because
-the shipped list says it is one, so the app's sentences keep their words.
+the app's own words have it, so the app's sentences keep their words.
 Right to left is the CSS written in logical sides (`margin-inline-start`, not
 `margin-left`), with number boxes kept left to right.
 

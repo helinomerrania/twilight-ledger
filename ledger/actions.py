@@ -9,6 +9,7 @@ from .dates import month_of, today
 from .money import mround, to_int
 from .registry import (ApiError, action, amount, clean_date, clean_period,
                        describe_entry, money_words, pot, who)
+from .words import t
 
 
 def _entry_line(con, body, out):
@@ -26,7 +27,7 @@ def _sales(con, body):
     replaced = [e["id"] for e in queries.entries(con, on=on, kind="daily_sales")
                 if e["source"] in ("manual", "pos")]
     for rid in replaced:
-        post.void(con, rid, why="replaced by a newer till figure")
+        post.void(con, rid, why=t("why.replaced_till"))
     new_id = post.sales(con, value, on=on, into=pot(con, body))
     # the figure it replaced stands again if this one is taken back
     for rid in replaced:
@@ -38,7 +39,7 @@ def _sales(con, body):
 def _expense(con, body):
     detail = str(body.get("detail") or "").strip()
     if not detail:
-        raise ApiError("pick what it was spent on")
+        raise ApiError(t("expense.pick"))
     return {"id": post.daily_expense(con, amount(body), detail=detail,
                                      on=clean_date(body.get("on")),
                                      out_of=pot(con, body),
@@ -48,7 +49,7 @@ def _expense(con, body):
 @action("income", summary=_entry_line)
 def _income(con, body):
     return {"id": post.other_income(con, amount(body),
-                                    detail=str(body.get("detail") or "Other income"),
+                                    detail=str(body.get("detail") or t("income.default")),
                                     on=clean_date(body.get("on")),
                                     into=pot(con, body), period=clean_period(body))}
 
@@ -87,7 +88,7 @@ def _pay_supplier(con, body):
 def _pay_fixed(con, body):
     name = str(body.get("who") or "").strip()
     if not db.one(con, "SELECT 1 FROM fixed_charge WHERE name = ?", (name,)):
-        raise ApiError("pick which monthly charge is being paid")
+        raise ApiError(t("fixed.pick"))
     return {"id": post.pay_fixed(con, amount(body), name=name,
                                  on=clean_date(body.get("on")),
                                  out_of=pot(con, body), period=clean_period(body))}
@@ -136,7 +137,7 @@ def _post_receipt(con, body):
     on = clean_date(body.get("on"))
     supplier = who(con, body, "supplier")
     terms = "cash" if body.get("terms") == "cash" else "credit"
-    what = str(body.get("what") or "").strip() or "Several items"
+    what = str(body.get("what") or "").strip() or t("receipt.several")
     number = str(body.get("number") or "").strip() or None
     eid = post.receipt_in(con, value, supplier=supplier, on=on, terms=terms,
                           what=what, number=number,
@@ -150,9 +151,8 @@ def _post_receipt(con, body):
 
 def _receipt_line_said(con, body, out):
     name = db.scalar(con, "SELECT name FROM stock_item WHERE id = ?", (out["item"],),
-                     default="an item")
-    return (f"Took {name} off a receipt" if out.get("removed")
-            else f"Receipt line: {name}")
+                     default=t("change.an_item"))
+    return t("change.receipt_line_off" if out.get("removed") else "change.receipt_line", name)
 
 
 @action("receipt_line", guard_pots=False, summary=_receipt_line_said)
@@ -163,28 +163,28 @@ def _receipt_line(con, body):
     r = db.one(con, "SELECT r.*, e.period FROM receipt r JOIN entry e ON e.id = r.entry_id "
                     "WHERE r.id = ?", (int(body["receipt"]),))
     if not r:
-        raise ApiError("that receipt is not in the books")
+        raise ApiError(t("receipt.none"))
     if r["voided_at"]:
-        raise ApiError("that receipt was deleted")
+        raise ApiError(t("receipt.deleted"))
     if queries.is_closed(con, r["period"]):
-        raise ApiError("that receipt belongs to a closed month")
+        raise ApiError(t("receipt.closed"))
     item, brand = _stock_item(con, body["item"])
     packages, blocks, loose = _boxes(body)
     raw = body.get("amount")
     value = to_int(raw, "amount") if raw not in (None, "") else None
     if value is not None and value < 0:
-        raise ApiError("an amount cannot be negative")
+        raise ApiError(t("receipt.negative"))
     if stock.is_empty(packages, blocks, loose, None):
         if value:
-            raise ApiError("say how many came, not only what they cost")
+            raise ApiError(t("receipt.how_many_not_only_cost"))
         con.execute("DELETE FROM receipt_line WHERE receipt_id = ? AND item_id = ?",
                     (r["id"], item["id"]))
         return {"receipt": r["id"], "item": item["id"], "removed": True}
     if item["letter"] == "A":
-        raise ApiError("a mix is made here, not bought: take in the tobacco that goes into it")
+        raise ApiError(t("receipt.mix"))
     qty_milli = stock.qty_milli_of(_quantity(con, item, brand, packages, blocks, loose))
     if qty_milli <= 0:
-        raise ApiError("say how many came")
+        raise ApiError(t("receipt.how_many"))
     con.execute(
         "INSERT INTO receipt_line(receipt_id, item_id, packages_milli, blocks_milli, "
         "loose_milli, qty_milli, amount) VALUES (?,?,?,?,?,?,?) "
@@ -201,12 +201,12 @@ def _receipt_line(con, body):
 def _entry(con, entry_id):
     rows = queries.entries(con, ids=[int(entry_id)])
     if not rows:
-        raise ApiError("that entry is not in the books any more")
+        raise ApiError(t("entry.gone"))
     return rows[0]
 
 
 def _void_line(con, body, out):
-    return "Deleted: " + out.pop("_was", "an entry")
+    return t("change.deleted", out.pop("_was", None) or t("change.an_entry"))
 
 
 @action("void", summary=_void_line)
@@ -214,14 +214,14 @@ def _void(con, body):
     """Delete an entry. It is kept, marked as deleted, and can be put back."""
     e = _entry(con, body["id"])
     if not e["deletable"]:
-        raise ApiError(_why_not(con, e, "deleted"))
+        raise ApiError(_why_not(con, e, t("why.verb_deleted")))
     was = describe_entry(con, e["id"])
     post.void(con, e["id"], why=body.get("why"))
     return {"id": e["id"], "_was": was}
 
 
 def _undo_line(con, body, out):
-    return "Taken back: " + out.pop("_was", "an entry")
+    return t("change.taken_back", out.pop("_was", None) or t("change.an_entry"))
 
 
 @action("undo", summary=_undo_line)
@@ -232,13 +232,12 @@ def _undo(con, body):
     gone = db.one(con, "SELECT replaced_by FROM entry WHERE id = ? AND voided_at IS NOT NULL",
                   (int(body["id"]),))
     if gone:
-        raise ApiError("That has since been corrected, so there is nothing to take back."
-                       if gone["replaced_by"] else "That has already been taken back.")
+        raise ApiError(t("undo.corrected" if gone["replaced_by"] else "undo.already"))
     e = _entry(con, body["id"])
     if not e["deletable"]:
-        raise ApiError(_why_not(con, e, "taken back"))
+        raise ApiError(_why_not(con, e, t("why.verb_taken_back")))
     was = describe_entry(con, e["id"])
-    post.void(con, e["id"], why="taken back")
+    post.void(con, e["id"], why=t("why.taken_back"))
     back = []
     for old in db.all_(con, "SELECT id FROM entry WHERE replaced_by = ?", (e["id"],)):
         con.execute("UPDATE entry SET replaced_by = NULL WHERE id = ?", (old["id"],))
@@ -250,25 +249,22 @@ def _undo(con, body):
     return {"id": e["id"], "put_back": back, "_was": was}
 
 
-@action("put_back", summary=lambda con, body, out: "Put back: " + describe_entry(con, out["id"]))
+@action("put_back", summary=lambda con, body, out: t("change.put_back",
+                                                        describe_entry(con, out["id"])))
 def _put_back(con, body):
     return {"id": post.unvoid(con, int(body["id"]))}
 
 
 def _why_not(con, e, verb):
     if e.get("retired_pot"):
-        return (f"{e['retired_pot']} has been retired, and its money would go back "
-                "into it. Bring it back in Setup first.")
+        return t("why.retired_pot", e["retired_pot"])
     if queries.is_closed(con, e["period"]):
-        return (f"{e['period']} is closed, so its entries cannot be {verb}. "
-                "Reopen the month first.")
+        return t("why.closed", e["period"], verb)
     if any(l["code"] == "eq:opening" for l in e["legs"]):
-        return ("that entry is from before these books began keeping a running "
-                f"balance for each person, so it is part of the record and cannot be {verb}.")
+        return t("why.historic", verb)
     if e["kind"] in ("salary_charge", "fixed_charge", "electricity_charge"):
-        return ("that is a charge the app works out itself. Change the salary, the "
-                "rent or the meter reading and it follows.")
-    return f"that kind of entry cannot be {verb} here"
+        return t("why.charge")
+    return t("why.kind", verb)
 
 
 # How to write each kind of entry again from a corrected form.
@@ -299,7 +295,7 @@ def _repost(con, kind, f, source_ref=None):
     if kind == "transfer":
         return post.transfer(con, f["amount"], frm=f["pot"], to=f["pot_to"],
                              source_ref=source_ref, **kw)
-    raise ApiError("that kind of entry cannot be corrected here")
+    raise ApiError(t("why.kind", t("why.verb_corrected")))
 
 
 _WHO_KIND = {"staff_advance": "staff", "staff_repayment": "staff",
@@ -309,7 +305,8 @@ _WHO_KIND = {"staff_advance": "staff", "staff_repayment": "staff",
 
 
 def _edit_line(con, body, out):
-    return f"Corrected: {out.pop('_was', 'an entry')} → {describe_entry(con, out['id'])}"
+    return t("change.corrected", out.pop("_was", None) or t("change.an_entry"),
+             describe_entry(con, out["id"]))
 
 
 @action("edit_entry", summary=_edit_line)
@@ -322,7 +319,7 @@ def _edit_entry(con, body):
     """
     e = _entry(con, body["id"])
     if not e["editable"]:
-        raise ApiError(_why_not(con, e, "corrected"))
+        raise ApiError(_why_not(con, e, t("why.verb_corrected")))
     kind = e["kind"]
 
     on = clean_date(body.get("on") or e["happened_on"])
@@ -338,8 +335,8 @@ def _edit_entry(con, body):
     if kind == "daily_sales" and on != e["happened_on"]:
         there = post.takings(con, on)
         if there:
-            raise ApiError(f"{on} already has its takings in the books "
-                           f"({sum(t['amount'] for t in there):,}). Correct those instead.")
+            raise ApiError(t("takings.already_correct", on,
+                             f"{sum(x['amount'] for x in there):,}"))
 
     # Who it was for is the account it was posted to, under the name it has
     # now: never the name written on the entry, which may since have been
@@ -384,9 +381,9 @@ def _edit_entry(con, body):
 def _count_summary(con, body, out):
     c = next((x for x in queries.cash_counts(con) if x["id"] == out["id"]), None)
     if not c:
-        return "Cash counted"
-    return (f"Cash counted for {c['on']}: ties" if c["diff"] == 0
-            else f"Cash counted for {c['on']}: out by {money_words(c['diff'])}")
+        return t("change.cash_counted")
+    return (t("change.cash_counted_ties", c["on"]) if c["diff"] == 0
+            else t("change.cash_counted_out", c["on"], money_words(c["diff"])))
 
 
 @action("cash_count", guard_pots=False, summary=_count_summary)
@@ -407,13 +404,13 @@ def _cash_count(con, body):
             continue
         counted = to_int(value, name)
         if counted < 0:
-            raise ApiError("a pot cannot hold less than nothing")
+            raise ApiError(t("cash.pot_negative"))
         con.execute("INSERT INTO cash_count_line(count_id, account_id, counted) "
                     "VALUES (?,?,?) ON CONFLICT(count_id, account_id) "
                     "DO UPDATE SET counted = excluded.counted", (cid, aid, counted))
     if not db.scalar(con, "SELECT count(*) FROM cash_count_line WHERE count_id = ?", (cid,)):
         con.execute("DELETE FROM cash_count WHERE id = ?", (cid,))
-        raise ApiError("count at least one pot")
+        raise ApiError(t("cash.count_one"))
     # how far out it is, said by the count itself: the screen keeps only the
     # latest counts, and an older night's would not be among them
     c = next((x for x in queries.cash_counts(con) if x["id"] == cid), None)
@@ -421,31 +418,28 @@ def _cash_count(con, body):
 
 
 @action("delete_cash_count", guard_pots=False,
-        summary=lambda con, body, out: f"Deleted the cash count for {out['on']}")
+        summary=lambda con, body, out: t("change.cash_count_deleted", out["on"]))
 def _delete_cash_count(con, body):
     c = db.one(con, "SELECT * FROM cash_count WHERE id = ?", (int(body["id"]),))
     if not c:
-        raise ApiError("that count is not in the books")
+        raise ApiError(t("cash.count_none"))
     if db.one(con, "SELECT 1 FROM entry WHERE source_ref LIKE ? AND voided_at IS NULL "
                    "AND kind = 'cash_difference' AND happened_on = ?",
               (f"count:{c['id']}:%", c["counted_on"])):
-        raise ApiError("a difference on that count was written off. Delete the "
-                       "write-off on Books first.")
+        raise ApiError(t("cash.count_written_off"))
     # The rest moved out after it would pass to the next count of the night,
     # which is taken after the move and must expect it gone.
     if db.one(con, "SELECT 1 FROM entry WHERE source_ref = ? AND voided_at IS NULL "
                    "AND kind = 'transfer' AND happened_on = ?",
               (f"count:{c['id']}:rest", c["counted_on"])):
-        raise ApiError("the rest of the drawer was moved out after that count. Delete "
-                       "the move on Books first.")
+        raise ApiError(t("cash.count_moved"))
     con.execute("DELETE FROM cash_count WHERE id = ?", (c["id"],))
     return {"on": c["counted_on"]}
 
 
 def _write_off_line(con, body, out):
-    word = "short" if out["diff"] < 0 else "over"
-    return (f"Wrote off {money_words(abs(out['diff']))} {word} in {out['pot']} "
-            f"on {out['on']}")
+    return t("change.wrote_off_short" if out["diff"] < 0 else "change.wrote_off_over",
+             money_words(abs(out["diff"])), out["pot"], out["on"])
 
 
 @action("write_off", guard_pots=False, summary=_write_off_line)
@@ -459,7 +453,7 @@ def _write_off(con, body):
     """
     count = next((c for c in queries.cash_counts(con) if c["id"] == int(body["id"])), None)
     if not count:
-        raise ApiError("that count is not in the books")
+        raise ApiError(t("cash.count_none"))
     done = []
     for p in count["pots"]:
         if body.get("pot") and p["name"] != body["pot"]:
@@ -473,7 +467,7 @@ def _write_off(con, body):
             source_ref=f"count:{count['id']}:{aid}")
         done.append((eid, p["name"], p["diff"]))
     if not done:
-        raise ApiError("there is nothing left to write off on that count")
+        raise ApiError(t("cash.nothing_to_write_off"))
     return {"id": done[0][0], "pot": ", ".join(d[1] for d in done),
             "diff": sum(d[2] for d in done), "on": count["on"]}
 
@@ -486,7 +480,7 @@ def _open_count(con, body):
     empty count is ignored until something is typed into it."""
     on = clean_date(body.get("on"))
     if locked(con, on):
-        raise ApiError("that month is closed, so no count can be started in it")
+        raise ApiError(t("count.closed_month"))
     con.execute("INSERT INTO stock_count(count_date, closing, source) "
                 "VALUES (?,0,'counted') ON CONFLICT(count_date) DO NOTHING", (on,))
     return {"count_date": on}
@@ -498,7 +492,7 @@ def _stock_item(con, item_id):
                        "JOIN stock_category sc ON sc.id = si.category_id "
                        "WHERE si.id = ?", (int(item_id),))
     if not item:
-        raise ApiError("no such stock item")
+        raise ApiError(t("item.none"))
     brand = db.one(con, "SELECT * FROM stock_item WHERE id = ?",
                    (item["parent_id"],)) if item["parent_id"] else None
     return item, brand
@@ -509,9 +503,9 @@ def _boxes(body):
     try:
         boxes = [stock.to_milli(body.get(k)) for k in ("packages", "blocks", "loose")]
     except (ValueError, ZeroDivisionError):
-        raise ApiError("a count is a number") from None
+        raise ApiError(t("count.number")) from None
     if min(boxes) < 0:
-        raise ApiError("a count cannot be less than nothing")
+        raise ApiError(t("count.negative"))
     return boxes
 
 
@@ -553,7 +547,7 @@ def _count_line(con, body):
     """
     on = body["on"]
     if locked(con, on):
-        raise ApiError("that count belongs to a closed month")
+        raise ApiError(t("count.closed"))
     head = db.one(con, "SELECT * FROM stock_count WHERE count_date = ?", (on,))
     if not head:
         on = clean_date(on)
@@ -565,7 +559,7 @@ def _count_line(con, body):
     gross = body.get("gross_grams")
     gross = to_int(gross, "gross_grams") if gross not in (None, "") else None
     if (gross or 0) < 0:
-        raise ApiError("a count cannot be less than nothing")
+        raise ApiError(t("count.negative"))
     tare_id = body.get("tare_id") or None
     tare_grams = db.scalar(con, "SELECT grams FROM tare WHERE id = ?",
                            (tare_id,)) if tare_id else 0
@@ -607,11 +601,11 @@ def _count_line(con, body):
 
 
 @action("delete_count", guard_pots=False,
-        summary=lambda con, body, out: f"Deleted the stock count for {out['deleted']}")
+        summary=lambda con, body, out: t("change.count_deleted", out["deleted"]))
 def _delete_count(con, body):
     on = body["on"]
     if locked(con, on):
-        raise ApiError("that count belongs to a closed month")
+        raise ApiError(t("count.closed"))
     con.execute("DELETE FROM stock_count WHERE count_date = ?", (on,))
     return {"deleted": on}
 
@@ -619,7 +613,7 @@ def _delete_count(con, body):
 # ------------------------------------------------------------------ the month
 
 @action("set_electricity", guard_pots=False,
-        summary=lambda con, body, out: f"Electricity charged: {money_words(out['bill']['total'])}")
+        summary=lambda con, body, out: t("change.electricity", money_words(out["bill"]["total"])))
 def _set_electricity(con, body):
     from . import accruals
     month = body.get("month") or body.get("view_month") or month_of(today())
@@ -630,15 +624,15 @@ def _set_electricity(con, body):
 
 
 @action("close_month", guard_pots=False,
-        summary=lambda con, body, out: f"Closed {out['month']} at a net of "
-                                       f"{money_words(out['result']['net'])}")
+        summary=lambda con, body, out: t("change.closed", out["month"],
+                                         money_words(out["result"]["net"])))
 def _close_month(con, body):
     from .close import close_month
     return close_month(con, body.get("month") or month_of(today()))
 
 
 @action("reopen_month", guard_pots=False,
-        summary=lambda con, body, out: f"Reopened {out['month']}")
+        summary=lambda con, body, out: t("change.reopened", out["month"]))
 def _reopen_month(con, body):
     from .close import reopen_month
     return reopen_month(con, body.get("month"))

@@ -16,6 +16,7 @@ from . import (accruals, actions, backup, buckets, cash, checks as _checks, db, 
 from .dates import NIGHT_ENDS, month_of, prev_month, today, tonight
 from .pos import actions as pos
 from .registry import ACTIONS, ApiError, run            # noqa: F401  (re-exported)
+from .words import t
 
 assert actions and setup and pos and cash                # imported to register
 
@@ -27,17 +28,13 @@ def bootstrap(con):
     with db.tx(con):
         post.ensure_system_accounts(con)
         if not db.one(con, "SELECT 1 FROM account WHERE kind = 'cash'"):
-            post.ensure_account(con, "cash:box", "Box", "cash", 1)
+            post.ensure_account(con, "cash:box", t("setup.first_pot"), "cash", 1)
         if not db.one(con, "SELECT 1 FROM stock_category"):
-            for i, (letter, name) in enumerate([
-                    ("A", "A - Mixed Tobacco (weighed)"),
-                    ("B", "B - Sealed Tobacco (blocks)"),
-                    ("C", "C - Shisha Supplies"), ("D", "D - Cafe Goods"),
-                    ("E", "E - Ice Cream"), ("F", "F - Other")]):
+            for i, letter in enumerate("ABCDEF"):
                 con.execute("INSERT INTO stock_category(letter, name, sort) "
-                            "VALUES (?,?,?)", (letter, name, i))
+                            "VALUES (?,?,?)", (letter, t(f"setup.category.{letter.lower()}"), i))
         if not db.setting(con, "business"):
-            db.set_setting(con, "business", {"name": "Twilight Rest & Cafe", "note": 250})
+            db.set_setting(con, "business", {"name": t("setup.first_business"), "note": 250})
     load_settings(con)
 
 
@@ -130,18 +127,18 @@ def settle(con, month):
     lines = []
     for p in queries.payroll(con, month):
         if p["still_to_pay"]:
-            lines.append({"action": "pay_salary", "what": "Salary", "who": p["name"],
+            lines.append({"action": "pay_salary", "what": t("settle.salary"), "who": p["name"],
                           "amount": p["still_to_pay"],
-                          "note": (f"includes {p['from_earlier']:,} from earlier months"
+                          "note": (t("settle.from_earlier", f"{p['from_earlier']:,}")
                                    if p["from_earlier"] else "")})
     for f in queries.fixed_outstanding(con, month):
         if f["still_to_pay"]:
-            lines.append({"action": "pay_fixed", "what": "Monthly charge",
+            lines.append({"action": "pay_fixed", "what": t("settle.monthly_charge"),
                           "who": f["name"], "amount": f["still_to_pay"], "note": ""})
     elec = queries.electricity_outstanding(con, month)
     if elec:
-        lines.append({"action": "pay_electricity", "what": "Electricity",
-                      "who": "Electricity", "amount": elec, "note": ""})
+        lines.append({"action": "pay_electricity", "what": t("settle.electricity"),
+                      "who": t("settle.electricity"), "amount": elec, "note": ""})
     note = money.NOTE
     for s in queries.supplier_statement(con, month):
         if s["closing"] <= 0:
@@ -152,17 +149,17 @@ def settle(con, month):
         owed, stock = s["owed_at_count"], s["on_shelves"]
         # rounded down to a whole note, so the noise in weighing never asks to be paid
         due = max(owed - stock, 0) // note * note
-        if s["count_date"]:
-            words = f"{owed:,} owed − {stock:,} of their stock still here"
-            later = s["closing"] - owed
-            if later > 0:
-                words += f"; {later:,} came after the count and is not due yet"
+        later = s["closing"] - owed
+        if not s["count_date"]:
+            words = t("settle.owed_no_count", f"{owed:,}")
+        elif later > 0:
+            words = t("settle.owed_later", f"{owed:,}", f"{stock:,}", f"{later:,}")
         else:
-            words = f"{owed:,} owed, with no count to set against it"
-        line = {"action": "pay_supplier", "what": "Supplier", "who": s["name"],
+            words = t("settle.owed", f"{owed:,}", f"{stock:,}")
+        line = {"action": "pay_supplier", "what": t("settle.supplier"), "who": s["name"],
                 "amount": due, "note": words}
         if not due:
-            line["done"] = "paid" if s["paid"] else "nothing consumed to pay"
+            line["done"] = t("settle.paid" if s["paid"] else "settle.nothing_used")
         lines.append(line)
     return lines
 

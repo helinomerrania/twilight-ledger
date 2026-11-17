@@ -7,6 +7,8 @@ is in one place; a date here means the day in Ranya.
 """
 from datetime import date, datetime, timedelta
 
+from .words import t
+
 ISO = "%Y-%m-%d"
 
 # The lounge closes after midnight: until six in the morning it is still the
@@ -44,7 +46,7 @@ def ymd(value):
             return datetime.strptime(s[:len(datetime.now().strftime(fmt))], fmt).date().isoformat()
         except ValueError:
             continue
-    raise ValueError(f"not a date: {value!r}")
+    raise ValueError(t("date.not_a_date_value", repr(value)))
 
 
 def month_of(value):
@@ -78,12 +80,14 @@ def prev_month(month):
     return f"{y - 1}-12" if m == 1 else f"{y}-{m - 1:02d}"
 
 
-MONTH_NAMES = ["January", "February", "March", "April", "May", "June", "July",
-               "August", "September", "October", "November", "December"]
-
-
 def month_name(month):
-    return f"{MONTH_NAMES[int(month[5:7]) - 1]} {month[:4]}"
+    """November 2026."""
+    return " ".join(month_words(month))
+
+
+def month_words(month):
+    """A month as the screens read it: its name and its year, two values."""
+    return t(f"month.{month[5:7]}"), month[:4]
 
 
 def days_in(month):

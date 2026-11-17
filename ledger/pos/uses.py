@@ -22,6 +22,7 @@ from fractions import Fraction
 from .. import db, stock
 from ..money import half_up
 from ..registry import ApiError, action
+from ..words import t
 from . import catalog
 
 WEIGHED = ("A", "B")                 # tobacco and mixes, counted in kilos
@@ -186,7 +187,7 @@ def view(con):
             continue
         u = use.get(m["Id"])
         item = items.get(u["item_id"]) if u else None
-        rows.append({"menu_id": m["Id"], "name": m.get("Name") or f"item {m['Id']}",
+        rows.append({"menu_id": m["Id"], "name": m.get("Name") or t("menu.unnamed", m["Id"]),
                      "group": m.get("GroupCode") or "",
                      "set": u is not None, "item_id": item["id"] if item else None,
                      "amount": float(u["amount"]) if u else 1,
@@ -206,8 +207,10 @@ def view(con):
 
 def _use_said(con, body, out):
     if out["takes"] is None:
-        return f"{out['menu']} is not set"
-    return f"{out['menu']} takes {out['takes'] or 'nothing'}"
+        return t("change.menu_unset", out["menu"])
+    if not out["takes"]:
+        return t("change.menu_nothing", out["menu"])
+    return t("change.menu_takes", out["menu"], out["takes"])
 
 
 @action("menu_use", guard_pots=False, summary=_use_said)
@@ -217,7 +220,7 @@ def _menu_use(con, body):
     menu_id = int(body["menu_id"])
     m = next((r for r in catalog.rows(con, "menu_item") if r["Id"] == menu_id), None)
     if not m:
-        raise ApiError("SambaPOS has no such menu item")
+        raise ApiError(t("menu.none"))
     have = uses(con).get(menu_id)
     if "item_id" in body:
         raw = str(body.get("item_id") or "").strip()
@@ -226,7 +229,7 @@ def _menu_use(con, body):
             return {"menu": m.get("Name"), "takes": None}
         item_id = int(raw) or None
         if item_id and not db.one(con, "SELECT 1 FROM stock_item WHERE id = ?", (item_id,)):
-            raise ApiError("no such stock item")
+            raise ApiError(t("item.none"))
     else:
         item_id = have["item_id"] if have else None
     amount = have["amount"] if have else Fraction(1)
@@ -235,9 +238,9 @@ def _menu_use(con, body):
         try:
             amount = Fraction(stock.to_milli(raw), 1000) if raw else Fraction(1)
         except (ValueError, ZeroDivisionError):
-            raise ApiError("how much is a number") from None
+            raise ApiError(t("menu.amount_number")) from None
         if amount <= 0:
-            raise ApiError("it takes more than nothing; or choose “takes nothing”")
+            raise ApiError(t("menu.amount_positive"))
     con.execute("INSERT INTO menu_use(menu_id, item_id, amount_milli) VALUES (?,?,?) "
                 "ON CONFLICT(menu_id) DO UPDATE SET item_id = excluded.item_id, "
                 "amount_milli = excluded.amount_milli",
@@ -248,15 +251,15 @@ def _menu_use(con, body):
 
 
 @action("head_grams", guard_pots=False,
-        summary=lambda con, body, out: (f"A head is now {out['grams']} g" if out["grams"]
-                                        else "Grams in a head cleared"))
+        summary=lambda con, body, out: (t("change.head", out["grams"]) if out["grams"]
+                                        else t("change.head_cleared")))
 def _head_grams(con, body):
     raw = str(body.get("grams") or "").strip()
     try:
         grams = int(raw) if raw else None
     except ValueError:
-        raise ApiError("grams are a whole number") from None
+        raise ApiError(t("head.whole")) from None
     if grams is not None and not 1 <= grams <= 500:
-        raise ApiError("a head is between 1 and 500 grams")
+        raise ApiError(t("head.range", 1, 500))
     db.set_setting(con, "head_grams", grams)
     return {"grams": grams}

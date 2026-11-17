@@ -3,29 +3,24 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
-<title>Twilight Ledger</title>
+<title></title>
 <link rel="stylesheet" href="app.css">
 </head>
 <body>
 
-<nav id="rail" aria-label="Screens">
-  <div class="brand" translate="no">Twilight Ledger<small id="brandsub">loading…</small></div>
+<!-- Every word on the page comes from lang/en.json, put in by app.js. -->
+<nav id="rail">
+  <div class="brand" id="brand" translate="no"><small id="brandsub"></small></div>
   <!-- the five jobs, filled in by app.js from one list so a screen cannot
        exist without a way to reach it -->
 </nav>
 
-<main id="main" aria-live="polite">
-  <p class="empty">Opening the books…</p>
-</main>
+<main id="main" aria-live="polite"></main>
 
 <div class="slip" id="slip" aria-hidden="true"></div>
 <div class="page" id="page" aria-hidden="true"></div>
 <div id="toast" role="status" aria-live="polite"></div>
 
 <script type="module" src="app.js"></script>
-<noscript>
-  <p style="padding:20px">This needs JavaScript. It all runs on your own PC —
-     nothing is sent anywhere.</p>
-</noscript>
 </body>
 </html>

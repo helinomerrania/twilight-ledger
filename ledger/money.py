@@ -13,6 +13,8 @@ silently inside a total.
 """
 from fractions import Fraction
 
+from .words import t
+
 NOTE = 250          # smallest note in circulation at the lounge
 DEFAULT_NOTE = 250
 
@@ -42,7 +44,7 @@ def to_int(v, field="amount"):
     n = _to_int(v, field)
     if abs(n) >= TOO_LARGE:
         said = v.strip() if isinstance(v, str) else f"{n:,}"
-        raise ValueError(f"{field}: {said} is far too large. Check the figure")
+        raise ValueError(t("amount.too_large", field, said))
     return n
 
 
@@ -50,12 +52,12 @@ def _to_int(v, field):
     if v is None or v == "":
         return 0
     if isinstance(v, bool):
-        raise ValueError(f"{field}: a true/false is not an amount")
+        raise ValueError(t("amount.true_false", field))
     if isinstance(v, int):
         return v
     if isinstance(v, float):
         if v != v or v in (float("inf"), float("-inf")):
-            raise ValueError(f"{field}: {v!r} is not a real number")
+            raise ValueError(t("amount.not_real", field, repr(v)))
         # Half away from zero, not Python's round(), which rounds halves to the
         # nearest even number: round(0.5) is 0 and round(1.5) is 2. Fine for
         # statistics, surprising in a cash book, and inconsistent with the
@@ -68,8 +70,8 @@ def _to_int(v, field):
         try:
             return _to_int(float(s), field)
         except ValueError:
-            raise ValueError(f"{field}: {v!r} is not an amount") from None
-    raise ValueError(f"{field}: {type(v).__name__} is not an amount")
+            raise ValueError(t("amount.not_an_amount", field, repr(v))) from None
+    raise ValueError(t("amount.not_an_amount", field, type(v).__name__))
 
 
 def mround(amount, note=None):

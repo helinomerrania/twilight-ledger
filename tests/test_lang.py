@@ -1,14 +1,12 @@
 """The screens in Kurdish (Later in the plan). The Kurdish comes from
 Mohammed through Gemini and lives in the books; the stand-ins here are made
 up. Nothing in Kurdish may be written in the app's code."""
-import json
-import tempfile
 import unicodedata
 import unittest
 from pathlib import Path
 from unittest import mock
 
-from ledger import api, db, lang, queries
+from ledger import api, db, lang, queries, words
 from tests.helpers import fresh_books
 
 ROOT = Path(__file__).resolve().parent.parent
@@ -91,59 +89,72 @@ class Pieces(unittest.TestCase):
 
 
 class Shipped(unittest.TestCase):
-    """The text the app ships with is put in the books once per version of
-    the list, so Gemini can be asked for all of it before any screen has
-    shown it."""
+    """The app's own words are put in the books as pieces once per version of
+    them, so Gemini can be asked for all of it before any screen has shown it."""
 
     def setUp(self):
         self.con = fresh_books()
-        self.dir = Path(tempfile.mkdtemp(prefix="twilight-lang-"))
-        self.file = self.dir / "catalog.json"
         lang._shipped = None
 
     def tearDown(self):
         lang._shipped = None
 
-    def ship(self, keys):
-        self.file.write_text(json.dumps(keys), encoding="utf-8")
+    def ship(self, more=None):
         lang._shipped = None
-        with mock.patch.object(lang, "CATALOG", self.file):
+        with mock.patch.object(lang, "words", lambda: {**words.words(), **(more or {})}):
             lang.view(self.con)
 
-    def test_the_shipped_text_is_added_once(self):
-        self.ship(["Tonight", "Stock"])
-        self.assertEqual(lang.todo(self.con)[:2], ["Tonight", "Stock"])
+    def test_the_words_are_added_once(self):
+        self.ship()
+        self.assertIn("Closing up", lang.todo(self.con, 5000))
         db.set_setting(self.con, "language", "en")
         self.con.execute("DELETE FROM lang_text")
-        self.ship(["Tonight", "Stock"])                     # the same list: not again
+        self.ship()                                         # the same words: not again
         self.assertEqual(lang.todo(self.con), [])
 
     def test_a_new_version_adds_what_is_new(self):
-        self.ship(["Tonight"])
-        api.run(self.con, "lang_set", {"pairs": {"Tonight": "[tonight]"}})
-        self.ship(["Tonight", "Month"])
-        self.assertEqual(lang.todo(self.con), ["Month"])
-        self.assertEqual(lang.texts(self.con), {"Tonight": "[tonight]"})
+        self.ship()
+        api.run(self.con, "lang_set", {"pairs": {"Closing up": "[closing]"}})
+        before = set(lang.todo(self.con, 5000))
+        self.ship({"test.new": "Count the spoons on {0}"})
+        self.assertEqual(set(lang.todo(self.con, 5000)) - before, {"Count the spoons on {0}"})
+        self.assertEqual(lang.texts(self.con), {"Closing up": "[closing]"})
 
-    def test_a_broken_list_is_ignored(self):
-        self.file.write_text("not json", encoding="utf-8")
-        with mock.patch.object(lang, "CATALOG", self.file):
-            lang.view(self.con)
-        self.assertEqual(lang.todo(self.con), [])
+    def test_each_is_the_piece_the_screens_look_up(self):
+        p = lang._pattern(words.words())
+        self.assertEqual(lang.key_of("Use SambaPOS's figure in step 1, then {0}.", p),
+                         "Use SambaPOS's figure in step {0}, then {1}.")
+        self.assertEqual(lang.key_of("Closed 2026-11-17 at 07:26, out by -1,250", p),
+                         "Closed {0} at {1}, out by {2}")
+        self.assertEqual(lang.key_of("Close {0} {1}?", p), "Close {0} {1}?")
+        self.assertEqual(lang.key_of("Sales for November 2026 and 3 Nov, on Monday", p),
+                         "Sales for {0} {1} and {2} {3}, on {4}")
+        self.assertEqual(lang.key_of("Copied to G:\\My Drive\\Twilight", p), "Copied to {0}")
 
-    def test_the_list_that_ships_is_english_only(self):
-        keys = json.loads((ROOT / "web" / "lang" / "catalog.json").read_text(encoding="utf-8"))
-        self.assertIsInstance(keys, list)
+    def test_months_and_days_are_pieces_on_their_own(self):
+        keys = lang.shipped()[1]
+        for word in ("November", "Nov", "Monday"):
+            self.assertIn(word, keys)
+
+    def test_what_is_never_on_a_screen_is_not_asked_for(self):
+        keys = set(lang.shipped()[1])
+        w = words.words()
+        p = lang._pattern(w)
+        for name in ("cli.check_total", "cli.help", "gemini.prompt", "migration.edited"):
+            self.assertNotIn(lang.key_of(w[name], p), keys, name)
+
+    def test_the_pieces_are_english_only(self):
+        keys = lang.shipped()[1]
         self.assertEqual(len(keys), len(set(keys)))
         for k in keys:
-            self.assertTrue(isinstance(k, str) and lang._good(k), k)
+            self.assertTrue(lang._good(k), k)
             self.assertEqual(kurdish_letters(k), [], k)
 
 
 class NoKurdishInTheCode(unittest.TestCase):
     """The Kurdish is Mohammed's own, made with Gemini, and lives in his
-    books. The app's code holds none, except each language's own name in the
-    language switch."""
+    books. The app holds none, except each language's own name in the
+    language switch, which is in the words (language.ckb)."""
 
     def test_no_kurdish_words_in_the_app(self):
         files = [*(ROOT / "ledger").rglob("*.py"), *(ROOT / "ledger").rglob("*.sql"),
@@ -151,8 +162,8 @@ class NoKurdishInTheCode(unittest.TestCase):
                  *(ROOT / "web").rglob("*.html"), *(ROOT / "web").rglob("*.json")]
         for f in files:
             text = f.read_text(encoding="utf-8")
-            if f.name == "lang.py":
-                text = text.replace(lang.LANGUAGES["ckb"], "")
+            if f.name == "en.json":
+                text = text.replace(words.words()["language.ckb"], "")
             self.assertEqual(kurdish_letters(text), [], f.relative_to(ROOT))
 
 

@@ -30,6 +30,7 @@ from urllib.parse import parse_qs, urlparse
 from . import api, backup, db, lang, queries, update
 from .close import ready
 from .pos import auto
+from .words import t
 
 ROOT = Path(__file__).resolve().parent.parent
 WEB = ROOT / "web"
@@ -75,12 +76,12 @@ class Handler(BaseHTTPRequestHandler):
 
     def send_file(self, path):
         if not path.exists() or not path.is_file():
-            return self.send_json({"error": "not found"}, 404)
+            return self.send_json({"error": t("server.not_found")}, 404)
         # Serve nothing outside web/, whatever the URL asks for.
         try:
             path.resolve().relative_to(WEB.resolve())
         except ValueError:
-            return self.send_json({"error": "not found"}, 404)
+            return self.send_json({"error": t("server.not_found")}, 404)
         body = path.read_bytes()
         # Windows' registry can say otherwise for any of these, and a browser
         # told not to guess will not run a script, nor use a stylesheet, that
@@ -128,7 +129,7 @@ class Handler(BaseHTTPRequestHandler):
     # ----------------------------------------------------------------- GET
     def do_GET(self):
         if not self._safe_host():
-            return self.send_json({"error": "this server only answers on localhost"}, 403)
+            return self.send_json({"error": t("server.localhost")}, 403)
         url = urlparse(self.path)
         q = {k: v[0] for k, v in parse_qs(url.query).items()}
         try:
@@ -144,7 +145,7 @@ class Handler(BaseHTTPRequestHandler):
                 out = queries.supplier_lines(self.con, int(q.get("id") or 0),
                                              q.get("month"))
                 if out is None:
-                    return self.send_json({"error": "no such supplier"}, 404)
+                    return self.send_json({"error": t("server.no_supplier")}, 404)
                 return self.send_json(out)
             if url.path == "/api/close":
                 return self.send_json(ready(self.con, q.get("month")))
@@ -162,7 +163,7 @@ class Handler(BaseHTTPRequestHandler):
                 return self.send_json(lang.todo(self.con, min(int(limit) if limit.isdigit()
                                                               else 150, 400)))
             if url.path.startswith("/api/"):
-                return self.send_json({"error": "no such endpoint"}, 404)
+                return self.send_json({"error": t("server.no_endpoint")}, 404)
         except (api.ApiError, db.LedgerError) as exc:
             return self.send_error_json(exc)
         except Exception as exc:                       # noqa: BLE001
@@ -173,9 +174,8 @@ class Handler(BaseHTTPRequestHandler):
 
     # ---------------------------------------------------------------- POST
     def do_POST(self):
-        refused = ("this server only answers on localhost" if not self._safe_host() else
-                   "writes are only accepted from the app's own page" if not self._own_page()
-                   else None)
+        refused = (t("server.localhost") if not self._safe_host() else
+                   t("server.own_page") if not self._own_page() else None)
         try:
             length = int(self.headers.get("Content-Length") or 0)
         except ValueError:
@@ -184,7 +184,7 @@ class Handler(BaseHTTPRequestHandler):
             # The body is left unread, so the connection ends here: what is
             # left of it must not be taken for the next request.
             self.close_connection = True
-            return self.send_json({"error": refused or "that was not valid JSON"},
+            return self.send_json({"error": refused or t("server.bad_json")},
                                   403 if refused else 400)
         url = urlparse(self.path)
         raw = self.rfile.read(length) if length else b"{}"
@@ -193,14 +193,12 @@ class Handler(BaseHTTPRequestHandler):
             if not isinstance(body, dict):
                 raise ValueError
         except ValueError:
-            return self.send_json({"error": "that was not valid JSON"}, 400)
+            return self.send_json({"error": t("server.bad_json")}, 400)
         # A page left open across an update still has the old screens, and
         # what they send may no longer mean what the new app takes it to mean.
         page = self.headers.get("X-Twilight-Version")
         if page and page != update.current():
-            return self.send_json({"error": "The app has been updated since this page was "
-                                            "opened. It is loading again: please repeat "
-                                            "what you were doing.", "reload": True}, 409)
+            return self.send_json({"error": t("server.updated"), "reload": True}, 409)
 
         try:
             if url.path == "/api/update":
@@ -213,7 +211,7 @@ class Handler(BaseHTTPRequestHandler):
                     new = lang.seen(self.con, body.get("keys"))
                 return self.send_json({"new": new})
             if not url.path.startswith("/api/do/"):
-                return self.send_json({"error": "no such endpoint"}, 404)
+                return self.send_json({"error": t("server.no_endpoint")}, 404)
             name = url.path[len("/api/do/"):]
             out = api.run(self.con, name, body)
         except (api.ApiError, db.LedgerError) as exc:
@@ -233,15 +231,16 @@ class Handler(BaseHTTPRequestHandler):
                 api.load_settings(self.con)
             backup.daily(self.con)
         except Exception as exc:                       # noqa: BLE001
-            problems.append(f"today's copy of the books could not be taken ({exc})")
+            problems.append(t("server.no_daily_copy", exc))
         try:
             out["state"] = api.state(self.con, month=body.get("view_month"),
                                      on=body.get("view_on"),
                                      count_date=body.get("view_count"))
         except Exception as exc:                       # noqa: BLE001
-            problems.append(f"the screen could not be brought up to date ({exc})")
+            problems.append(t("server.no_state", exc))
         if problems:
-            out["warning"] = "Saved, but " + " and ".join(problems) + "."
+            out["warning"] = (t("server.saved_but", problems[0]) if len(problems) == 1
+                              else t("server.saved_but_two", *problems))
         return out
 
 
@@ -276,7 +275,7 @@ def running_at(port, books):
 def serve(db_path=None, port=PORT, *, open_browser=True):
     already = running_at(port, Path(db_path or db.DEFAULT_DB).resolve())
     if already:
-        print(f"Twilight Ledger is already open at {already}")
+        print(t("cli.already_open", already))
         if open_browser:
             webbrowser.open(already)
         return 0
@@ -284,7 +283,7 @@ def serve(db_path=None, port=PORT, *, open_browser=True):
     api.bootstrap(con)
     rep = db.integrity(con)
     if not rep["ok"]:
-        print("The books will not be served:")
+        print(t("cli.not_served"))
         for key in ("sqlite", "foreign_keys", "unbalanced"):
             if rep[key] and rep[key] != [{"integrity_check": "ok"}]:
                 print(f"  {key}: {rep[key]}")
@@ -292,7 +291,7 @@ def serve(db_path=None, port=PORT, *, open_browser=True):
     try:
         backup.daily(con)
     except (db.LedgerError, OSError) as exc:
-        print(f"  could not take today's backup: {exc}")
+        print(t("cli.no_backup_today", exc))
 
     while not free_port(port) and port < PORT + 20:
         port += 1
@@ -301,20 +300,20 @@ def serve(db_path=None, port=PORT, *, open_browser=True):
     srv = ThreadingHTTPServer((HOST, port), Handler)
     auto.start(con.path)         # SambaPOS's backups, read by themselves
     url = f"http://{HOST}:{port}/"
-    print(f"Twilight Ledger {update.current()} — {con.path}")
-    print(f"  {rep['entries']} entries, {rep['postings']} postings, balanced")
-    print(f"  open {url}")
-    print("  press Ctrl+C to stop")
+    print(t("cli.serving", update.current(), con.path))
+    print(t("cli.serving_books", rep["entries"], rep["postings"]))
+    print(t("cli.serving_open", url))
+    print(t("cli.serving_stop"))
     if open_browser and not os.environ.get("TWILIGHT_RESTARTED"):
         threading.Timer(0.6, lambda: webbrowser.open(url)).start()
     try:
         srv.serve_forever()
     except KeyboardInterrupt:
-        print("\n  stopped")
+        print("\n" + t("cli.stopped"))
     finally:
         srv.server_close()
         con.close()
     if Handler.restart:
-        print("  updated — starting again")
+        print(t("cli.restarting"))
         return RESTART
     return 0

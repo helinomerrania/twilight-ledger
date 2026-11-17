@@ -20,6 +20,8 @@ from collections import defaultdict
 from datetime import datetime, timedelta
 from decimal import Decimal
 
+from ..words import t as words
+
 PAGE = 8192
 DATA_PAGE = 1
 KNOWN_PAGE_TYPES = {1, 2, 3, 4, 7, 8, 9, 10, 11, 13, 15, 16, 17, 18, 19, 20}
@@ -121,7 +123,7 @@ def record_parts(raw, off):
     status_a = raw[off]
     fixed_end = _u(raw[off + 2:off + 4], "<H")
     if fixed_end < 4 or off + fixed_end + 2 > len(raw):
-        raise BakError("not a row")
+        raise BakError(words("bak.not_row"))
     fixed = raw[off + 4: off + fixed_end]
     pos = off + fixed_end
     ncols = _u(raw[pos:pos + 2], "<H")
@@ -141,7 +143,7 @@ def record_parts(raw, off):
             complex_ = bool(end & 0x8000)
             end = off + (end & 0x7FFF)
             if end < start or end > len(raw):
-                raise BakError("not a row")
+                raise BakError(words("bak.not_row"))
             var.append((raw[start:end], complex_))
             start = end
     return {"type": (status_a >> 1) & 7, "fixed": fixed, "null": nullmap, "var": var}
@@ -262,7 +264,7 @@ class Backup:
     def __init__(self, data):
         self.pages = scan(data)
         if not self.pages:
-            raise BakError("there are no database pages in that file")
+            raise BakError(words("bak.no_pages"))
         self.by_au = defaultdict(list)
         for p in self.pages.values():
             self.by_au[p.au].append(p)
@@ -284,7 +286,7 @@ class Backup:
                                  "name": r["var"][0][0].decode("utf-16-le", "replace"),
                                  "type": f[13:15].decode("ascii", "replace").strip()}
         if not any(o["type"] == "U" for o in self.objects.values()):
-            raise BakError("no tables could be found in that backup")
+            raise BakError(words("bak.no_tables"))
 
         self.columns = defaultdict(list)
         for r in self._recs(AU_SYSCOLPARS):

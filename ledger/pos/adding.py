@@ -20,6 +20,7 @@ import json
 from collections import defaultdict
 
 from .. import db, post
+from ..words import t
 from . import archive, links
 
 ENTRY = {  # (what the account is, which way the money went) -> entry kind
@@ -70,12 +71,12 @@ def _from_document(con, d, linked, pots, names):
     base = {"at": d["at"], "what": d["kind"] or d["name"]}
     lines = _lines_of(con, d["id"])
     if not lines:
-        return [{**base, "status": "skip", "words": "reversed in SambaPOS", "amount": 0,
+        return [{**base, "status": "skip", "words": t("posline.reversed"), "amount": 0,
                  "account": None}]
     lines = [l for l in lines if l["amount"]]
     if not lines:
         # entered by mistake with no amount: nothing moved
-        return [{**base, "status": "skip", "words": "no amount in SambaPOS", "amount": 0,
+        return [{**base, "status": "skip", "words": t("posline.no_amount"), "amount": 0,
                  "account": None}]
     unlinked = [l for l in lines if l["account_id"] not in linked]
     if unlinked:
@@ -88,7 +89,7 @@ def _from_document(con, d, linked, pots, names):
                                      "type": l["account_type"], "link": None,
                                      "suggest": links.suggest(con, known,
                                                               drawer=bool(l["drawer"]))},
-                         "words": "needs linking"})
+                         "words": t("posline.needs_linking")})
         return held
     pot_lines = [l for l in lines if linked[l["account_id"]]["as_what"] == "pot"]
     others = [l for l in lines if linked[l["account_id"]]["as_what"] not in ("pot", "ignore")]
@@ -106,18 +107,17 @@ def _from_document(con, d, linked, pots, names):
         if a and b and a != b and to["amount"] > 0:
             return [{**base, "ref": ref, "kind": "transfer", "detail": a, "pot": a, "to": b,
                      "amount": to["amount"], "account": acct(to), "status": "new",
-                     "words": f"Moved from {a} to {b}"}]
+                     "words": t("posline.moved", a, b)}]
         if a and a == b:
             return [{**base, "status": "skip", "amount": to["amount"], "account": acct(to),
-                     "words": f"both sides are {a} in the books"}]
+                     "words": t("posline.both_sides", a)}]
     if not others:
         return [{**base, "status": "skip", "amount": sum(abs(l["amount"]) for l in lines) // 2,
                  "account": acct(lines[0]) if lines else None,
-                 "words": "left out, as linked"}]
+                 "words": t("posline.left_out")}]
     if len(pot_lines) != 1 or pots.get(linked[pot_lines[0]["account_id"]]["account_id"]) is None:
         return [{**base, "status": "manual", "amount": abs(o["amount"]), "account": acct(o),
-                 "words": "SambaPOS moved this between accounts that are not one pot "
-                          "and one other: enter it by hand"} for o in others]
+                 "words": t("posline.not_one_pot")} for o in others]
     pot = pots[linked[pot_lines[0]["account_id"]]["account_id"]]
     out = []
     for o in others:
@@ -127,21 +127,21 @@ def _from_document(con, d, linked, pots, names):
         line = {**base, "amount": abs(o["amount"]), "account": acct(o), "pot": pot}
         if kind is None:
             out.append({**line, "status": "manual",
-                        "words": f"money {'out to' if way == 'out' else 'in from'} "
-                                 f"{links.WORDS[link['as_what']].lower()}: enter it by hand"})
+                        "words": t("posline.money_out" if way == "out" else "posline.money_in",
+                                   links.word(link["as_what"]).lower())})
             continue
         detail = link["detail"] if link["as_what"] in links.LIST_KINDS \
             else names.get(link["account_id"], "?")
         out.append({**line, "status": "new", "kind": kind, "detail": detail,
                     "ref": ref if len(others) == 1 else f"{ref}:{o['pos_id']}",
-                    "words": f"{_label(kind)} · {detail}, "
-                             f"{'out of' if way == 'out' else 'into'} {pot}"})
+                    "words": t("posline.entry_out" if way == "out" else "posline.entry_in",
+                               _label(kind), detail, pot)})
     return out
 
 
 def _label(kind):
-    from ..kinds import LABELS
-    return LABELS.get(kind, kind)
+    from ..kinds import KINDS, label
+    return label(kind) if kind in KINDS else kind
 
 
 def _books(con, on):
@@ -161,13 +161,13 @@ def _takings(con, on, night, linked, pots):
     into the pot its SambaPOS account is linked to — cash into the drawer's
     pot, a card or transfer into the bank's — so the count compares cash with
     cash. With one way of paying it is the single line it always was."""
-    base = {"at": None, "what": "Takings", "kind": "daily_sales",
-            "detail": "Total sales of the day", "account": None}
+    base = {"at": None, "what": t("posline.takings"), "kind": "daily_sales",
+            "detail": t("entry.sales_detail"), "account": None}
     drawer = _drawer_pot(con, linked, pots)
     takings = night["takings"]
     if takings <= 0:
         return [{**base, "amount": takings, "pot": drawer, "status": "skip",
-                 "words": "nothing was paid"}]
+                 "words": t("posline.nothing_paid")}]
     types = {r["pos_id"]: json.loads(r["data"]) for r in db.all_(
         con, "SELECT pos_id, data FROM pos_catalog WHERE kind = 'payment_type'")}
     groups = db.all_(con, """
@@ -194,23 +194,22 @@ def _takings(con, on, night, linked, pots):
             known = links.account(con, acct) or {"pos_id": acct, "name": g["kind"]}
             was_drawer = bool(db.scalar(con, "SELECT 1 FROM pos_doc_line WHERE account_id = ? "
                                              "AND drawer = 1 LIMIT 1", (acct,)))
-            line.update(pot=None, status="held", words="needs linking", account={
+            line.update(pot=None, status="held", words=t("posline.needs_linking"), account={
                 "pos_id": acct, "name": known["name"], "type": known.get("type_name"),
                 "link": None, "suggest": links.suggest(con, known, drawer=was_drawer)})
         elif linked[acct]["as_what"] == "pot" and linked[acct]["account_id"] in pots:
             line.update(pot=pots[linked[acct]["account_id"]], status="new")
         else:
             line.update(pot=None, status="manual",
-                        words=f"paid by {g['kind']}, which is not money in a pot: "
-                              "enter it by hand")
+                        words=t("posline.paid_by_other", g["kind"]))
         lines.append(line)
     one = len(lines) == 1
     for l in lines:
         if l["status"] == "new":
             l["ref"] = (f"pos:sales:{on}:{l['amount']}" if one
                         else f"pos:sales:{on}:{l['payment']}:{l['amount']}")
-            l["words"] = (f"Sales, into {l['pot']}" if one
-                          else f"Sales by {l['payment']}, into {l['pot']}")
+            l["words"] = (t("posline.sales_into", l["pot"]) if one
+                          else t("posline.sales_by_into", l["payment"], l["pot"]))
     return lines
 
 
@@ -257,10 +256,10 @@ def plan(con, on):
         if had and not had["voided_at"]:
             line["status"] = "added"
             if (had["amount"] or 0) != line["amount"]:
-                line["note"] = f"the books have {had['amount']:,}"
+                line["note"] = t("posline.books_have", f"{had['amount']:,}")
         elif had and had["replaced_by"]:
             line["status"] = "added"
-            line["note"] = "corrected by hand in the books"
+            line["note"] = t("posline.corrected")
         elif had:
             line["status"] = "deleted"
         elif line["kind"] != "daily_sales":
@@ -278,20 +277,18 @@ def plan(con, on):
             # the same money, split differently
             for l in group:
                 l["status"] = "typed"
-                l["note"] = f"entered by hand as {sum(theirs):,} in all"
+                l["note"] = t("posline.typed_in_all", f"{sum(theirs):,}")
         else:
             for l in group:
                 l["status"] = "check"
-                l["note"] = ("entered by hand as " + ", ".join(f"{a:,}" for a in theirs)
-                             + ": put one of them right")
+                l["note"] = t("posline.typed_check", ", ".join(f"{a:,}" for a in theirs))
     new_sales = [l for l in sales_lines if l["status"] == "new"]
     if new_sales and typed_sales:
         hand_total = sum(b["amount"] or 0 for b in typed_sales)
         for l in new_sales:
             l["status"] = "typed" if hand_total == takings else "check"
         if hand_total != takings:
-            new_sales[0]["note"] = (f"entered by hand as {hand_total:,}. To make "
-                                    "SambaPOS's figure the sales, use it in step 1")
+            new_sales[0]["note"] = t("posline.typed_sales", f"{hand_total:,}", 1)
     elif new_sales and other_sales:
         new_sales[0]["replaces"] = sum(b["amount"] or 0 for b in other_sales)
     only_books = [{"id": b["id"], "kind": b["kind"], "label": _label(b["kind"]),
@@ -315,7 +312,7 @@ def add(con, p):
                               "kind = 'daily_sales' AND source = 'pos' AND voided_at IS NULL",
                          (on,)):
             if e["source_ref"] not in keep:
-                post.void(con, e["id"], why="replaced by a fuller copy of the night")
+                post.void(con, e["id"], why=t("why.fuller_copy"))
                 replaced.append(e["id"])
     for line in p["lines"]:
         if line["status"] != "new":

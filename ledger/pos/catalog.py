@@ -12,6 +12,7 @@ from datetime import date, datetime, timedelta
 from decimal import Decimal
 
 from .. import db, money
+from ..words import t
 
 # which SambaPOS table each kind comes from
 KINDS = {
@@ -99,7 +100,7 @@ def menu(con, nights=30):
     for it in rows(con, "menu_item"):
         if it["_gone"]:
             continue
-        name = it.get("Name") or f"item {it['Id']}"
+        name = it.get("Name") or t("menu.unnamed", it["Id"])
         ports = []
         for p in sorted(portions[it["Id"]], key=lambda p: p["Id"]):
             for pr in prices[p["Id"]] or [{}]:

@@ -9,8 +9,9 @@ someone moved August.
 import json
 
 from . import accruals, db, post, queries
-from .dates import month_end, month_name, month_of, next_month, tonight
+from .dates import month_end, month_of, month_words, next_month, tonight
 from .money import split_shares
+from .words import t
 
 
 def ready(con, month):
@@ -18,40 +19,37 @@ def ready(con, month):
     stops, warnings = [], []
     per = queries.period(con, month)
     if per and per["status"] == "closed":
-        stops.append(f"{month} is already closed.")
+        stops.append(t("close.already", month))
     elif month >= month_of(tonight()):
         # closed at one in the morning on its last night, the rest of that
         # night's takings and payments could no longer be put in
-        stops.append(f"{month_name(month)} is still running. It can be closed once "
-                     "its last night is over.")
+        stops.append(t("close.running", *month_words(month)))
     bad = db.all_(con, "SELECT * FROM unbalanced LIMIT 1")
     if bad:
-        stops.append("The books do not balance.")
+        stops.append(t("close.unbalanced"))
     c = queries.cogs(con, month)
     if not c["date"] or c["date"] < f"{month}-01":
-        stops.append("There is no stock count in this month, so the cost of "
-                     "goods cannot be measured.")
+        stops.append(t("close.no_count"))
     prev = _previous(con, month)
     if prev and queries.period(con, prev) and queries.period(con, prev)["status"] == "open":
-        stops.append(f"{prev} is still open. Months close in order.")
+        stops.append(t("close.prev_open", prev))
     if c["raw"] < 0:
-        warnings.append(f"The cost of goods comes out at {c['raw']:,}, which is "
-                        "negative — a delivery may be missing.")
+        warnings.append(t("close.negative_cogs", f"{c['raw']:,}"))
     for p in queries.payroll(con, month):
         if p["still_to_pay"]:
-            warnings.append(f"{p['name']} is still owed {p['still_to_pay']:,}.")
+            warnings.append(t("close.owed", p["name"], f"{p['still_to_pay']:,}"))
     for f in queries.fixed_outstanding(con, month):
         if f["still_to_pay"]:
-            warnings.append(f"{f['name']} is still owed {f['still_to_pay']:,}.")
+            warnings.append(t("close.owed", f["name"], f"{f['still_to_pay']:,}"))
     if not queries.period_total(con, "exp:electricity", month):
-        warnings.append("No electricity has been charged to this month yet.")
+        warnings.append(t("close.no_electricity"))
     elif queries.electricity_outstanding(con, month):
-        warnings.append(f"Electricity is still owed "
-                        f"{queries.electricity_outstanding(con, month):,}.")
+        warnings.append(t("close.electricity_owed",
+                          f"{queries.electricity_outstanding(con, month):,}"))
     breaks = [x for x in queries.cash_counts(con)
               if x["diff"] != 0 and x["on"][:7] == month]
     for b in breaks:
-        warnings.append(f"The count on {b['on']} is out by {b['diff']:+,}.")
+        warnings.append(t("close.count_out", b["on"], f"{b['diff']:+,}"))
     return {"can_close": not stops, "stops": stops, "warnings": warnings,
             "count_date": c["date"], "result": queries.live_result(con, month)}
 
@@ -82,15 +80,15 @@ def close_month(con, month):
     count_date = c["date"]
     if c["value"]:
         post.record(con, kind="cogs", on=count_date, period=month,
-                    detail="Cost of goods sold", source="close",
+                    detail=t("close.cogs_detail"), source="close",
                     legs=[(post.account_id(con, "exp:cogs"), c["value"]),
                           (post.account_id(con, "inv:stock"), -c["value"])])
     have = queries.balance(con, "inv:stock", as_of=count_date)
     drift = have - c["closing"]
     if drift:
         post.record(con, kind="stock_difference", on=count_date, period=month,
-                    detail="Stock difference", source="close",
-                    memo="brings the stock account onto the count",
+                    detail=t("close.difference_detail"), source="close",
+                    memo=t("close.difference_memo"),
                     legs=[(post.account_id(con, "exp:variance"), drift),
                           (post.account_id(con, "inv:stock"), -drift)])
 
@@ -108,7 +106,7 @@ def close_month(con, month):
             continue
         post.record(con, kind="profit_share", on=month_end(month), period=month,
                     detail=name, source="close",
-                    memo=f"share of {month}",
+                    memo=t("close.share_memo", month),
                     legs=[(post.account_id(con, "eq:profit"), amount),
                           (post.account_by_name(con, "partner", name), -amount)])
     result["allocated"] = cut
@@ -134,18 +132,17 @@ def reopen_month(con, month):
     """
     per = queries.period(con, month)
     if not per or per["status"] != "closed":
-        raise db.LedgerError(f"{month} is not closed")
+        raise db.LedgerError(t("close.not_closed", month))
     later = [m for m in queries.months(con)
              if m > month and queries.period(con, m)
              and queries.period(con, m)["status"] == "closed"]
     if later:
-        raise db.LedgerError(
-            f"{later[0]} was closed after this one. Reopen months newest first.")
+        raise db.LedgerError(t("close.reopen_order", later[0]))
     con.execute("UPDATE period SET status='open', closed_at=NULL WHERE month=?",
                 (month,))
     for e in db.all_(con, "SELECT id FROM entry WHERE period = ? AND source = 'close' "
                           "AND voided_at IS NULL", (month,)):
-        post.void(con, e["id"], why=f"{month} reopened")
+        post.void(con, e["id"], why=t("close.reopened", month))
     db.audit(con, "period.reopen", f"period:{month}",
              {"kept_result": json.loads(per["result"]) if per["result"] else None})
     return {"month": month, "reopened": True}

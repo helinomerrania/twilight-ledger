@@ -20,6 +20,7 @@ from itertools import pairwise
 from . import db
 from .pos import uses
 from .registry import ApiError, action
+from .words import t
 
 POOL = 3                     # pairs of counts pooled into the ratio
 DROP = Fraction(8, 10)       # a pair under 80% of the ratio before it is pointed out
@@ -118,16 +119,15 @@ def view(con):
 
 
 @action("per_hookah", guard_pots=False,
-        summary=lambda con, body, out: (f"{out['name']} is now used with each hookah"
-                                        if out["on"] else
-                                        f"{out['name']} is no longer counted by hookahs"))
+        summary=lambda con, body, out: t("change.per_hookah_on" if out["on"]
+                                         else "change.per_hookah_off", out["name"]))
 def _per_hookah(con, body):
     it = db.one(con, "SELECT si.*, sc.letter FROM stock_item si JOIN stock_category sc "
                      "ON sc.id = si.category_id WHERE si.id = ?", (int(body["id"]),))
     if not it:
-        raise ApiError("no such stock item")
+        raise ApiError(t("item.none"))
     on = bool(body.get("on"))
     if on and it["letter"] in ("A", "B"):
-        raise ApiError("tobacco goes by recipe, not by a ratio")
+        raise ApiError(t("ratio.tobacco"))
     con.execute("UPDATE stock_item SET per_hookah = ? WHERE id = ?", (1 if on else 0, it["id"]))
     return {"name": it["name"], "on": on}

@@ -20,6 +20,7 @@ import re
 from fractions import Fraction
 
 from .money import half_up
+from .words import t
 
 MILLI = 1000
 
@@ -80,14 +81,14 @@ def parse_packs(text):
         return None
     m = _PACKS.fullmatch(s)
     if not m:
-        raise ValueError("say how it comes, like 12×10×50 g, 3×1 kg or 250 g")
+        raise ValueError(t("packs.say_how"))
     *counts, size, unit = m.groups()
     grams = Fraction(size) * (1000 if unit.startswith("k") else 1)
     if grams.denominator != 1 or not 1 <= grams <= 100000:
-        raise ValueError("a pack is whole grams, from 1 g to 100 kg")
+        raise ValueError(t("packs.grams"))
     counts = [int(n) for n in counts if n]
     if any(not 1 <= n <= 1000 for n in counts):
-        raise ValueError("a box holds from 1 to 1000 of what is inside it")
+        raise ValueError(t("packs.box"))
     counts = [n for n in counts if n > 1]        # 12×1×50 g is 12×50 g
     per_carton, per_block = ([None, None] + counts)[-2:]
     return {"grams": int(grams), "per_block": per_block, "per_carton": per_carton}
@@ -115,7 +116,7 @@ def pack_levels(conv, packs):
     g = packs["grams"] if packs else c["grams_per_pack"]
     per_block = packs["per_block"] if packs else c["packs_per_block"]
     per_carton = packs["per_carton"] if packs else c["blocks_per_carton"]
-    small = f"{g / 1000:g} kg" if g >= 1000 and g % 100 == 0 else f"{g} g"
+    small = t("unit.kg", f"{g / 1000:g}") if g >= 1000 and g % 100 == 0 else t("unit.g", g)
     out = [("loose", small)]
     if per_block and per_block > 1:
         out.insert(0, ("blocks", f"{per_block}×{small}"))
@@ -132,11 +133,11 @@ def levels(letter, conv=None, packs=None, pack_size=None):
     if letter == "B":
         return pack_levels(conv, packs)
     if letter == "E":
-        return [("packages", "cartons"), ("loose", "buckets")]
+        return [("packages", t("level.cartons")), ("loose", t("level.buckets"))]
     per = int(pack_size or 1)
     if per > 1:
-        return [("packages", f"packages of {per}"), ("loose", "pieces")]
-    return [("packages", "pieces")]
+        return [("packages", t("level.packages_of", per)), ("loose", t("level.pieces"))]
+    return [("packages", t("level.pieces"))]
 
 
 def quantity(letter, *, packages_milli=0, blocks_milli=0, loose_milli=0,

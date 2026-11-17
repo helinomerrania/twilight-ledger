@@ -12,27 +12,28 @@ Reading the recipes below is the fastest way to understand the books.
 import json
 
 from . import db
-from .dates import month_name, month_of, today
+from .dates import month_of, month_words, today
 from .money import to_int
+from .words import t
 
 # ----------------------------------------------------------------- accounts
 
 # Accounts that always exist, whatever Mohammed has set up.
 SYSTEM_ACCOUNTS = [
-    # code,              name,                     kind,        normal
-    ("rev:sales",        "Sales",                  "revenue",   -1),
-    ("rev:other",        "Other income",           "revenue",   -1),
-    ("exp:daily",        "Daily expenses",         "expense",    1),
-    ("exp:rent",         "Rent",                   "expense",    1),
-    ("exp:salaries",     "Salaries",               "expense",    1),
-    ("exp:electricity",  "Electricity",            "expense",    1),
-    ("exp:cogs",         "Cost of goods sold",     "expense",    1),
-    ("exp:variance",     "Stock difference",       "expense",    1),
-    ("inv:stock",        "Stock on hand",          "inventory",  1),
-    ("acc:electricity",  "Electricity not yet paid", "accrual",  -1),
-    ("eq:opening",       "Opening balances",       "partner",   -1),
-    ("eq:profit",        "Profit allocated",       "partner",   -1),
-    ("eq:difference",    "Cash differences",       "expense",    1),
+    # code,              its name in the words,         kind,        normal
+    ("rev:sales",        "account.sales",               "revenue",   -1),
+    ("rev:other",        "account.other_income",        "revenue",   -1),
+    ("exp:daily",        "account.daily_expenses",      "expense",    1),
+    ("exp:rent",         "account.rent",                "expense",    1),
+    ("exp:salaries",     "account.salaries",            "expense",    1),
+    ("exp:electricity",  "account.electricity",         "expense",    1),
+    ("exp:cogs",         "account.cogs",                "expense",    1),
+    ("exp:variance",     "account.stock_difference",    "expense",    1),
+    ("inv:stock",        "account.stock_on_hand",       "inventory",  1),
+    ("acc:electricity",  "account.electricity_unpaid",  "accrual",   -1),
+    ("eq:opening",       "account.opening",             "partner",   -1),
+    ("eq:profit",        "account.profit",              "partner",   -1),
+    ("eq:difference",    "account.cash_differences",    "expense",    1),
 ]
 
 
@@ -54,7 +55,7 @@ def ensure_account(con, code, name, kind, normal, meta=None, sort=0, active=1):
 
 def ensure_system_accounts(con):
     for code, name, kind, normal in SYSTEM_ACCOUNTS:
-        ensure_account(con, code, name, kind, normal)
+        ensure_account(con, code, t(name), kind, normal)
 
 
 def slug(text):
@@ -70,7 +71,7 @@ def slug(text):
 def account_id(con, code):
     r = con.execute("SELECT id FROM account WHERE code = ?", (code,)).fetchone()
     if not r:
-        raise db.LedgerError(f"no such account: {code}")
+        raise db.LedgerError(t("account.no_such", code))
     return r["id"]
 
 
@@ -84,7 +85,7 @@ def account_by_name(con, kind, name):
                     (kind, f"{_prefix(kind)}:{slug(name)}")).fetchone()
     if r:
         return r["id"]
-    raise db.LedgerError(f"no {kind} called {name!r}")
+    raise db.LedgerError(t("account.none", kind, repr(name)))
 
 
 def main_pot(con):
@@ -95,7 +96,7 @@ def main_pot(con):
     r = con.execute("SELECT id, name FROM account WHERE kind = 'cash' AND active = 1 "
                     "ORDER BY sort, name LIMIT 1").fetchone()
     if not r:
-        raise db.LedgerError("there is no cash pot. Add one in Setup.")
+        raise db.LedgerError(t("pot.no_cash_pot"))
     return r
 
 
@@ -126,8 +127,7 @@ def period_status(con, month):
 
 def assert_open(con, month):
     if period_status(con, month) == "closed":
-        raise db.LedgerError(
-            f"{month} is closed. Reopen it on the Month screen before changing it.")
+        raise db.LedgerError(t("month.closed", month))
     if not con.execute("SELECT 1 FROM period WHERE month = ?", (month,)).fetchone():
         # A month the books have not reached is one before they began. Months
         # close in order, so with a later one closed it is closed too: an entry
@@ -136,8 +136,8 @@ def assert_open(con, month):
         later = con.execute("SELECT MIN(month) FROM period WHERE month > ? "
                             "AND status = 'closed'", (month,)).fetchone()[0]
         if later:
-            raise db.LedgerError(f"{month_name(month)} is before the books begin, and "
-                                 f"{month_name(later)} is already closed.")
+            raise db.LedgerError(t("month.before_books", *month_words(month),
+                                   *month_words(later)))
 
 
 # -------------------------------------------------------------------- writing
@@ -159,11 +159,10 @@ def record(con, *, kind, legs, on=None, period=None, detail=None, memo=None,
     period = period or month_of(on)
     legs = [(int(a), to_int(v)) for a, v in legs if to_int(v) != 0]
     if not legs:
-        raise db.LedgerError("nothing to record: every leg was zero")
+        raise db.LedgerError(t("entry.zero_legs"))
     off = sum(v for _, v in legs)
     if off != 0:
-        raise db.LedgerError(
-            f"{kind} does not balance: the legs are out by {off} dinar")
+        raise db.LedgerError(t("entry.unbalanced", kind, off))
     if not allow_closed:
         assert_open(con, period)
     ensure_period(con, period)
@@ -187,7 +186,7 @@ def void(con, entry_id, why=None):
     """
     r = con.execute("SELECT * FROM entry WHERE id = ?", (entry_id,)).fetchone()
     if not r:
-        raise db.LedgerError(f"no entry {entry_id}")
+        raise db.LedgerError(t("entry.none", entry_id))
     if r["voided_at"]:
         return entry_id
     assert_open(con, r["period"])
@@ -213,37 +212,32 @@ def unvoid(con, entry_id):
     correction, because the correction is already standing in its place."""
     r = con.execute("SELECT * FROM entry WHERE id = ?", (entry_id,)).fetchone()
     if not r:
-        raise db.LedgerError(f"no entry {entry_id}")
+        raise db.LedgerError(t("entry.none", entry_id))
     if not r["voided_at"]:
         return entry_id
     if r["replaced_by"]:
-        raise db.LedgerError("that entry was corrected, not deleted. "
-                             "The corrected one is in the books.")
+        raise db.LedgerError(t("entry.corrected"))
     if r["source"] == "close":
         # written by closing the month and taken back by opening it again:
         # back beside the month's own figures it would count them twice
-        raise db.LedgerError("that was written by closing the month. Close the month "
-                             "again and it is written again.")
+        raise db.LedgerError(t("entry.by_closing"))
     assert_open(con, r["period"])
     retired = db.one(con, "SELECT a.name FROM posting p JOIN account a ON a.id = p.account_id "
                           "WHERE p.entry_id = ? AND a.kind IN ('cash', 'float') "
                           "AND a.active = 0", (entry_id,))
     if retired:
         # its money would land in a pot nothing shows and nothing can move
-        raise db.LedgerError(f"{retired['name']} has been retired. Bring it back in "
-                             "Setup first, then put this back.")
+        raise db.LedgerError(t("pot.retired_put_back", retired["name"]))
     if r["kind"] == "daily_sales":
         # A night has one set of takings: a figure typed in, or SambaPOS's
         # lines, one for each way of paying. Putting one back beside another
         # would count the night's sales twice. (SambaPOS's lines a fuller copy
         # of the night replaced are marked replaced, and refused above.)
-        there = [t for t in takings(con, r["happened_on"], but=entry_id)
-                 if r["source"] != "pos" or t["source"] != "pos"]
+        there = [x for x in takings(con, r["happened_on"], but=entry_id)
+                 if r["source"] != "pos" or x["source"] != "pos"]
         if there:
-            raise db.LedgerError(
-                f"{r['happened_on']} already has its takings in the books "
-                f"({sum(t['amount'] for t in there):,}). Delete those first "
-                "if this is the right figure.")
+            raise db.LedgerError(t("takings.already", r["happened_on"],
+                                   f"{sum(x['amount'] for x in there):,}"))
     con.execute("UPDATE entry SET voided_at = NULL WHERE id = ?", (entry_id,))
     con.execute("UPDATE receipt SET voided_at = NULL WHERE entry_id = ?", (entry_id,))
     db.audit(con, "entry.unvoid", f"entry:{entry_id}",
@@ -258,11 +252,12 @@ def unvoid(con, entry_id):
 # place that knows it is double entry.
 
 def sales(con, amount, *, on=None, into=None, period=None, source="manual",
-          source_ref=None, detail="Total sales of the day"):
+          source_ref=None, detail=None):
     """A night's takings: cash goes up, revenue goes up."""
     cash = pot_id(con, into)
     rev = account_id(con, "rev:sales")
-    return record(con, kind="daily_sales", on=on, period=period, detail=detail,
+    return record(con, kind="daily_sales", on=on, period=period,
+                  detail=detail or t("entry.sales_detail"),
                   source=source, source_ref=source_ref,
                   legs=[(cash, to_int(amount)), (rev, -to_int(amount))])
 
@@ -289,7 +284,7 @@ def charge_fixed(con, amount, *, name, period):
     the liability, which is why rent shows in October's result even when the
     cash leaves in November. Every monthly charge goes on the Rent line.
     """
-    liability = ensure_account(con, f"acc:{slug(name)}", f"{name} not yet paid",
+    liability = ensure_account(con, f"acc:{slug(name)}", t("account.not_yet_paid", name),
                                "accrual", -1)
     return record(con, kind="fixed_charge", on=f"{period}-01", period=period,
                   detail=name,
@@ -299,7 +294,7 @@ def charge_fixed(con, amount, *, name, period):
 
 def pay_fixed(con, amount, *, name, on=None, out_of=None, period=None):
     """Pay a fixed cost. Settles the liability; never touches profit again."""
-    liability = ensure_account(con, f"acc:{slug(name)}", f"{name} not yet paid",
+    liability = ensure_account(con, f"acc:{slug(name)}", t("account.not_yet_paid", name),
                                "accrual", -1)
     cash = pot_id(con, out_of)
     return record(con, kind="fixed_payment", on=on, period=period, detail=name,
@@ -389,9 +384,9 @@ def transfer(con, amount, *, frm, to, on=None, period=None, **src):
     a = account_by_name_any(con, frm)
     b = account_by_name_any(con, to)
     if a == b:
-        raise db.LedgerError("a transfer needs two different pots")
+        raise db.LedgerError(t("transfer.same_pot"))
     return record(con, kind="transfer", on=on, period=period,
-                  detail=frm, memo=f"{frm} to {to}", **src,
+                  detail=frm, memo=t("transfer.memo", frm, to), **src,
                   legs=[(b, to_int(amount)), (a, -to_int(amount))])
 
 
@@ -400,14 +395,14 @@ def account_by_name_any(con, name):
     r = con.execute("SELECT id FROM account WHERE kind IN ('cash','float') AND name = ?",
                     (name,)).fetchone()
     if not r:
-        raise db.LedgerError(f"no pot called {name!r}")
+        raise db.LedgerError(t("pot.none_quoted", repr(name)))
     return r["id"]
 
 
 def electricity_used(con, amount, *, period, note=None):
     """What the meter says was used this month, charged to the month."""
     return record(con, kind="electricity_charge", on=f"{period}-01", period=period,
-                  detail="Electricity", memo=note,
+                  detail=t("entry.electricity"), memo=note,
                   legs=[(account_id(con, "exp:electricity"), to_int(amount)),
                         (account_id(con, "acc:electricity"), -to_int(amount))])
 
@@ -415,7 +410,7 @@ def electricity_used(con, amount, *, period, note=None):
 def pay_electricity(con, amount, *, on=None, out_of=None, period=None):
     cash = pot_id(con, out_of)
     return record(con, kind="electricity_payment", on=on, period=period,
-                  detail="Electricity",
+                  detail=t("entry.electricity"),
                   legs=[(account_id(con, "acc:electricity"), to_int(amount)),
                         (cash, -to_int(amount))])
 

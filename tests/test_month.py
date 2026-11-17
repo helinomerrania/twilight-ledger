@@ -56,7 +56,7 @@ class SoFar(unittest.TestCase):
         api.run(self.con, "partner_draw", {"amount": 100000, "who": "Frank Hale",
                                            "on": DAY})
         d = queries.drawings(self.con, NOW)
-        self.assertEqual((d["taken"], d["basis"]), (100000, "so far"))
+        self.assertEqual((d["taken"], d["basis"]), (100000, "so_far"))
         self.assertEqual(d["profit"], queries.so_far(self.con, NOW)["net"])
 
     def test_a_finished_month_has_no_so_far(self):

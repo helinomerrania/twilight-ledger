@@ -1,20 +1,6 @@
 #!/usr/bin/env python3
-"""Twilight Ledger — the books for Twilight Rest & Cafe.
-
-    python twilight.py                  open the books in a browser
-    python twilight.py check             is everything sound?
-    python twilight.py backup            set a copy aside now (and to the second folder)
-    python twilight.py restore FILE      put a copy back as the live books
-    python twilight.py update            check GitHub for a newer version and install it
-    python twilight.py pos save          keep tonight from SambaPOS, before the reset
-    python twilight.py pos import FILE   keep what is in a SambaPOS backup
-    python twilight.py import FILE       bring in a twilight-books.json export
-    python twilight.py verify FILE       compare against the old app's figures
-    python twilight.py close 2026-11     close a month from the command line
-    python twilight.py sql "SELECT ..."  ask the books a question directly
-
-Nothing here needs installing beyond Python itself.
-"""
+"""Twilight Ledger, from the command line: `python twilight.py --help` says
+what it can do (its words, like every other, are in web/lang/en.json)."""
 import argparse
 import json
 import sys
@@ -23,6 +9,7 @@ from pathlib import Path
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 
 from ledger import db                                        # noqa: E402
+from ledger.words import t                                   # noqa: E402
 
 
 def cmd_serve(a):
@@ -33,17 +20,17 @@ def cmd_serve(a):
 def cmd_check(a):
     con = db.connect(a.db)
     rep = db.integrity(con)
-    print(f"books        {con.path}")
-    print(f"migrations   {', '.join(rep['migrations'])}")
-    print(f"entries      {rep['entries']:,}")
-    print(f"postings     {rep['postings']:,}")
-    print(f"sqlite       {rep['sqlite'][0]['integrity_check']}")
-    print(f"foreign keys {'clean' if not rep['foreign_keys'] else rep['foreign_keys']}")
-    print(f"balanced     {'yes' if not rep['unbalanced'] else rep['unbalanced']}")
+    print(t("cli.check_books", con.path))
+    print(t("cli.check_migrations", ", ".join(rep["migrations"])))
+    print(t("cli.check_entries", f"{rep['entries']:,}"))
+    print(t("cli.check_postings", f"{rep['postings']:,}"))
+    print(t("cli.check_sqlite", rep["sqlite"][0]["integrity_check"]))
+    print(t("cli.check_keys", t("cli.clean") if not rep["foreign_keys"] else rep["foreign_keys"]))
+    print(t("cli.check_balanced", t("cli.yes") if not rep["unbalanced"] else rep["unbalanced"]))
     total = db.scalar(con, "SELECT COALESCE(SUM(amount), 0) FROM posting")
-    print(f"debits less credits, across every account: {total}")
+    print(t("cli.check_total", total))
     ok = rep["ok"] and total == 0
-    print("\nsound" if ok else "\nNOT SOUND")
+    print("\n" + t("cli.sound" if ok else "cli.not_sound"))
     return 0 if ok else 1
 
 
@@ -51,12 +38,12 @@ def cmd_backup(a):
     from ledger import backup
     con = db.connect(a.db)
     out = backup.run(con, why=a.why)
-    print(f"copied to {out['file']}  ({out['entries']:,} entries, checked)")
+    print(t("cli.copied", out["file"], f"{out['entries']:,}"))
     if out["second"]:
-        print(f"and to {out['second']}: " + ("checked" if out["second_ok"]
-                                            else f"FAILED - {out['second_error']}"))
+        print(t("cli.copied_second", out["second"]) if out["second_ok"]
+              else t("cli.copied_second_failed", out["second"], out["second_error"]))
     else:
-        print("no second folder is set, so this copy is only on this PC's disk")
+        print(t("cli.no_second"))
     return 0 if out["second_ok"] is not False else 1
 
 
@@ -72,41 +59,38 @@ def cmd_restore(a):
     from ledger import backup
     here = _open_on(a.db)
     if here:
-        print(f"The app is open at {here}. Stop it first: close the black window it "
-              "runs in (closing the browser does not stop it), then run this again.")
+        print(t("cli.open_stop_first", here))
         return 1
     if not a.yes:
-        print("This replaces the live books with the copy. The books being replaced")
-        print("are set aside first. Run again with --yes to go ahead.")
-        print("\nCopies on this PC, newest last:")
+        print(t("cli.restore_warn"))
+        print("\n" + t("cli.restore_copies"))
         for f in backup.copies(a.db)[-12:]:
             print("  ", f)
         return 1
     out = backup.restore(a.db, a.file)
-    print(f"restored {out['entries']:,} entries from {out['restored_from']}")
+    print(t("cli.restored", f"{out['entries']:,}", out["restored_from"]))
     if out["previous_kept_as"]:
-        print(f"the books that were replaced are kept as {out['previous_kept_as']}")
+        print(t("cli.restored_kept", out["previous_kept_as"]))
     return 0
 
 
 def cmd_update(a):
     from ledger import update
     info = update.check()
-    print(f"this is version {info['current']}; GitHub has {info['latest']}")
+    print(t("cli.versions", info["current"], info["latest"]))
     if not info["newer"]:
-        print("nothing to do")
+        print(t("cli.nothing_to_do"))
         return 0
     if a.check:
         return 0
     here = _open_on(a.db)
     if here:
-        print(f"The app is open at {here}. Update it there, in Setup under This app, "
-              "or stop it first by closing the black window it runs in.")
+        print(t("cli.open_update_there", here))
         return 1
     con = db.connect(a.db)
     out = update.download_and_apply(con)
-    print(f"updated to {out['to']}. The books were copied first: {out['books_copy']}")
-    print(f"the previous code is kept as {out['old_code']}")
+    print(t("cli.updated", out["to"], out["books_copy"]))
+    print(t("cli.old_code", out["old_code"]))
     return 0
 
 
@@ -120,56 +104,55 @@ def cmd_pos(a):
     try:
         if a.what == "test":
             p = sources.test_live(s["server"], s["database"])
-            print(f"connected to {p.get('db')} as {p.get('who')}: {p.get('tickets')} tickets "
-                  f"in SambaPOS now, {p.get('open_periods')} work period(s) open")
+            print(t("cli.pos_connected", p.get("db"), p.get("who"), p.get("tickets"),
+                    p.get("open_periods")))
             return 0
         if a.what == "nights":
             for r in db.all_(con, "SELECT night, SUM(tickets) t, SUM(takings) k, SUM(unpaid) u "
                                   "FROM pos_period WHERE tickets > 0 GROUP BY night ORDER BY night"):
-                print(f"{r['night']}  {r['t']:>4} tickets  {r['k']:>12,} paid"
-                      + (f"  {r['u']:,} unpaid" if r["u"] else ""))
+                line = t("cli.pos_night", r["night"], f"{r['t']:>4}", f"{r['k']:>12,}")
+                print(line + (t("cli.pos_night_unpaid", f"{r['u']:,}") if r["u"] else ""))
             return 0
         if a.what == "import":
             if not a.files:
-                print("name the backup files to bring in")
+                print(t("cli.pos_name_files"))
                 return 1
             lines = []
             for f in a.files:
-                lines += pos.keep(con, sources.read_backup(f), f"from {Path(f).name}")
+                lines += pos.keep(con, sources.read_backup(f), t("pos.kept_from", Path(f).name))
         else:
-            print(f"reading SambaPOS ({s['database']} on {s['server']})...")
-            lines = pos.keep(con, sources.read_live(s["server"], s["database"]), "straight from its database")
+            print(t("cli.pos_reading", s["database"], s["server"]))
+            lines = pos.keep(con, sources.read_live(s["server"], s["database"]),
+                             t("pos.kept_live"))
     except sources.PosError as exc:
         print(f"\n{exc}", file=sys.stderr)
         return 1
     lines = [l for l in lines if l["tickets"]]
     if not lines:
-        print("SambaPOS has no tickets to keep. If the reset has already run, that night")
-        print("is gone from SambaPOS: enter its takings from the printed report.")
+        print(t("cli.pos_no_tickets"))
         return 1
     worry = False
     for night in sorted({l["night"] for l in lines}):
         n = archive.night(con, night)
-        print(f"\nthe night of {night}: {n['tickets']} tickets, {n['takings']:,} paid", end="")
+        print("\n" + t("cli.pos_kept_night", night, n["tickets"], f"{n['takings']:,}"), end="")
         if n["unpaid"]:
             worry = True
-            print(f", {n['unpaid']:,} still unpaid on {n['open_tickets']} open ticket(s)")
+            print(t("cli.pos_kept_unpaid", f"{n['unpaid']:,}", n["open_tickets"]))
         else:
-            print(", everything paid")
+            print(t("cli.pos_kept_paid"))
         if n["documents"]:
             moved = [d for d in n["documents"] if not d["reversed"]]
-            print(f"  and {len(moved)} other record(s) - expenses, advances - "
-                  f"{n['drawer_out']:,} out of the drawer"
-                  + (f", {n['drawer_in']:,} into it" if n["drawer_in"] else ""))
+            print(t("cli.pos_kept_records", len(moved), f"{n['drawer_out']:,}")
+                  + (t("cli.pos_kept_records_in", f"{n['drawer_in']:,}") if n["drawer_in"] else ""))
         if not n["ended"] and a.what == "save":
-            print("  the work period is still open; if more is sold, save again before the reset")
+            print(t("cli.pos_still_open_save"))
         elif not n["ended"]:
-            print("  (its work period was still open when this copy was made)")
+            print(t("cli.pos_was_open"))
     if a.what == "save":
         if worry:
-            print("\nClose the open tickets in SambaPOS, then run this again before the reset.")
+            print("\n" + t("cli.pos_close_tickets"))
         else:
-            print("\nKept. It is safe to run the reset now.")
+            print("\n" + t("cli.pos_safe"))
     return 1 if worry else 0
 
 
@@ -191,9 +174,9 @@ def cmd_close(a):
         return 0
     with db.tx(con):
         out = close_month(con, a.month)
-    print(f"{a.month} closed. Net {out['result']['net']:,}")
+    print(t("cli.closed", a.month, f"{out['result']['net']:,}"))
     for w in out["warnings"]:
-        print(f"  note: {w}")
+        print(t("cli.note", w))
     return 0
 
 
@@ -202,7 +185,7 @@ def cmd_sql(a):
     con = db.connect(a.db, migrate=False, readonly=True)
     rows = db.all_(con, a.query)
     if not rows:
-        print("(no rows)")
+        print(t("cli.no_rows"))
         return 0
     cols = rows[0].keys()
     width = {c: max(len(c), *(len(str(r[c])) for r in rows)) for c in cols}
@@ -210,60 +193,60 @@ def cmd_sql(a):
     print("  ".join("-" * width[c] for c in cols))
     for r in rows:
         print("  ".join(str(r[c]).ljust(width[c]) for c in cols))
-    print(f"\n{len(rows)} rows")
+    print("\n" + t("cli.rows", len(rows)))
     return 0
 
 
 def main(argv=None):
     ap = argparse.ArgumentParser(
-        prog="twilight", description=__doc__,
+        prog="twilight", description=t("cli.help"),
         formatter_class=argparse.RawDescriptionHelpFormatter)
-    ap.add_argument("--db", default=db.DEFAULT_DB, help="where the books are kept")
+    ap.add_argument("--db", default=db.DEFAULT_DB, help=t("cli.help_db"))
     sub = ap.add_subparsers(dest="cmd")
 
-    s = sub.add_parser("serve", help="open the books in a browser (the default)")
+    s = sub.add_parser("serve", help=t("cli.help_serve"))
     s.add_argument("--port", type=int, default=8788)
     s.add_argument("--no-browser", action="store_true")
     s.set_defaults(fn=cmd_serve)
 
-    s = sub.add_parser("check", help="is everything sound?")
+    s = sub.add_parser("check", help=t("cli.help_check"))
     s.set_defaults(fn=cmd_check)
 
-    s = sub.add_parser("backup", help="set a copy aside now")
+    s = sub.add_parser("backup", help=t("cli.help_backup"))
     s.add_argument("--why", default="manual")
     s.set_defaults(fn=cmd_backup)
 
-    s = sub.add_parser("restore", help="put a copy back as the live books")
+    s = sub.add_parser("restore", help=t("cli.help_restore"))
     s.add_argument("file")
     s.add_argument("--yes", action="store_true")
     s.set_defaults(fn=cmd_restore)
 
-    s = sub.add_parser("update", help="install a newer version from GitHub")
-    s.add_argument("--check", action="store_true", help="only say whether there is one")
+    s = sub.add_parser("update", help=t("cli.help_update"))
+    s.add_argument("--check", action="store_true", help=t("cli.help_update_check"))
     s.set_defaults(fn=cmd_update)
 
-    s = sub.add_parser("pos", help="keep SambaPOS nights before the reset deletes them")
+    s = sub.add_parser("pos", help=t("cli.help_pos"))
     s.add_argument("what", choices=["save", "import", "test", "nights"])
-    s.add_argument("files", nargs="*", help="for import: SambaPOS backups (.zip or .bak)")
+    s.add_argument("files", nargs="*", help=t("cli.help_pos_files"))
     s.set_defaults(fn=cmd_pos)
 
-    s = sub.add_parser("import", help="bring in a twilight-books.json export")
+    s = sub.add_parser("import", help=t("cli.help_import"))
     s.add_argument("file")
     s.add_argument("--as-is", action="store_true",
-                   help="keep the five back-dated payments as they were")
+                   help=t("cli.help_as_is"))
     s.set_defaults(fn=cmd_import)
 
-    s = sub.add_parser("verify", help="compare against the old app's figures")
+    s = sub.add_parser("verify", help=t("cli.help_verify"))
     s.add_argument("file")
     s.set_defaults(fn=cmd_verify)
 
-    s = sub.add_parser("close", help="close a month")
+    s = sub.add_parser("close", help=t("cli.help_close"))
     s.add_argument("month")
     s.add_argument("--dry-run", action="store_true",
-                   help="say what would happen, change nothing")
+                   help=t("cli.help_dry_run"))
     s.set_defaults(fn=cmd_close)
 
-    s = sub.add_parser("sql", help="ask the books a question (read-only)")
+    s = sub.add_parser("sql", help=t("cli.help_sql"))
     s.add_argument("query")
     s.set_defaults(fn=cmd_sql)
 

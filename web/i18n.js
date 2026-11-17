@@ -5,7 +5,8 @@
    swapped in as it appears, and the page runs right to left. A piece is one
    element's own words, with what changes in it taken out as {0}, {1}…:
    numbers, dates, the names in the books, anything already in Kurdish, and
-   the elements inside it. So "Filled Apple Mix: 500 g" and "Filled House Mix:
+   the elements inside it. (The English itself is in lang/en.json, which the
+   screens and the server share.) So "Filled Apple Mix: 500 g" and "Filled House Mix:
    300 g" are the one piece "Filled {0}: {1} g", and the Kurdish can put {0}
    and {1} wherever its grammar wants them.
 
@@ -28,12 +29,9 @@ const LEAVE = 'script, style, noscript, textarea, code, pre, bdi, svg, [translat
    times and numbers. */
 const FILES = String.raw`[A-Za-z]:\\(?:[\w.\- ]+\\)*[\w.\-]*|https?:\/\/\S+|[\w\-.:]+\.(?:zip|bak|db|json|csv|txt|pdf|bat)\b`;
 const KURDISH = String.raw`\p{Script=Arabic}(?:[\p{Script=Arabic}\p{M}\p{Cf}]|\s(?=\p{Script=Arabic}))*`;
-const MONTHS = 'January February March April May June July August September October November December'.split(' ');
-const SHORT = MONTHS.map(m => m.slice(0, 3));
-const DAYS = 'Monday Tuesday Wednesday Thursday Friday Saturday Sunday'.split(' ');
-const CALENDAR = String.raw`(?:${MONTHS.join('|')})(?=\s\d{4})|(?<=\d\s)(?:${SHORT.join('|')})\b|\b(?:${DAYS.join('|')})\b`;
+let CALENDAR = '';                       // month and day names: set by calendar()
 const NUMBERS = String.raw`\d{4}-\d{2}-\d{2}(?:[ T]\d{2}:\d{2}(?::\d{2})?)?|\d{1,2}:\d{2}(?::\d{2})?|[-−+]?\d+(?:[,.]\d+)*%?`;
-const CALENDAR_WORD = new RegExp(`^(?:${[...MONTHS, ...SHORT, ...DAYS].join('|')})$`);
+let CALENDAR_WORD = /^$/;
 
 let lang = 'en';
 let dict = new Map();
@@ -80,7 +78,8 @@ function forget() {
    out; so are three phrases the app itself writes into the books when nothing
    was typed. A name that is also one of the app's own words ("Ice" beside
    "Ice cream", "Electricity", "Foil") is taken as the word, so the app's
-   sentences keep their words: the shipped text tells which they are. */
+   sentences keep their words: the app's own words (lang/en.json) tell which
+   they are. */
 
 const NAME_FIELDS = new Set([
   'name', 'who', 'detail', 'brand', 'flavour', 'mix', 'pot', 'pot_to', 'main_pot', 'item',
@@ -89,16 +88,23 @@ const NAME_FIELDS = new Set([
 ]);
 const APP_WORDS = new Set(['checks', 'lang', 'recent', 'categories', 'accounts',
                            'targets', 'legs', 'differences', 'levels', 'update']);
-const MADE = new Set(['Several items', 'Total sales of the day', 'not known']);
+let MADE = new Set();
 const escape = s => s.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
 
 let shipped = '';
 const appWord = new Map();
+let WORDS = {};
 
-/** The text that ships with the app (web/lang/catalog.json). */
-export function setCatalog(keys) {
-  shipped = Array.isArray(keys) ? keys.join('\n') : '';
+/** The app's own words (lang/en.json), once they are read: the month and day
+    names, the sentences that tell a name from a word, and the phrases the app
+    writes into the books itself. What only the black window says, and the
+    prompt for Gemini, are not among the screens' words. */
+export function useWords(words) {
+  WORDS = words;
+  calendar(words);
+  shipped = Object.entries(words).filter(([k]) => !/^(cli|gemini)\./.test(k)).map(([, v]) => v).join('\n');
   appWord.clear();
+  MADE = new Set([words['receipt.several'], words['entry.sales_detail'], words['cash.not_known']]);
 }
 
 const usedByApp = s => {
@@ -147,12 +153,17 @@ function keyOf(text, holes = []) {
   return { key, vals, words: letters > 1 || (letters === 1 && vals.length > 0) };
 }
 
-/** The key the screens would use for `text`: how new English is added to the
-    catalog (web/lang/catalog.json) with the key the screens will look it up by. */
-export const keyFor = text => {
-  const k = keyOf(String(text || ''));
-  return k && k.words ? k.key : null;
-};
+/** The month and day names, from the words: a month with its year, a short
+    month after a day, and a day, are values in a piece of text, translated on
+    their own. */
+function calendar(words) {
+  const months = Array.from({ length: 12 }, (_, i) => words[`month.${String(i + 1).padStart(2, '0')}`]);
+  const short = months.map(m => m.slice(0, 3));
+  const days = Array.from({ length: 7 }, (_, i) => words[`day.${i + 1}`]);
+  CALENDAR = String.raw`(?:${months.join('|')})(?=\s\d{4})|(?<=\d\s)(?:${short.join('|')})\b|\b(?:${days.join('|')})\b`;
+  CALENDAR_WORD = new RegExp(`^(?:${[...months, ...short, ...days].join('|')})$`);
+  pattern = build();
+}
 
 const ownText = el => {
   let s = '';
@@ -316,26 +327,12 @@ export const BATCH = 150;
 export function prompt(keys) {
   const chosen = [...dict].filter(([k]) => !k.includes('{') && k.length <= 24 && k.split(' ').length <= 3)
     .sort((a, b) => a[0].length - b[0].length).slice(0, 60);
-  return `You are translating the screens of a small bookkeeping app into Central Kurdish
-(Sorani), written in the Kurdish Arabic script. The owner and staff of a hookah lounge
-and café in Ranya, Kurdistan, use it every night to record sales, expenses, cash, stock
-and staff.
-
-Rules:
-- Plain, short, everyday Kurdish, the way a café owner in Ranya speaks, not formal or
-  literary. Buttons and headings stay short.
-- Keep every {0}, {1}, {2}… exactly as written. Each stands for a number, a date, a name
-  or another part of the screen. Move it to wherever Kurdish grammar needs it, but never
-  drop, change or add one.
-- Use the same Kurdish word for the same English word every time.
-- Keep SambaPOS, Gemini, Tailscale, GitHub, USB and PDF as they are.
-- Answer with JSON only: one object whose keys are the line numbers below and whose
-  values are the Kurdish, like {"1": "…", "2": "…"}, with nothing before or after it.
-${chosen.length ? `
-Words already used on these screens. Keep using them:
+  // taken as they are written: the prompt's own {0}, {1}… are words to Gemini
+  return `${WORDS['gemini.prompt']}\n${chosen.length ? `
+${WORDS['gemini.chosen']}
 ${chosen.map(([k, v]) => `${k} = ${v}`).join('\n')}
 ` : ''}
-Lines:
+${WORDS['gemini.lines']}
 ${keys.map((k, i) => `${i + 1}. ${k}`).join('\n')}
 `;
 }
@@ -346,7 +343,7 @@ export function answer(text, batch = []) {
   const s = String(text || '');
   const from = s.indexOf('{');
   const to = s.lastIndexOf('}');
-  if (from < 0 || to < from) throw new Error('no JSON');
+  if (from < 0 || to < from) throw new SyntaxError();
   const o = JSON.parse(s.slice(from, to + 1));
   const out = {};
   for (const [k, v] of Object.entries(o)) {

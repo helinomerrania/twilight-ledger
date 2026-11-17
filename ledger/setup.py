@@ -10,24 +10,30 @@ import json
 import re
 
 from . import accruals, backup, db, money, post, queries, stock
-from .dates import month_name, month_of, next_day, next_month, today, ymd
+from .dates import month_of, month_words, next_day, next_month, today, ymd
 from .money import to_int
 from .registry import ApiError, action, clean_date, name_of
+from .words import t
 
-_WORDS = {
-    "account_add": "Added {name}", "account_rename": "Renamed to {name}",
-    "account_active": "{verb} {who}",
-    "set_share": "Changed {who}'s share to {share}%",
-    "set_salary": "Changed {who}'s salary to {amount}",
-    "staff_started": "{who} started on {on}",
-    "fixed_set": "Set {name} to {amount} a month",
-    "fixed_remove": "Stopped charging {name}",
-    "list_add": "Added {value} to a list", "list_remove": "Removed {value} from a list",
-    "item_add": "Added stock item {name}", "item_update": "Changed stock item {who}",
-    "tare_set": "Changed a bucket weight", "business_set": "Changed the business details",
-    "conversions_set": "Changed the unit conversions",
-    "elec_factors_set": "Changed the electricity factors",
-    "backup_folder": "Changed the second backup folder",
+# The line each Setup action leaves in Recent changes (in the words, change.*),
+# and what of the request goes into it, in order.
+_LINES = {
+    "account_add": ("change.account_add", "name"),
+    "account_rename": ("change.account_rename", "name"),
+    "set_share": ("change.set_share", "who", "share"),
+    "set_salary": ("change.set_salary", "who", "amount"),
+    "staff_started": ("change.staff_started", "who", "on"),
+    "fixed_set": ("change.fixed_set", "name", "amount"),
+    "fixed_remove": ("change.fixed_remove", "name"),
+    "list_add": ("change.list_add", "value"),
+    "list_remove": ("change.list_remove", "value"),
+    "item_add": ("change.item_add", "name"),
+    "item_update": ("change.item_update", "who"),
+    "tare_set": ("change.tare_set",),
+    "business_set": ("change.business_set",),
+    "conversions_set": ("change.conversions_set",),
+    "elec_factors_set": ("change.elec_factors_set",),
+    "backup_folder": ("change.backup_folder",),
 }
 
 
@@ -39,18 +45,24 @@ def _line(name):
             table = ("stock_item" if name.startswith("item")
                      else "tare" if name.startswith("tare") else "account")
             r = db.one(con, f"SELECT name FROM {table} WHERE id = ?", (int(body["id"]),))
-            ctx["who"] = r["name"] if r else "something"
-        ctx["verb"] = "Brought back" if body.get("active") else "Retired"
+            ctx["who"] = r["name"] if r else t("change.something")
         if name == "account_active" and body.get("back_on") and body.get("active"):
-            return f"{ctx['who']} came back on {body['back_on']}"
+            return t("change.came_back", ctx["who"], body["back_on"])
         if name == "account_active" and body.get("left_on") and not body.get("active"):
-            return f"{ctx['who']} left on {body['left_on']}"
+            return t("change.left", ctx["who"], body["left_on"])
+        if name == "account_active":
+            return t("change.brought_back" if body.get("active") else "change.retired",
+                     ctx.get("who"))
         if name == "account_add" and body.get("kind") == "staff" and body.get("started_on"):
-            return f"Added {body.get('name')}, who started on {body['started_on']}"
-        try:
-            return _WORDS.get(name, name).format(**ctx)
-        except (KeyError, IndexError, ValueError):
-            return _WORDS.get(name, name).split(" {")[0]
+            return t("change.staff_added", body.get("name"), body["started_on"])
+        if "share" in ctx:
+            ctx["share"] = f"{ctx['share']}%"
+        line, *fields = _LINES[name]
+        values = [ctx.get(f) for f in fields]
+        if any(v is None for v in values):
+            # said without what it is missing: the words before the first gap
+            return t(line, *("{}" for _ in fields)).split(" {")[0]
+        return t(line, *values)
     return make
 
 
@@ -84,7 +96,7 @@ def _taken(con, kind, name, but=None):
 def _account(con, body):
     a = db.one(con, "SELECT * FROM account WHERE id = ?", (int(body["id"]),))
     if not a or a["kind"] not in _KIND or a["code"].startswith("eq:"):
-        raise ApiError("no such account")
+        raise ApiError(t("account.none_here"))
     return a
 
 
@@ -92,10 +104,10 @@ def _account(con, body):
 def _account_add(con, body):
     kind = body.get("kind")
     if kind not in _KIND:
-        raise ApiError("that is not something Setup can add")
+        raise ApiError(t("account.cannot_add"))
     name = name_of(body)
     if _taken(con, kind, name):
-        raise ApiError(f"there is already a {name}")
+        raise ApiError(t("name.taken", name))
     prefix, normal = _KIND[kind]
     code, n = f"{prefix}:{post.slug(name)}", 2
     while db.one(con, "SELECT 1 FROM account WHERE code = ?", (code,)):
@@ -103,8 +115,8 @@ def _account_add(con, body):
     meta = {"share": _share(body.get("share"))} if kind == "partner" else {}
     started = None
     if kind == "staff" and body.get("started_on"):
-        started = meta["started_on"] = _a_day(body["started_on"], "the day they started",
-                                              "Add them on their first day of work.")
+        started = meta["started_on"] = _a_day(body["started_on"], t("day.started"),
+                                              t("day.started_wait"))
     sort = db.scalar(con, "SELECT COALESCE(MAX(sort), 0) + 1 FROM account "
                           "WHERE kind = ? AND sort < 90", (kind,))
     aid = post.ensure_account(con, code, name, kind, normal, meta=meta, sort=sort)
@@ -126,7 +138,7 @@ def _account_rename(con, body):
     a = _account(con, body)
     name = name_of(body)
     if _taken(con, a["kind"], name, but=a["id"]):
-        raise ApiError(f"there is already a {name}")
+        raise ApiError(t("name.taken", name))
     con.execute("UPDATE account SET name = ? WHERE id = ?", (name, a["id"]))
     return {"id": a["id"]}
 
@@ -140,32 +152,27 @@ def _account_active(con, body):
     active = 1 if body.get("active") else 0
     if not active and a["kind"] in ("cash", "float") \
             and queries.balance(con, a["code"]) != 0:
-        raise ApiError(f"{a['name']} still holds "
-                       f"{queries.balance(con, a['code']):,}. Move it out first.")
+        raise ApiError(t("pot.still_holds", a["name"], f"{queries.balance(con, a['code']):,}"))
     meta = json.loads(a["meta"] or "{}")
     was_left = meta.get("left_after")
     if a["kind"] == "staff":
         if active:
             if body.get("back_on") and meta.get("left_on"):
                 # back after time away: the days between are not paid for
-                back = _a_day(body["back_on"], "the day they came back",
-                              "Bring them back once they are here.")
+                back = _a_day(body["back_on"], t("day.back"), t("day.back_wait"))
                 if back <= meta["left_on"]:
-                    raise ApiError(f"they left on {meta['left_on']}, so they came back after it")
+                    raise ApiError(t("day.back_after", meta["left_on"]))
                 if back != next_day(meta["left_on"]):
                     meta["away"] = (meta.get("away") or []) + [[meta["left_on"], back]]
             for k in ("left_after", "left_on", "former"):
                 meta.pop(k, None)
         elif body.get("left_on"):
             # their last day of work: that month is charged for the days worked
-            on = _a_day(body["left_on"], "the day they left",
-                        "Mark them as left once they have gone.")
+            on = _a_day(body["left_on"], t("day.left"), t("day.left_wait"))
             if meta.get("started_on") and on < meta["started_on"]:
-                raise ApiError(f"they started on {meta['started_on']}, so they cannot "
-                               "have left before it")
+                raise ApiError(t("day.left_before_start", meta["started_on"]))
             if meta.get("away") and on < meta["away"][-1][1]:
-                raise ApiError(f"they came back on {meta['away'][-1][1]}, so they cannot "
-                               "have left again before it")
+                raise ApiError(t("day.left_before_back", meta["away"][-1][1]))
             meta["left_on"], meta["left_after"] = on, month_of(on)
         else:
             meta["left_after"] = month_of(today())
@@ -183,14 +190,12 @@ def _account_active(con, body):
     share = float(meta.get("share") or 0) if a["kind"] == "partner" else 0
     if share and not active:
         # closing splits a month's profit by every share, theirs too
-        note = (f"{a['name']} still has a {share * 100:g}% share of the profit. Give it to "
-                "the others in Setup, or every month closed from now on is split with "
-                f"{a['name']} too.")
+        note = t("share.still_has", a["name"], f"{share * 100:g}%", a["name"])
     return {"id": a["id"], "note": note}
 
 
 @action("clock_ok", guard_pots=False,
-        summary=lambda con, body, out: f"Said the computer's date is right: {today()}")
+        summary=lambda con, body, out: t("change.clock_ok", today()))
 def _clock_ok(con, body):
     """The computer's date is far ahead of the books, and it is right: the
     months between are charged as any months the app was not opened in."""
@@ -204,11 +209,11 @@ def _staff_started(con, body):
     they started in is charged for the days of it they worked."""
     a = _account(con, body)
     if a["kind"] != "staff":
-        raise ApiError("only staff have a first day of work")
-    on = _a_day(body.get("on"), "the day they started", "Add them on their first day of work.")
+        raise ApiError(t("day.only_staff"))
+    on = _a_day(body.get("on"), t("day.started"), t("day.started_wait"))
     meta = json.loads(a["meta"] or "{}")
     if not a["active"] and meta.get("left_on") and on > meta["left_on"]:
-        raise ApiError(f"they left on {meta['left_on']}, so they cannot have started after it")
+        raise ApiError(t("day.started_after_left", meta["left_on"]))
     was = meta.get("started_on")
     meta["started_on"] = on
     con.execute("UPDATE account SET meta = ? WHERE id = ?",
@@ -228,11 +233,11 @@ def _a_day(value, what, wait):
     try:
         on = ymd(value)
     except ValueError:
-        raise ApiError(f"{what} is not a date") from None
+        raise ApiError(t("date.not_a_date", what)) from None
     if not on:
-        raise ApiError(f"{what} is needed")
+        raise ApiError(t("field.needed", what))
     if on > today():
-        raise ApiError(f"{on} has not come yet. {wait}")
+        raise ApiError(t("day.not_come", on, wait))
     return clean_date(on, what=what)
 
 
@@ -240,12 +245,10 @@ def _closed_note(months):
     """What to say when closed months keep a salary that is now wrong."""
     if not months:
         return None
-    names = [month_name(m) for m in months]
-    one = len(names) == 1
-    said = names[0] if one else ", ".join(names[:-1]) + " and " + names[-1]
-    return (f"{said} {'is' if one else 'are'} closed, so the salary charged in "
-            f"{'it' if one else 'them'} stands. Reopen {'it' if one else 'them, newest first,'} "
-            "on Month to put it right.")
+    if len(months) == 1:
+        return t("salary.closed_one", *month_words(months[0]))
+    names = [" ".join(month_words(m)) for m in months]
+    return t("salary.closed_many", t("list.and", ", ".join(names[:-1]), names[-1]))
 
 
 def _share(v):
@@ -255,9 +258,9 @@ def _share(v):
     try:
         s = float(str(v if v is not None else 0).strip().rstrip("%") or 0)
     except (TypeError, ValueError):
-        raise ApiError("a share is a percentage") from None
+        raise ApiError(t("share.percentage")) from None
     if not 0 <= s <= 100:
-        raise ApiError("a share is between 0 and 100")
+        raise ApiError(t("share.range", 0, 100))
     return round(s / 100, 4)
 
 
@@ -290,10 +293,10 @@ def _save_salary(con, account_id, amount, month=None):
 def _set_salary(con, body):
     a = _account(con, body)
     if a["kind"] != "staff":
-        raise ApiError("only staff have a salary")
+        raise ApiError(t("salary.only_staff"))
     amount = to_int(body.get("amount"), "salary")
     if amount < 0:
-        raise ApiError("a salary cannot be negative")
+        raise ApiError(t("salary.negative"))
     month = body.get("view_month")
     started = json.loads(a["meta"] or "{}").get("started_on")
     if started and not db.one(con, "SELECT 1 FROM salary WHERE account_id = ?", (a["id"],)):
@@ -320,7 +323,7 @@ def _fixed_set(con, body):
     name = _spelt(name_of(body), [r["name"] for r in db.all_(con, "SELECT name FROM fixed_charge")])
     value = to_int(body.get("amount"), "amount")
     if value < 0:
-        raise ApiError("a monthly charge cannot be negative")
+        raise ApiError(t("fixed.negative"))
     month = _effective_month(con, body)
     old = db.one(con, "SELECT * FROM fixed_charge WHERE name = ?", (name,))
     if old and old["amount"] == value and old["active"] and not old["to_month"] \
@@ -348,7 +351,7 @@ def _fixed_remove(con, body):
 @action("list_add", guard_pots=False, summary=_line("list_add"))
 def _list_add(con, body):
     if body.get("list") not in ("expense", "reason", "income", "bill"):
-        raise ApiError("no such list")
+        raise ApiError(t("list.none"))
     value = _spelt(name_of(body, "value"),
                    [r["value"] for r in db.all_(con, "SELECT value FROM pick_list WHERE list = ?",
                                                 (body["list"],))])
@@ -377,18 +380,18 @@ def _item_add(con, body):
                             "sc ON sc.id = si.category_id WHERE si.id = ?",
                        (int(body["brand"]),))
         if not brand or brand["parent_id"]:
-            raise ApiError("a flavour belongs to a brand")
+            raise ApiError(t("item.flavour_brand"))
         body = {**body, "letter": brand["letter"],
                 "name": brand["name"] + FLAVOUR + name_of(body), "price": body.get("price") or 0}
     cat = db.one(con, "SELECT * FROM stock_category WHERE letter = ?",
                  (str(body.get("letter") or "").upper(),))
     if not cat:
-        raise ApiError("pick a category")
+        raise ApiError(t("item.pick_category"))
     name = name_of(body)
     # "hill leaf" beside Hill Leaf would be counted under either, or both
     if any(_as_read(r["name"]) == _as_read(name) for r in db.all_(
             con, "SELECT name FROM stock_item WHERE category_id = ?", (cat["id"],))):
-        raise ApiError(f"{name} is already in that category")
+        raise ApiError(t("item.in_category", name))
     unit = {"A": "kg", "B": "kg", "E": "carton"}.get(cat["letter"], "piece")
     sort = db.scalar(con, "SELECT COALESCE(MAX(sort), 0) + 1 FROM stock_item")
     cur = con.execute(
@@ -418,9 +421,9 @@ def _shelf_empty(con, item):
                        "AND (l.qty_milli > 0 OR l.value > 0)",
                   (last["id"], item["id"], item["id"]))
     if left["n"]:
-        raise ApiError(f"the count on {last['count_date']} found {item['name']} on the shelves"
-                       f"{f', worth {left['value']:,}' if left['value'] else ''}. Retire it "
-                       "after a count that no longer finds it.")
+        raise ApiError(t("item.on_shelves_worth", last["count_date"], item["name"],
+                         f"{left['value']:,}") if left["value"] else
+                       t("item.on_shelves", last["count_date"], item["name"]))
 
 
 @action("item_update", guard_pots=False, summary=_line("item_update"))
@@ -431,13 +434,13 @@ def _item_update(con, body):
     item = db.one(con, "SELECT si.*, sc.letter FROM stock_item si JOIN stock_category sc "
                        "ON sc.id = si.category_id WHERE si.id = ?", (int(body["id"]),))
     if not item:
-        raise ApiError("no such item")
+        raise ApiError(t("item.no_such"))
     if "name" in body:
         _rename(con, item, name_of(body))
     if "price" in body:
         price = to_int(body.get("price"), "price")
         if price < 0:
-            raise ApiError("a price cannot be negative")
+            raise ApiError(t("item.price_negative"))
         con.execute("UPDATE stock_item SET price = ? WHERE id = ?", (price, item["id"]))
     if "pack_size" in body:
         con.execute("UPDATE stock_item SET pack_size = ? WHERE id = ?",
@@ -449,7 +452,7 @@ def _item_update(con, body):
                     (1 if body.get("active") else 0, item["id"], item["id"]))
     if "packs" in body:
         if item["letter"] != "B":
-            raise ApiError("only sealed tobacco comes in packs and blocks")
+            raise ApiError(t("item.only_sealed_packs"))
         try:
             packs = stock.parse_packs(body.get("packs"))
         except ValueError as e:
@@ -461,9 +464,9 @@ def _item_update(con, body):
         try:
             low = stock.to_milli(raw) if raw else None
         except (ValueError, ZeroDivisionError):
-            raise ApiError("a minimum is a number") from None
+            raise ApiError(t("item.minimum_number")) from None
         if low is not None and low < 0:
-            raise ApiError("a minimum cannot be less than nothing")
+            raise ApiError(t("item.minimum_negative"))
         con.execute("UPDATE stock_item SET minimum_milli = ? WHERE id = ?", (low, item["id"]))
     if body.get("barcode_add"):
         _barcode_add(con, item, body["barcode_add"])
@@ -488,7 +491,7 @@ def _rename(con, item, name):
         if any(_as_read(r["name"]) == _as_read(new) for r in db.all_(
                 con, "SELECT name FROM stock_item WHERE id <> ? AND category_id = "
                      "(SELECT category_id FROM stock_item WHERE id = ?)", (item_id, item_id))):
-            raise ApiError(f"{new} is already in that category")
+            raise ApiError(t("item.in_category", new))
     for item_id, new in renamed:
         con.execute("UPDATE stock_item SET name = ? WHERE id = ?", (new, item_id))
 
@@ -507,11 +510,11 @@ def _barcode_add(con, item, raw):
         if not code:
             continue
         if not re.fullmatch(r"[0-9A-Za-z._-]{3,64}", code):
-            raise ApiError(f"{code[:20]} is not a barcode")
+            raise ApiError(t("barcode.bad", code[:20]))
         other = db.one(con, "SELECT si.id, si.name FROM stock_barcode b JOIN stock_item si "
                             "ON si.id = b.item_id WHERE b.code = ?", (code,))
         if other and other["id"] != item["id"]:
-            raise ApiError(f"{code} is already {other['name']}")
+            raise ApiError(t("barcode.taken", code, other["name"]))
         con.execute("INSERT OR IGNORE INTO stock_barcode(code, item_id) VALUES (?,?)",
                     (code, item["id"]))
 
@@ -520,7 +523,7 @@ def _barcode_add(con, item, raw):
 def _tare_set(con, body):
     grams = to_int(body.get("grams"), "grams")
     if grams < 0:
-        raise ApiError("a bucket cannot weigh less than nothing")
+        raise ApiError(t("tare.negative"))
     if body.get("id"):
         con.execute("UPDATE tare SET grams = ? WHERE id = ?", (grams, int(body["id"])))
     else:
@@ -538,7 +541,7 @@ def _business_set(con, body):
     if "note" in body and body["note"] not in (None, ""):
         note = to_int(body["note"], "note")
         if note < 1 or note > 100000:
-            raise ApiError("the smallest banknote must be a sensible figure")
+            raise ApiError(t("business.note"))
         b["note"] = note
         money.set_note(note)
     db.set_setting(con, "business", b)
@@ -552,7 +555,7 @@ def _item_supplier(con, body):
     sid = body.get("supplier_id") or None
     if sid and not db.one(con, "SELECT 1 FROM account WHERE id = ? AND kind = 'supplier'",
                           (int(sid),)):
-        raise ApiError("no such supplier")
+        raise ApiError(t("supplier.none"))
     con.execute("UPDATE stock_item SET supplier_id = ? WHERE id = ?",
                 (int(sid) if sid else None, int(body["id"])))
     return {}
@@ -572,7 +575,7 @@ def _conversions_set(con, body):
         if key in body and body[key] not in (None, ""):
             v = to_int(body[key], key)
             if not low <= v <= high:
-                raise ApiError(f"{key} must be between {low} and {high}")
+                raise ApiError(t("conversions.range", key, low, high))
             conv[key] = v
     db.set_setting(con, "conversions", conv)
     return {}
@@ -588,7 +591,7 @@ def _elec_factors_set(con, body):
         if key in body and body[key] not in (None, ""):
             v = to_int(body[key], key)
             if v < 0 or (key.endswith("Share") and v < 1):
-                raise ApiError("that is not a usable figure")
+                raise ApiError(t("factors.bad"))
             f[key] = v
     db.set_setting(con, "elec_factors", f)
     return {}

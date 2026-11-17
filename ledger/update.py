@@ -33,6 +33,7 @@ from datetime import datetime
 from pathlib import Path
 
 from . import backup, db
+from .words import t
 
 REPO = "helinomerrania/twilight-ledger"
 BRANCH = "main"
@@ -80,16 +81,12 @@ def _get(url, limit=MAX_DOWNLOAD):
     except urllib.error.HTTPError as exc:
         # GitHub was reached and said no; that is not the same as no internet
         if exc.code == 404:
-            raise db.LedgerError("GitHub has nothing to offer at that address yet, "
-                                 "so nothing was changed.") from exc
-        raise db.LedgerError(f"GitHub answered with an error ({exc.code}), so "
-                             "nothing was changed.") from exc
+            raise db.LedgerError(t("update.nothing_there")) from exc
+        raise db.LedgerError(t("update.github_error", exc.code)) from exc
     except (urllib.error.URLError, OSError, ValueError) as exc:
-        raise db.LedgerError(
-            "GitHub could not be reached, so nothing was changed. "
-            f"({getattr(exc, 'reason', exc)})") from exc
+        raise db.LedgerError(t("update.unreachable", getattr(exc, "reason", exc))) from exc
     if len(data) > limit:
-        raise db.LedgerError("the download is far larger than this app should be")
+        raise db.LedgerError(t("update.too_large"))
     return data
 
 
@@ -98,7 +95,7 @@ def check(root=ROOT):
     have = current(root)
     latest = _get(_version_url(), limit=200).decode("utf-8", "replace").strip()
     if not latest or len(latest) > 40 or not any(ch.isdigit() for ch in latest):
-        raise db.LedgerError("GitHub answered, but not with a version number")
+        raise db.LedgerError(t("update.no_version"))
     return {"current": have, "latest": latest,
             "newer": parse(latest) > parse(have)}
 
@@ -116,7 +113,7 @@ def _members(zf):
         rel = n[len(prefix):]
         parts = Path(rel).parts
         if not rel or rel.startswith(("/", "\\")) or ".." in parts or ":" in rel:
-            raise db.LedgerError(f"the download contains an unsafe path: {n}")
+            raise db.LedgerError(t("update.unsafe_path", n))
         out[rel] = n
     return out
 
@@ -127,15 +124,14 @@ def inspect(zip_bytes, con=None):
     try:
         zf = zipfile.ZipFile(io.BytesIO(zip_bytes))
     except zipfile.BadZipFile as exc:
-        raise db.LedgerError("the download is not a zip file") from exc
+        raise db.LedgerError(t("update.not_zip")) from exc
     files = _members(zf)
     for needed in ("twilight.py", "VERSION", "ledger/db.py", "ledger/post.py",
                    "web/index.html"):
         if needed not in files:
-            raise db.LedgerError(f"the download is not this app: {needed} is missing")
+            raise db.LedgerError(t("update.not_this_app", needed))
     if any(rel == "data" or rel.startswith("data/") for rel in files):
-        raise db.LedgerError("the download contains a data folder. An update "
-                             "never carries books, so this one is refused.")
+        raise db.LedgerError(t("update.data_folder"))
     version = zf.read(files["VERSION"]).decode("utf-8", "replace").strip()
 
     for rel, name in files.items():
@@ -143,8 +139,7 @@ def inspect(zip_bytes, con=None):
             try:
                 compile(zf.read(name).decode("utf-8"), rel, "exec")
             except (SyntaxError, UnicodeDecodeError) as exc:
-                raise db.LedgerError(f"the new version is broken ({rel}: {exc}). "
-                                     "Nothing was changed.") from exc
+                raise db.LedgerError(t("update.broken", rel, exc)) from exc
 
     if con is not None:
         applied = {r["name"]: r["sha"] for r in con.execute(
@@ -152,14 +147,10 @@ def inspect(zip_bytes, con=None):
         for name, sha in applied.items():
             rel = f"ledger/migrations/{name}"
             if rel not in files:
-                raise db.LedgerError(
-                    f"the new version has lost {name}, which these books have "
-                    "already been through. Nothing was changed.")
+                raise db.LedgerError(t("update.lost_migration", name))
             text = zf.read(files[rel]).decode("utf-8").replace("\r\n", "\n")
             if not db.same_migration(name, sha, db._sha(text)):
-                raise db.LedgerError(
-                    f"the new version has rewritten {name}, which these books "
-                    "have already been through. Nothing was changed.")
+                raise db.LedgerError(t("update.rewritten_migration", name))
     return {"version": version, "files": files, "zip": zf}
 
 
@@ -208,13 +199,11 @@ def _opens(stage, con):
                              capture_output=True, text=True, timeout=300, cwd=str(stage),
                              check=False)
     except (OSError, subprocess.TimeoutExpired) as exc:
-        raise db.LedgerError(f"the new version could not be tried ({exc}). "
-                             "Nothing was changed.") from exc
+        raise db.LedgerError(t("update.not_tried", exc)) from exc
     if run.returncode != 0:
         said = [ln for ln in (run.stderr or run.stdout or "").strip().splitlines() if ln.strip()]
-        raise db.LedgerError("the new version could not open a copy of these books ("
-                             + (said[-1].strip() if said else f"it stopped with {run.returncode}")
-                             + "). Nothing was changed.")
+        raise db.LedgerError(t("update.cannot_open_books", said[-1].strip() if said
+                               else t("update.stopped_with", run.returncode)))
 
 
 def apply(zip_bytes, con, root=ROOT):
@@ -224,7 +213,7 @@ def apply(zip_bytes, con, root=ROOT):
     found = inspect(zip_bytes, con)
     have, version = current(root), found["version"]
     if parse(version) <= parse(have):
-        raise db.LedgerError(f"this is already version {have}; the download is {version}")
+        raise db.LedgerError(t("update.already", have, version))
     files, zf = found["files"], found["zip"]
 
     # 1 (on disk). unpack out of the way
@@ -250,8 +239,7 @@ def apply(zip_bytes, con, root=ROOT):
         saved = backup.run(con, why=f"before-update-{version}")
     except (db.LedgerError, OSError) as exc:
         shutil.rmtree(stage, ignore_errors=True)
-        raise db.LedgerError("could not set the books aside first, so nothing "
-                             f"was changed: {exc}") from exc
+        raise db.LedgerError(t("update.no_backup", exc)) from exc
 
     # 4. the code being replaced, so this can be undone by unzipping it back
     stamp = datetime.now().strftime("%Y%m%d-%H%M%S")
@@ -290,10 +278,7 @@ def apply(zip_bytes, con, root=ROOT):
             except OSError:
                 pass
         shutil.rmtree(stage, ignore_errors=True)
-        raise db.LedgerError(
-            f"the update could not be put in place ({exc}). The app was left "
-            "as it was. Close anything that has the app's folder open and try "
-            "again.") from exc
+        raise db.LedgerError(t("update.not_put_in_place", exc)) from exc
 
     for _, old in moved + replaced_files:
         try:
@@ -301,7 +286,7 @@ def apply(zip_bytes, con, root=ROOT):
         except OSError:
             pass
     shutil.rmtree(stage, ignore_errors=True)
-    db.audit(con, "update", None, {"summary": f"Updated the app from {have} to {version}",
+    db.audit(con, "update", None, {"summary": t("update.done", have, version),
                                    "from": have, "to": version})
     return {"from": have, "to": version, "books_copy": saved["file"],
             "old_code": str(old_code)}

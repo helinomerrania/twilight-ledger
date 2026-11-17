@@ -17,13 +17,17 @@ from fractions import Fraction
 from . import db, post, queries
 from .dates import month_of, next_month, today
 from .money import mround_fraction, to_int
+from .words import t
 
 
-def _charged(con, account_code, period, kind, detail):
+def _charged(con, account_code, period, kind, detail=None):
+    """What a month has been charged on an account: by one charge's name (a
+    rent's), or all of them (the electricity, whatever its entries say)."""
     return db.scalar(con,
         "SELECT COALESCE(SUM(m.amount), 0) FROM movement m "
-        "WHERE m.code = ? AND m.period = ? AND m.entry_kind = ? AND m.detail = ?",
-        (account_code, period, kind, detail))
+        "WHERE m.code = ? AND m.period = ? AND m.entry_kind = ? "
+        "AND (? IS NULL OR m.detail = ?)",
+        (account_code, period, kind, detail, detail))
 
 
 def _salary_charged(con, account_id, period):
@@ -224,8 +228,7 @@ def electricity_bill(con, *, private_price=0, elevator_price=0,
     if last_reading not in (None, "") and now_reading not in (None, ""):
         units = to_int(now_reading) - to_int(last_reading)
         if units < 0:
-            raise db.LedgerError("the meter cannot have gone backwards: the reading "
-                                 "now is lower than the last one")
+            raise db.LedgerError(t("meter.backwards"))
     public = mround_fraction(Fraction(units * f["publicRate"], max(f["publicShare"], 1))) \
         if units else 0
     return {"private": private, "elevator": elevator, "public": public,
@@ -235,14 +238,14 @@ def electricity_bill(con, *, private_price=0, elevator_price=0,
 def set_electricity(con, month, *, private_price=0, elevator_price=0,
                     last_reading=None, now_reading=None):
     if not _is_open(con, month):
-        raise db.LedgerError(f"{month} is closed")
+        raise db.LedgerError(t("month.is_closed", month))
     bill = electricity_bill(con, private_price=private_price,
                             elevator_price=elevator_price,
                             last_reading=last_reading, now_reading=now_reading)
-    have = _charged(con, "exp:electricity", month, "electricity_charge", "Electricity")
+    have = _charged(con, "exp:electricity", month, "electricity_charge")
     if bill["total"] != have:
         post.electricity_used(con, bill["total"] - have, period=month,
-                              note="from the meter reading")
+                              note=t("meter.memo"))
     note = json.dumps({"pp": to_int(private_price), "pe": to_int(elevator_price),
                        "last": last_reading, "now": now_reading})
     con.execute("INSERT INTO meter_reading(read_on, units, rate, note) VALUES (?,?,?,?) "
@@ -273,7 +276,6 @@ def electricity_view(con, month):
     return {"private_price": saved.get("pp") or "", "elevator_price": saved.get("pe") or "",
             "last_reading": last if last is not None else "",
             "now_reading": saved.get("now") if saved.get("now") is not None else "",
-            "charged": _charged(con, "exp:electricity", month,
-                                "electricity_charge", "Electricity"),
+            "charged": _charged(con, "exp:electricity", month, "electricity_charge"),
             "unpaid": queries.balance(con, "acc:electricity"),
             "factors": factors(con)}
