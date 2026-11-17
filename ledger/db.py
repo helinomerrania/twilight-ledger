@@ -46,12 +46,21 @@ def backup_dir(db_path):
     return data_dir(db_path) / "backups"
 
 
+def read_only(path):
+    """SQLite's address for a file, opened only to be read. The path goes in as
+    it is but for the characters an address gives a meaning to: a # in a
+    folder's name ended the path there, so a copy in "Twilight #2" could not be
+    read, and SQLite made an empty file called "Twilight " beside it."""
+    raw = str(Path(path).resolve())
+    return "file:" + raw.replace("%", "%25").replace("#", "%23").replace("?", "%3F") + "?mode=ro"
+
+
 def connect(db_path=DEFAULT_DB, *, migrate=True, check=True, readonly=False):
     """Open the books. Creates them on first run."""
     path = Path(db_path).resolve()
     path.parent.mkdir(parents=True, exist_ok=True)
     if readonly:
-        con = sqlite3.connect(f"file:{path}?mode=ro", uri=True, factory=Books)
+        con = sqlite3.connect(read_only(path), uri=True, factory=Books)
     else:
         con = sqlite3.connect(str(path), isolation_level=None, factory=Books)
     try:
@@ -234,7 +243,7 @@ def snapshot(db_path=DEFAULT_DB, why="manual"):
     stamp = datetime.now().strftime("%Y-%m-%d-%H%M%S")
     safe = re.sub(r"[^a-zA-Z0-9._-]", "-", why)[:40]
     dest = out / f"twilight-{stamp}-{safe}.db"
-    con = sqlite3.connect(f"file:{src}?mode=ro", uri=True)
+    con = sqlite3.connect(read_only(src), uri=True)
     try:
         target = sqlite3.connect(str(dest))
         try:

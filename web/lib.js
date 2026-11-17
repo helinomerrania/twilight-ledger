@@ -163,16 +163,23 @@ export function ask(title, body, yes = 'Yes', no = 'Cancel') {
       resolve(answer);
     };
     const opener = document.activeElement;
+    const opened = Date.now();
     box.setAttribute('role', 'alertdialog');
-    box.querySelector('[data-yes]').onclick = () => done(true);
+    box.querySelector('[data-yes]').onclick = e => { if (meant(e, opened)) done(true); };
     box.querySelector('[data-no]').onclick = () => done(false);
     box.addEventListener('keydown', e => {
-      if (e.key === 'Escape') { e.preventDefault(); done(false); }
+      if (e.key === 'Escape') { e.preventDefault(); done(false); } else if (e.repeat) e.preventDefault();
     });
     host.append(box);
     box.querySelector('[data-yes]').focus();
   });
 }
+
+/* The first button of a question has the keyboard, so Enter pressed twice to
+   add an expense answered "Pay anyway" before the question could be read, and
+   the box went below zero. A key in the question's first moment, or one held
+   down, answers nothing; a click, or a key once it has been read, does. */
+const meant = (e, opened) => e.detail > 0 || Date.now() - opened > 600;
 
 /** A question's title with someone's name in it. The name is kept as typed
     in either language, even one not in the books yet, as when it is being
@@ -194,6 +201,7 @@ export function askDate(title, body, value, max, yes = 'Yes', no = 'Cancel') {
         <button class="btn" data-no>${esc(no)}</button></div>`;
     const input = box.querySelector('input');
     const opener = document.activeElement;
+    const opened = Date.now();
     const done = answer => {
       box.remove();
       if (opener && document.contains(opener)) opener.focus({ preventScroll: true });
@@ -204,11 +212,14 @@ export function askDate(title, body, value, max, yes = 'Yes', no = 'Cancel') {
       else input.focus();
     };
     box.setAttribute('role', 'alertdialog');
-    box.querySelector('[data-yes]').onclick = chosen;
+    box.querySelector('[data-yes]').onclick = e => { if (meant(e, opened)) chosen(); };
     box.querySelector('[data-no]').onclick = () => done(null);
     box.addEventListener('keydown', e => {
-      if (e.key === 'Escape') { e.preventDefault(); done(null); }
-      if (e.key === 'Enter' && e.target === input) { e.preventDefault(); chosen(); }
+      if (e.key === 'Escape') { e.preventDefault(); done(null); return; }
+      if (e.key === 'Enter' && e.target === input) {
+        e.preventDefault();
+        if (!e.repeat && meant(e, opened)) chosen();
+      } else if (e.repeat) e.preventDefault();
     });
     host.append(box);
     input.focus();

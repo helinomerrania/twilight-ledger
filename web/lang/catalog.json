@@ -871,5 +871,6 @@
 "{0} {1} is still running. It can be closed once its last night is over.",
 "It is past six, and a new night has begun.",
 "This screen is still on the night of {0}, so what is put in now is that night's.",
-"Go to the new night"
+"Go to the new night",
+"{0} {1} is before the books begin, and {2} {3} is already closed."
 ]

@@ -530,10 +530,16 @@ def _quantity(con, item, brand, packages, blocks, loose, gross=None, tare_grams=
 def locked(con, count_date):
     """A count in a closed month cannot be started, changed or deleted: the
     month was built on its counts, and a later one would become the next
-    month's opening stock without the closed month knowing."""
+    month's opening stock without the closed month knowing.
+
+    Nor can one before a closed month. Months close in order, so every month
+    up to the last closed one is closed; but the count the books' first month
+    opened with is dated in the month before it, which the books never had,
+    and it could be deleted, moving the closed month's cost of goods."""
     if not count_date:
         return False
-    return queries.is_closed(con, str(count_date)[:7]) or bool(db.one(
+    last = db.scalar(con, "SELECT MAX(month) FROM period WHERE status = 'closed'")
+    return bool(last and str(count_date)[:7] <= last) or bool(db.one(
         con, "SELECT 1 FROM period WHERE count_date = ? AND status = 'closed'", (count_date,)))
 
 

@@ -199,6 +199,25 @@ class AYearTypedWrong(unittest.TestCase):
                                       "pot": "Box", "allow_overdraw": True})
         self.assertIn(PREV, queries.months(self.con))
 
+    def test_but_not_once_the_first_month_is_closed(self):
+        """Months close in order. Dated just before a first month that was
+        already closed, an entry opened a month behind it, and charged it a
+        month's rent that was paid before the books began."""
+        con = fresh_books()
+        api.run(con, "sales", {"amount": 900000, "on": f"{PREV}-15"})
+        add_count(con, f"{PREV}-28", 1000000)
+        api.run(con, "close_month", {"month": PREV})
+        before = db.scalar(con, "SELECT COUNT(*) FROM entry")
+        early = prev_month(PREV)
+        for when in ({"on": f"{early}-13"}, {"on": f"{NOW}-02", "period": early}):
+            with self.assertRaises(api.ApiError, msg=when) as err:
+                api.run(con, "expense", {"detail": "Tea", "amount": 5000, "pot": "Box",
+                                         "allow_overdraw": True, **when})
+            self.assertIn("before the books begin", str(err.exception))
+        api.state(con)
+        self.assertEqual(db.scalar(con, "SELECT COUNT(*) FROM entry"), before)
+        self.assertEqual(queries.months(con), [PREV, NOW])
+
 
 class TheClockIsWrong(unittest.TestCase):
     """Every month up to today is charged. A computer whose date has jumped

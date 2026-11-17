@@ -47,6 +47,23 @@ class Copies(unittest.TestCase):
         ok = {c["label"]: c["ok"] for c in checks.checks(self.con, NOW)}
         self.assertTrue(ok["The books have a copy somewhere else"])
 
+    def test_a_folder_with_a_hash_in_its_name(self):
+        """A # in a folder's name ended SQLite's address for the copy there:
+        it could not be read, so the copy was said to have failed every time,
+        and an empty file was made at what was left of the path."""
+        for name in ("Twilight #2", "100%25 sure", "Twilight"):
+            second = self.away / name
+            second.mkdir()
+            backup.set_folder(self.con, str(second))
+            out = backup.run(self.con)
+            self.assertTrue(out["second_ok"], (name, out["second_error"]))
+            copy = db.connect(second / Path(out["file"]).name, readonly=True, migrate=False)
+            self.assertEqual(entries(copy), entries(self.con))
+            copy.close()
+        # and nothing was made beside them
+        self.assertEqual(sorted(p.name for p in self.away.iterdir()),
+                         ["100%25 sure", "Twilight", "Twilight #2"])
+
     def test_a_folder_that_has_gone_is_reported_not_hidden(self):
         backup.set_folder(self.con, str(self.away))
         shutil.rmtree(self.away)

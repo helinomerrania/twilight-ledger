@@ -12,7 +12,7 @@ Reading the recipes below is the fastest way to understand the books.
 import json
 
 from . import db
-from .dates import month_of, today
+from .dates import month_name, month_of, today
 from .money import to_int
 
 # ----------------------------------------------------------------- accounts
@@ -128,6 +128,16 @@ def assert_open(con, month):
     if period_status(con, month) == "closed":
         raise db.LedgerError(
             f"{month} is closed. Reopen it on the Month screen before changing it.")
+    if not con.execute("SELECT 1 FROM period WHERE month = ?", (month,)).fetchone():
+        # A month the books have not reached is one before they began. Months
+        # close in order, so with a later one closed it is closed too: an entry
+        # dated there opened it behind the closed months, and charged it a
+        # month's rent that was paid before the books began.
+        later = con.execute("SELECT MIN(month) FROM period WHERE month > ? "
+                            "AND status = 'closed'", (month,)).fetchone()[0]
+        if later:
+            raise db.LedgerError(f"{month_name(month)} is before the books begin, and "
+                                 f"{month_name(later)} is already closed.")
 
 
 # -------------------------------------------------------------------- writing
@@ -154,9 +164,9 @@ def record(con, *, kind, legs, on=None, period=None, detail=None, memo=None,
     if off != 0:
         raise db.LedgerError(
             f"{kind} does not balance: the legs are out by {off} dinar")
-    ensure_period(con, period)
     if not allow_closed:
         assert_open(con, period)
+    ensure_period(con, period)
     cur = con.execute(
         "INSERT INTO entry(happened_on, period, kind, detail, memo, source, source_ref) "
         "VALUES (?,?,?,?,?,?,?)",

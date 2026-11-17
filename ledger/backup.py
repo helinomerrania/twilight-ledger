@@ -41,7 +41,7 @@ def verify(path):
     Returns (entries, postings). Raises LedgerError if it is not usable.
     """
     try:
-        con = sqlite3.connect(f"file:{Path(path).resolve()}?mode=ro", uri=True)
+        con = sqlite3.connect(db.read_only(path), uri=True)
     except sqlite3.Error as exc:
         raise db.LedgerError(f"the copy cannot be opened: {exc}") from exc
     try:
@@ -194,7 +194,7 @@ def restore(db_path, source):
     target = Path(db_path).resolve()
     kept = db.snapshot(target, why="before-restore") if target.exists() else None
     target.parent.mkdir(parents=True, exist_ok=True)
-    src = sqlite3.connect(f"file:{source.resolve()}?mode=ro", uri=True)
+    src = sqlite3.connect(db.read_only(source), uri=True)
     try:
         dst = sqlite3.connect(str(target))
         try:

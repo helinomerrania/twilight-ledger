@@ -212,6 +212,22 @@ class CountsAndClosedMonths(unittest.TestCase):
         self.assertEqual(queries.cogs(self.con, "2026-11")["opening"], opening)
         self.assertEqual(queries.count_for(self.con, "2026-10"), "2026-10-28")
 
+    def test_nor_before_one(self):
+        """The count the books' first month opened with is dated in the month
+        before, which the books never had: once that month was closed, its
+        opening count could still be deleted, and its cost of goods moved."""
+        api.run(self.con, "count_line", {"on": "2026-09-30", "item": self.leaf, "blocks": "18"})
+        api.run(self.con, "close_month", {"month": "2026-10"})
+        cogs = queries.cogs(self.con, "2026-10")
+        self.assertEqual(cogs["opening_date"], "2026-09-30")
+        self.assertTrue(api.count_sheet(self.con, "2026-09-30")["locked"])
+        for name, body in (("delete_count", {"on": "2026-09-30"}),
+                           ("count_line", {"on": "2026-09-30", "item": self.leaf, "blocks": "1"}),
+                           ("open_count", {"on": "2026-09-29"})):
+            with self.assertRaises(api.ApiError, msg=name):
+                api.run(self.con, name, body)
+        self.assertEqual(queries.cogs(self.con, "2026-10"), cogs)
+
 
 class CostOfGoods(unittest.TestCase):
     def setUp(self):
