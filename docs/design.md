@@ -384,38 +384,52 @@ screen shows it. The screens read the file before they draw anything
 Names are `area.thing`; the file is kept in order, one sentence to a line, so a
 changed word is a changed line. `tests/test_words.py` fails if the code uses a
 name the file does not have, if the file has a sentence nothing uses, or if a
-sentence has crept back into the code on either side. The prompt for Gemini
-(`gemini.prompt`) is the one entry taken exactly as written, because its own
-`{0}` and `{1}` are words to Gemini.
+sentence has crept back into the code on either side.
 
 ## The screens in Kurdish
 
-The screens are drawn in English, from the words, and Kurdish (Sorani) is laid
-over them as they are drawn (`web/i18n.js`), rather than every card asking for
-its Kurdish by name. That keeps the Kurdish in Mohammed's hands, piece by piece.
-A piece of text is one element's own words, with what changes in it taken out
-as `{0}`, `{1}`…: numbers, dates, the elements inside it, anything already in
-Kurdish script, and the names in the books. The names are found in the state
-by the field they sit in, so "Filled Apple Mix: 1,500 g" and "Filled House
-Mix: 300 g" are one piece, and the Kurdish can put `{0}` and `{1}` where its
-grammar wants them. Values go back in wrapped in Unicode isolates, so a minus
-sign or an English name keeps its own direction inside right-to-left text.
+The Kurdish (Sorani) comes with the app, in `web/lang/ckb.json`, by the same
+names as the English: `"closing.title": "…"`. Mohammed translates it himself,
+with Gemini, in batches of sentences handed to him in a chat, and his answers
+are put into the file; nothing in the app makes or changes Kurdish any more.
+Kurdish is only ever in that file, and `tests/test_lang.py` keeps it so: every
+name is one of the English ones, every `{0}` goes in exactly once (one lost
+would lose a number or a name), and a sentence that follows another on the
+screen keeps the space or comma it starts with. What never goes into Kurdish
+is listed in `ledger/lang.py` (`ENGLISH_ONLY`): the black window, the
+language's own names, the app's name and the programs it works with, and
+what the app writes into new books. Setup → This app → Language says how many
+of the rest have their Kurdish; one with none yet stays English.
 
-The Kurdish is Mohammed's, made with Gemini, and lives in the books
-(`lang_text`); no Kurdish is written in the code, and a test keeps it that
-way. Setup → Language copies the next batch of text with no Kurdish yet as a
-prompt, and takes Gemini's answer back; a line that lost a `{0}` is refused,
-because it would lose a number or a name, and is asked again. The pieces are
-made from the app's own words, each as the screens will look it up (`lang.py`
-takes out its numbers, dates and months the way `i18n.js` does), so all of it
-can be asked for before any screen has shown it; text a screen shows that is not
-among them, such as a sentence made of two, is added as it is seen.
+With Kurdish chosen, the screens' own sentences come out of `t()` and `th()`
+in Kurdish, each wrapped as one right-to-left run, and every value in it (a
+number, a date, a name) wrapped in a Unicode isolate, so a minus sign or an
+English name keeps its own direction inside the Kurdish. A sentence with no
+Kurdish yet comes out as one left-to-right run. What is sent to the server,
+or set beside what it sent, uses `en()`, which is always English: the books
+stay English whatever the screens are in.
+
+The server only ever speaks English, so what it writes into the books (a line
+in Recent changes, "Several items" on a receipt) and the black window stay
+English. What it says is put into Kurdish on the screen, as it is shown
+(`web/i18n.js`). A piece of text is a run of an element's own words, with what
+changes in it taken out as `{0}`, `{1}`…: numbers, dates, anything in Kurdish
+already, and the names in the books, found in the state by the field they sit
+in. Every sentence in the file is made into the same shape, with its Kurdish
+numbered to match, so "Filled Apple Mix: 1,500 g" is found as "Filled {0}:
+{1} g". A piece whose value is itself a sentence is matched to the sentence
+around it and its parts looked up in turn, as is a line of parts joined by `·`
+or `—` ("Deleted: Daily expense · Ice · 5,000"); a short sentence ("{0} g")
+is never matched around a value that has no Kurdish. The Kurdish Mohammed made
+in the app before it came with it, kept in his books (`lang_text`), is used
+where `ckb.json` has none.
 
 A name that is also one of the app's own words — an expense called "Ice"
 beside "Ice cream", one called "Electricity" — is taken as the word, because
 the app's own words have it, so the app's sentences keep their words.
 Right to left is the CSS written in logical sides (`margin-inline-start`, not
-`margin-left`), with number boxes kept left to right.
+`margin-left`), with number boxes kept left to right. Switching language
+reloads the page, so everything is drawn again the new way round.
 
 ## Updating from GitHub
 

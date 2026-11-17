@@ -1,7 +1,7 @@
 /* Formatting, markup helpers and the one way this app talks to the server.
    Everything here is pure except the functions that call the server. */
 
-import { localiseNow, useWords } from './i18n.js';
+import { inEnglish, inKurdish, kurdish, localiseNow, ownWay, useWords } from './i18n.js';
 
 export const S = {               // whatever the server last told us
   data: null,
@@ -33,32 +33,55 @@ export const signed = n => (Number(n) > 0 ? '+' : '') + money(n);
 /* ------------------------------------------------------------------- words */
 
 /* Every sentence the screens show is in lang/en.json, by name, with {0}, {1}…
-   where its values go, shared with the server (ledger/words.py says more).
-   They are read before anything is drawn, and nothing is spelt out here. */
+   where its values go, shared with the server (ledger/words.py says more),
+   and its Kurdish in lang/ckb.json, by the same name. They are read before
+   anything is drawn, and nothing is spelt out here. */
 let WORDS = {};
+let KURDISH = {};
+
+async function read(file) {
+  const r = await fetch(file, { cache: 'no-store' });
+  if (!r.ok) throw new Error(`${file}: ${r.status}`);
+  return r.json();
+}
 
 export async function loadWords() {
-  const r = await fetch('lang/en.json', { cache: 'no-store' });
-  if (!r.ok) throw new Error(`lang/en.json: ${r.status}`);
-  WORDS = await r.json();
-  useWords(WORDS);
+  WORDS = await read('lang/en.json');
+  // without its Kurdish the app still says everything, in English
+  try { KURDISH = await read('lang/ckb.json'); } catch (err) { console.error(err); }
+  useWords(WORDS, KURDISH);
 }
 
 const fill = (s, vals) => s.replace(/\{(\d+)\}/g, (_, i) => String(vals[Number(i)] ?? ''));
 
-/** The sentence called `name`, with its values put in, as plain text. */
-export function t(name, ...vals) {
+/* With the screens in Kurdish, a sentence is its Kurdish if it has it, each
+   value in it kept its own way round; else its English, kept left to right
+   (i18n.js). */
+function sentence(name, vals, safe) {
   const s = WORDS[name];
-  if (s === undefined) { console.error(`no words called ${name}`); return name; }
-  return fill(s, vals);
+  if (s === undefined) {
+    console.error(`no words called ${name}`);
+    return safe(name);
+  }
+  if (!kurdish()) return fill(safe(s), vals);
+  const k = KURDISH[name];
+  return k ? inKurdish(fill(safe(k), vals.map(v => ownWay(String(v ?? '')))))
+    : inEnglish(fill(safe(s), vals));
 }
+
+/** The sentence called `name`, with its values put in, as plain text. */
+export const t = (name, ...vals) => sentence(name, vals, String);
 
 /** The same, to go into markup: its own words made safe, its values put in as
     they come (made safe already, or markup). */
-export function th(name, ...vals) {
+export const th = (name, ...vals) => sentence(name, vals, esc);
+
+/** The sentence in English whatever the screens are in: for what is sent to
+    the server, or set beside what it sent. */
+export function en(name, ...vals) {
   const s = WORDS[name];
-  if (s === undefined) { console.error(`no words called ${name}`); return esc(name); }
-  return fill(esc(s), vals);
+  if (s === undefined) { console.error(`no words called ${name}`); return name; }
+  return fill(s, vals);
 }
 
 /* ------------------------------------------------------------------- dates */

@@ -14,11 +14,9 @@
        server says so, and the screen asks whether to go ahead. */
 
 import * as C from './cards.js';
+import { said, setLanguage, setNames, useBooks, watch } from './i18n.js';
 import {
-  BATCH, answer, prompt, setDict, setLanguage, setNames, watch,
-} from './i18n.js';
-import {
-  S, ask, askDate, closeCheck, empty, esc, get, load, loadWords, money, monthName, monthWords, pickItem,
+  S, ask, askDate, closeCheck, empty, en, esc, get, load, loadWords, money, monthName, monthWords, pickItem,
   post, printPage, printSlip, say, send, signed, t, th, withName,
 } from './lib.js';
 
@@ -147,6 +145,7 @@ const fields = () => [...document.querySelectorAll('#main input, #main select, #
 
 function renderRail() {
   const rail = document.getElementById('rail');
+  rail.setAttribute('aria-label', t('app.screens'));
   const bad = S.data ? S.data.checks.filter(c => !c.ok).length : 0;
   rail.querySelectorAll('button.tab').forEach(b => b.remove());
   let foot = rail.querySelector('.foot');
@@ -283,20 +282,18 @@ function carry(el) {
   }, { once: true });
 }
 
-/** English or Kurdish, and the Kurdish itself when it has changed. The
-    language is also kept in this browser, so the next start opens the right
-    way round before the books arrive. */
-let langVersion = null;
+/** English or Kurdish, and in Kurdish, the Kurdish kept in the books from
+    before it came with the app. The language is also kept in this browser,
+    so the next start opens the right way round before the books arrive. */
+let booksAsked = false;
 
 async function useLanguage(state) {
   const l = state.lang || {};
   setLanguage(l.language);
   try { localStorage.setItem('twilight.lang', l.language || 'en'); } catch { /* not kept */ }
-  if (l.version !== langVersion) {
-    try {
-      setDict(await get('/api/lang'));
-      langVersion = l.version;
-    } catch { /* the next state tries again */ }
+  if (l.language === 'ckb' && !booksAsked) {
+    booksAsked = true;
+    try { useBooks(await get('/api/lang')); } catch { booksAsked = false; }
   }
   setNames(state);
 }
@@ -916,7 +913,7 @@ const H = {
     if (!amount) return say(t('receipt_form.type_total'), true);
     const out = await act(() => sendGuarded('receipt', {
       amount, on: val('rDate'), who: val('rSup'), number: val('rNo'),
-      what: val('rWhat') || t('receipt.several'), terms: val('rTerms'), pot: val('rPot'),
+      what: val('rWhat') || en('receipt.several'), terms: val('rTerms'), pot: val('rPot'),
     }), { skip: ['#rAmt', '#rNo', '#rWhat'] });
     if (!out) return;
     S.draft.rlines = out.receipt || null;            // what came in, while the receipt is in hand
@@ -1099,8 +1096,8 @@ const H = {
       const nights = [...new Set((out.kept || []).map(l => l.night))];
       const bad = out.failed || [];
       if (bad.length) {
-        say(bad.length === 1 ? t('pos_auto.failed_one', bad[0].note)
-          : t('pos_auto.failed_many', bad.length, bad[0].note), true);
+        say(bad.length === 1 ? t('pos_auto.failed_one', said(bad[0].note))
+          : t('pos_auto.failed_many', bad.length, said(bad[0].note)), true);
       } else if (nights.length) {
         say(nights.length === 1 ? t('pos_auto.night', nights[0]) : t('pos_auto.nights', nights.length));
       } else {
@@ -1235,63 +1232,9 @@ const H = {
   /* -------------------------------------------------------------- language */
 
   async langPick(el) {
-    const out = await act(() => send('language_set', { language: el.dataset.lang }));
-    if (out && el.dataset.lang === 'ckb' && !S.data.lang.done) {
-      say(t('lang.no_kurdish_yet'));
-    }
-  },
-
-  async langCopy() {
-    let keys;
-    try { keys = await get(`/api/lang/todo?limit=${BATCH}`); } catch (err) { return say(err.message, true); }
-    if (!keys.length) return say(t('lang.every_piece'));
-    S.draft.langBatch = keys;
-    try { localStorage.setItem('twilight.langBatch', JSON.stringify(keys)); } catch { /* not kept */ }
-    const text = prompt(keys);
-    try {
-      await navigator.clipboard.writeText(text);
-      S.draft.langPrompt = null;
-      say(t('lang.copied', keys.length));
-    } catch {
-      S.draft.langPrompt = text;
-      say(t('lang.copy_from_box'));
-    }
-    render();
-  },
-
-  async langSave() {
-    const box = document.getElementById('langAnswer');
-    let batch = S.draft.langBatch;
-    if (!batch) {
-      try { batch = JSON.parse(localStorage.getItem('twilight.langBatch') || 'null'); } catch { /* none */ }
-    }
-    let pairs;
-    try { pairs = answer(box ? box.value : '', batch || []); } catch {
-      return say(t('lang.not_answer'), true);
-    }
-    if (!Object.keys(pairs).length) return say(t('lang.nothing_to_save'), true);
-    const out = await act(() => send('lang_set', { pairs }), { skip: ['#langAnswer'] });
-    if (!out) return;
-    S.draft.langBatch = null;
-    S.draft.langPrompt = null;
-    try { localStorage.removeItem('twilight.langBatch'); } catch { /* not kept */ }
-    render({ skip: ['#langAnswer'] });
-    const n = out.wrong_count;
-    say(!n ? t('lang_save.saved', out.saved)
-      : n === 1 ? t('lang_save.lost_one', out.saved) : t('lang_save.lost_many', out.saved, n), Boolean(n));
-  },
-
-  langFind() {
-    S.draft.langFind = (document.getElementById('langFind') || {}).value || '';
-    render();
-  },
-
-  async langFix(el) {
-    const row = el.closest('tr');
-    const box = row && row.querySelector('input');
-    if (!box) return;
-    const out = await act(() => send('lang_set', { pairs: { [el.dataset.key]: box.value } }));
-    if (out) say(out.saved ? t('common.saved') : t('lang.not_saved'), !out.saved);
+    if (el.dataset.lang === S.data.lang.language) return;
+    // everything is drawn again, the new way round
+    if (await act(() => send('language_set', { language: el.dataset.lang }))) location.reload();
   },
 
   async health() {
@@ -1821,7 +1764,7 @@ document.addEventListener('keydown', e => {
   if (e.key !== 'Enter' || e.isComposing || !el.matches('input, select')) return;
 
   const submit = { nSales: 'sales', nAmt: 'nAdd', eAmt: 'addEntry', rAmt: 'receipt', q: 'search',
-                   rlItem: 'addRLine', fillItem: 'fillAdd', langFind: 'langFind' };
+                   rlItem: 'addRLine', fillItem: 'fillAdd' };
   if (submit[el.id]) {
     e.preventDefault();
     H[submit[el.id]](el);
@@ -1921,15 +1864,15 @@ window.addEventListener('hashchange', () => {
     document.getElementById('main').textContent = String(err && err.message);
     return;
   }
+  // the language this browser last had, until the books say
+  try { setLanguage(localStorage.getItem('twilight.lang')); } catch { /* English */ }
   document.title = t('app.name');
   document.getElementById('brand').prepend(t('app.name'));
   document.getElementById('brandsub').textContent = t('app.loading');
-  document.getElementById('rail').setAttribute('aria-label', t('app.screens'));
   document.getElementById('main').innerHTML = `<p class="empty">${th('app.opening')}</p>`;
   const [tab, page] = location.hash.slice(1).split('/');
   if (PAGES[tab]) S.tab = tab;
   if (PAGES[tab] && page && PAGES[tab].some(p => p[0] === page)) S.page[tab] = page;
-  try { setLanguage(localStorage.getItem('twilight.lang')); } catch { /* English */ }
   watch();
   try {
     await apply(await load(), { fresh: true });

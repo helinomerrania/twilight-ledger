@@ -732,4 +732,3 @@ code { font: 12px var(--mono); }
 html[dir="rtl"] input[type="number"], html[dir="rtl"] input[data-money] { direction: ltr; text-align: right; }
 html[dir="rtl"] td.num input, html[dir="rtl"] .pot input,
 html[dir="rtl"] label.sizebox input { text-align: left; }
-html[dir="rtl"] textarea#langAnswer { direction: ltr; }

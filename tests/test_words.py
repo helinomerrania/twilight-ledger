@@ -1,4 +1,5 @@
-"""Every sentence the app says is in one file, web/lang/en.json, by name.
+"""Every sentence the app says is in one file, web/lang/en.json, by name
+(and its Kurdish in web/lang/ckb.json, by the same name: tests/test_lang.py).
 
 The code names a sentence and gives it its values; it never spells one out.
 These tests keep it that way: the file is well made, every name the code uses
@@ -16,7 +17,6 @@ from ledger import words
 ROOT = Path(__file__).resolve().parent.parent
 FILE = ROOT / "web" / "lang" / "en.json"
 NAME = re.compile(r"[a-z0-9_]+(?:\.[a-z0-9_]+)+")
-RAW = ("gemini.",)               # taken as written, never filled in: its {0} are words to Gemini
 # what the books' own trail calls a change: names of actions, not of words
 NOT_WORDS = {"entry.void", "entry.unvoid", "period.close", "period.reopen"}
 
@@ -52,20 +52,19 @@ class TheFile(unittest.TestCase):
 
     def test_values_go_in_numbered_from_nought(self):
         for name, text in self.words.items():
-            if name.startswith(RAW):
-                continue
             holes = {int(n) for n in re.findall(r"\{(\d+)\}", text)}
             self.assertEqual(holes, set(range(len(holes))), name)
 
     def test_the_server_and_the_screens_read_the_same_file(self):
         self.assertEqual(words.FILE, FILE)
         self.assertEqual(words.t("look.many", 3), "3 things need a look.")
-        self.assertIn("fetch('lang/en.json'", (ROOT / "web" / "lib.js").read_text(encoding="utf-8"))
+        self.assertIn("read('lang/en.json')", (ROOT / "web" / "lib.js").read_text(encoding="utf-8"))
 
 
 class TheNames(unittest.TestCase):
     """A name the code uses that is not in the file would show as the name; a
-    sentence in the file that nothing uses is one more for Gemini for nothing."""
+    sentence in the file that nothing uses is one more to put into Kurdish for
+    nothing."""
 
     def setUp(self):
         self.words = words.words()
@@ -232,7 +231,7 @@ SHOWN = re.compile(r'\b(title|placeholder|aria-label|label|alt|data-confirm|data
                    r'"([^"{]*)"')
 # names of keys, of what SambaPOS calls things, and what a developer reads
 JS_ALLOWED = {"Escape", "Enter", "Shift", "ArrowUp", "ArrowDown", "Normal", "no words called {}",
-              "lang/en.json: {}", "YOUR-PC\\\\you", "<code>sa</code>"}
+              "YOUR-PC\\\\you", "<code>sa</code>"}
 
 
 def screen_words(kind, text):

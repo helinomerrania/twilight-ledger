@@ -1,15 +1,20 @@
-"""The screens in Kurdish (Later in the plan). The Kurdish comes from
-Mohammed through Gemini and lives in the books; the stand-ins here are made
-up. Nothing in Kurdish may be written in the app's code."""
+"""The screens in Kurdish. The Kurdish comes with the app, in
+web/lang/ckb.json, by the same names as the English in web/lang/en.json; the
+screens use it themselves (web/i18n.js), and the server only ever speaks
+English. Nothing else in the app is in Kurdish."""
+import json
+import re
 import unicodedata
 import unittest
 from pathlib import Path
 from unittest import mock
 
-from ledger import api, db, lang, queries, words
+from ledger import api, db, lang, queries, registry, words
 from tests.helpers import fresh_books
 
 ROOT = Path(__file__).resolve().parent.parent
+FILE = ROOT / "web" / "lang" / "ckb.json"
+HOLES = re.compile(r"\{\d+\}")
 
 
 def kurdish_letters(text):
@@ -17,54 +22,52 @@ def kurdish_letters(text):
             and "ARABIC" in unicodedata.name(c, "")]
 
 
-class Pieces(unittest.TestCase):
+class TheKurdishFile(unittest.TestCase):
+
+    def setUp(self):
+        self.text = FILE.read_text(encoding="utf-8")
+        self.kurdish = json.loads(self.text)
+        self.english = words.words()
+
+    def test_it_is_names_in_order_one_to_a_line(self):
+        # as the English is, so a change to the Kurdish shows as a change to one line
+        lines = [f"{json.dumps(k)}: {json.dumps(v, ensure_ascii=False)}"
+                 for k, v in sorted(self.kurdish.items())]
+        self.assertEqual(self.text, "{\n" + ",\n".join(lines) + "\n}\n" if lines else "{}\n")
+
+    def test_every_name_is_one_of_the_english(self):
+        self.assertEqual(sorted(set(self.kurdish) - set(self.english)), [])
+
+    def test_what_stays_english_has_no_kurdish(self):
+        self.assertEqual([n for n in self.kurdish if lang.ENGLISH_ONLY.fullmatch(n)], [])
+
+    def test_every_value_goes_in_once(self):
+        # Kurdish that lost a {0} would lose a number or a name
+        for name, text in self.kurdish.items():
+            self.assertEqual(sorted(HOLES.findall(text)), sorted(HOLES.findall(self.english[name])), name)
+
+    def test_each_is_in_kurdish(self):
+        for name, text in self.kurdish.items():
+            self.assertTrue(kurdish_letters(text), name)
+            self.assertEqual(text, text.rstrip(), name)
+
+    def test_what_goes_on_after_another_sentence_still_does(self):
+        # " Opened by {0}…" and ", in {0}" follow another sentence on the screen
+        for name, text in self.kurdish.items():
+            e = self.english[name]
+            self.assertEqual(text[:len(text) - len(text.lstrip())], e[:len(e) - len(e.lstrip())], name)
+            if e[:1] in ",;":
+                self.assertIn(text[:1], ",;،؛", name)
+
+    def test_the_screens_and_the_server_read_it(self):
+        self.assertIn("read('lang/ckb.json')", (ROOT / "web" / "lib.js").read_text(encoding="utf-8"))
+        self.assertEqual(words.KURDISH, FILE)
+
+
+class TheLanguage(unittest.TestCase):
+
     def setUp(self):
         self.con = fresh_books()
-
-    def seen(self, *keys):
-        with db.tx(self.con):
-            return lang.seen(self.con, list(keys))
-
-    def save(self, pairs):
-        return api.run(self.con, "lang_set", {"pairs": pairs})
-
-    def test_what_the_screens_show_is_kept_to_ask_for(self):
-        self.assertEqual(self.seen("Save", "Filled {0}: {1} g", "Save"), 2)
-        self.assertEqual(self.seen("Save"), 0)
-        self.assertEqual(lang.todo(self.con)[-2:], ["Save", "Filled {0}: {1} g"])
-
-    def test_nothing_without_words_is_kept(self):
-        self.seen("{0}", "", "12,000", "x" * 401, None, 7)
-        self.assertEqual(db.scalar(self.con, "SELECT COUNT(*) FROM lang_text "
-                                             "WHERE key IN ('{0}', '', '12,000')"), 0)
-
-    def test_saving_kurdish(self):
-        self.seen("Save", "Filled {0}: {1} g")
-        out = self.save({"Save": "  [save]  ", "Filled {0}: {1} g": "[{1} g {0}]"})
-        self.assertEqual((out["saved"], out["wrong_count"]), (2, 0))
-        self.assertEqual(lang.texts(self.con), {"Save": "[save]", "Filled {0}: {1} g": "[{1} g {0}]"})
-        self.assertNotIn("Save", lang.todo(self.con))
-
-    def test_a_translation_that_loses_a_value_is_left_out(self):
-        out = self.save({"Filled {0}: {1} g": "[filled {0}]", "Paid {0}": "[{0} {0}]",
-                         "Owed {0}": "[{1}]"})
-        self.assertEqual((out["saved"], out["wrong_count"]), (0, 3))
-        self.assertEqual(lang.texts(self.con), {})
-
-    def test_empty_kurdish_takes_a_piece_back_to_english(self):
-        self.save({"Filled {0}: {1} g": "[{0} {1}]"})
-        self.assertEqual(self.save({"Filled {0}: {1} g": ""})["saved"], 1)
-        self.assertEqual(lang.texts(self.con), {})
-        self.assertIn("Filled {0}: {1} g", lang.todo(self.con))
-
-    def test_each_save_tells_the_screens_to_fetch_the_kurdish_again(self):
-        before = lang.view(self.con)["version"]
-        self.save({"Save": "[save]"})
-        self.assertEqual(lang.view(self.con)["version"], before + 1)
-
-    def test_it_is_in_recent_changes(self):
-        self.save({"Save": "[save]", "Cancel": "[cancel]"})
-        self.assertIn("Kurdish saved for 2 pieces of text", queries.recent(self.con)[0]["summary"])
 
     def test_choosing_the_language(self):
         self.assertEqual(api.state(self.con)["lang"]["language"], "en")
@@ -75,92 +78,70 @@ class Pieces(unittest.TestCase):
         with self.assertRaises(api.ApiError):
             api.run(self.con, "language_set", {"language": "fr"})
 
-    def test_the_screens_are_told_how_far_it_has_got(self):
-        self.seen("Save", "Cancel", "Back")
-        self.save({"Save": "[save]"})
-        v = lang.view(self.con)
-        self.assertEqual(v["done"], 1)
-        self.assertGreaterEqual(v["todo"], 2)
+    def test_it_is_in_recent_changes(self):
+        api.run(self.con, "language_set", {"language": "ckb"})
+        self.assertEqual(queries.recent(self.con)[0]["summary"],
+                         words.t("change.language", words.t("language.ckb")))
 
-    def test_the_next_batch_is_the_longest_waiting_first(self):
-        self.seen(*[f"Piece {n}" if n else "Piece" for n in range(3)])
-        self.assertEqual(lang.todo(self.con, 400)[-3:], ["Piece", "Piece 1", "Piece 2"])
-        self.assertEqual(len(lang.todo(self.con, 2)), 2)
+    def test_the_server_speaks_english_with_the_screens_in_kurdish(self):
+        # what it writes into the books and the black window stays English
+        api.run(self.con, "language_set", {"language": "ckb"})
+        with self.assertRaises(api.ApiError) as no:
+            api.run(self.con, "language_set", {"language": "fr"})
+        self.assertEqual(str(no.exception), words.words()["language.choose"])
+
+    def test_the_screens_are_told_how_much_has_its_kurdish(self):
+        shown = [n for n in words.words() if not lang.ENGLISH_ONLY.fullmatch(n)]
+        with mock.patch.object(lang, "kurdish", lambda: {"closing.title": "[x]", "tab.stock": "[y]"}):
+            v = lang.view(self.con)
+        self.assertEqual((v["done"], v["total"]), (2, len(shown)))
+
+    def test_what_never_goes_into_kurdish_is_not_counted(self):
+        for name in ("cli.help", "migration.edited", "language.ckb", "language.en", "app.name",
+                     "backup.example_path", "setup.first_pot", "page.sambapos"):
+            self.assertIn(name, words.words())
+            self.assertTrue(lang.ENGLISH_ONLY.fullmatch(name), name)
+        for name in ("closing.title", "language.choose", "cli_like", "page.stock"):
+            self.assertFalse(lang.ENGLISH_ONLY.fullmatch(name), name)
+
+    def test_the_kurdish_kept_in_the_books_is_still_handed_over(self):
+        # made with Gemini before the Kurdish came with the app; the screens
+        # use it where lang/ckb.json has none
+        with db.tx(self.con):
+            self.con.execute("INSERT INTO lang_text(key, ckb) VALUES ('Closing up', '[closing]'), "
+                             "('Filled {0}: {1} g', '[{1} {0}]'), ('Save', NULL), ('Back', '')")
+        self.assertEqual(lang.texts(self.con), {"Closing up": "[closing]", "Filled {0}: {1} g": "[{1} {0}]"})
 
 
-class Shipped(unittest.TestCase):
-    """The app's own words are put in the books as pieces once per version of
-    them, so Gemini can be asked for all of it before any screen has shown it."""
+class NothingLeftOfGemini(unittest.TestCase):
+    """The Kurdish is no longer made in the app: nothing hands out a prompt,
+    takes an answer back, or notes what the screens show."""
 
-    def setUp(self):
-        self.con = fresh_books()
-        lang._shipped = None
+    def test_no_action_saves_kurdish(self):
+        self.assertEqual(sorted(n for n in registry.ACTIONS if n.startswith("lang")), ["language_set"])
 
-    def tearDown(self):
-        lang._shipped = None
-
-    def ship(self, more=None):
-        lang._shipped = None
-        with mock.patch.object(lang, "words", lambda: {**words.words(), **(more or {})}):
-            lang.view(self.con)
-
-    def test_the_words_are_added_once(self):
-        self.ship()
-        self.assertIn("Closing up", lang.todo(self.con, 5000))
-        db.set_setting(self.con, "language", "en")
-        self.con.execute("DELETE FROM lang_text")
-        self.ship()                                         # the same words: not again
-        self.assertEqual(lang.todo(self.con), [])
-
-    def test_a_new_version_adds_what_is_new(self):
-        self.ship()
-        api.run(self.con, "lang_set", {"pairs": {"Closing up": "[closing]"}})
-        before = set(lang.todo(self.con, 5000))
-        self.ship({"test.new": "Count the spoons on {0}"})
-        self.assertEqual(set(lang.todo(self.con, 5000)) - before, {"Count the spoons on {0}"})
-        self.assertEqual(lang.texts(self.con), {"Closing up": "[closing]"})
-
-    def test_each_is_the_piece_the_screens_look_up(self):
-        p = lang._pattern(words.words())
-        self.assertEqual(lang.key_of("Use SambaPOS's figure in step 1, then {0}.", p),
-                         "Use SambaPOS's figure in step {0}, then {1}.")
-        self.assertEqual(lang.key_of("Closed 2026-11-17 at 07:26, out by -1,250", p),
-                         "Closed {0} at {1}, out by {2}")
-        self.assertEqual(lang.key_of("Close {0} {1}?", p), "Close {0} {1}?")
-        self.assertEqual(lang.key_of("Sales for November 2026 and 3 Nov, on Monday", p),
-                         "Sales for {0} {1} and {2} {3}, on {4}")
-        self.assertEqual(lang.key_of("Copied to G:\\My Drive\\Twilight", p), "Copied to {0}")
-
-    def test_months_and_days_are_pieces_on_their_own(self):
-        keys = lang.shipped()[1]
-        for word in ("November", "Nov", "Monday"):
-            self.assertIn(word, keys)
-
-    def test_what_is_never_on_a_screen_is_not_asked_for(self):
-        keys = set(lang.shipped()[1])
-        w = words.words()
-        p = lang._pattern(w)
-        for name in ("cli.check_total", "cli.help", "gemini.prompt", "migration.edited"):
-            self.assertNotIn(lang.key_of(w[name], p), keys, name)
-
-    def test_the_pieces_are_english_only(self):
-        keys = lang.shipped()[1]
-        self.assertEqual(len(keys), len(set(keys)))
-        for k in keys:
-            self.assertTrue(lang._good(k), k)
-            self.assertEqual(kurdish_letters(k), [], k)
+    def test_not_a_word_of_it(self):
+        files = [*(ROOT / "ledger").rglob("*.py"), *(ROOT / "web").glob("*.*"),
+                 *(ROOT / "web" / "lang").glob("*.json"), ROOT / "twilight.py"]
+        for f in files:
+            text = f.read_text(encoding="utf-8")
+            for gone in ("gemini", "lang/seen", "lang/todo", "langBatch", "lang_set"):
+                self.assertNotIn(gone, text.lower(), f.relative_to(ROOT))
 
 
 class NoKurdishInTheCode(unittest.TestCase):
-    """The Kurdish is Mohammed's own, made with Gemini, and lives in his
-    books. The app holds none, except each language's own name in the
-    language switch, which is in the words (language.ckb)."""
+    """All the Kurdish is in web/lang/ckb.json. Apart from it the app holds
+    none, but the name of the language itself in the language switch, which
+    is in the words (language.ckb)."""
 
     def test_no_kurdish_words_in_the_app(self):
         files = [*(ROOT / "ledger").rglob("*.py"), *(ROOT / "ledger").rglob("*.sql"),
                  *(ROOT / "web").rglob("*.js"), *(ROOT / "web").rglob("*.css"),
-                 *(ROOT / "web").rglob("*.html"), *(ROOT / "web").rglob("*.json")]
+                 *(ROOT / "web").rglob("*.html"), *(ROOT / "web").rglob("*.json"),
+                 *(ROOT / "tools").rglob("*.py"), ROOT / "twilight.py"]
         for f in files:
+            if f == FILE:
+                continue
             text = f.read_text(encoding="utf-8")
             if f.name == "en.json":
                 text = text.replace(words.words()["language.ckb"], "")

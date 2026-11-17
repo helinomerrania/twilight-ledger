@@ -4,14 +4,13 @@
    disagreed. */
 
 import {
-  S, args, card, cls, empty, esc, field, money, monthName, monthWords,
+  S, args, card, cls, empty, en, esc, field, money, monthName, monthWords,
   options, pct, potOptions, signed, t, table, th, tile, tiles,
 } from './lib.js';
 
 /** The months that are closed, as a set. */
 const closedMonths = () =>
   new Set((S.data.summary || []).filter(m => m.status === 'closed').map(m => m.month));
-import { BATCH, texts } from './i18n.js';
 
 // c.go is a screen, or a page of one ('books/cash'); the button names the screen
 const go = c => (c.go ? ` <button class="mini link" data-go="${esc(c.go)}">${th(`go.${c.go.split('/')[0]}`)}</button>` : '');
@@ -223,7 +222,7 @@ export function cashDifferences() {
       <span class="down">${r.found < 0 ? `<span class="bad" style="height:${h}px"></span>` : ''}</span>
       <span class="quiet">${Number(r.on.slice(8))}</span></div>`;
   }).join('');
-  const known = d.by_who.filter(g => g.who !== t('cash.not_known'));
+  const known = d.by_who.filter(g => g.who !== en('cash.not_known'));
   const who = known.length ? table(`<th>${th('diffs.opened_sambapos')}</th><th class="num">${th('diffs.nights')}</th>
       <th class="num">${th('diffs.short')}</th><th class="num">${th('diffs.over')}</th>
       <th class="num">${th('diffs.net')}</th>`,
@@ -1480,52 +1479,16 @@ export function businessCard() {
     </div>`);
 }
 
-/** English or Kurdish. The Kurdish is made with Gemini: a batch of the text
-    with none yet is copied from here as a prompt, and the answer pasted back.
-    It lives in the books, never in the app's code. */
+/** English or Kurdish, and how much of the app has its Kurdish yet: it comes
+    with the app, in lang/ckb.json. */
 export function languageCard() {
   const L = S.data.lang;
   const names = L.languages || { en: t('language.en'), ckb: t('language.ckb') };
-  const total = L.done + L.todo;
-  const batches = Math.ceil(L.todo / BATCH);
-  const q = (S.draft.langFind || '').trim();
-  const found = q ? [...texts()].filter(([k, v]) => k.toLowerCase().includes(q.toLowerCase())
-                                                 || v.includes(q)).slice(0, 30) : [];
   return card(`<h2>${th('lang.title')}</h2>
     <p class="sub">${th('lang.sub')}</p>
     <div class="chips" translate="no">${Object.entries(names).map(([k, label]) =>
       `<button data-act="langPick" data-lang="${esc(k)}" aria-pressed="${L.language === k}">${esc(label)}</button>`).join('')}</div>
-    <p class="note">${th('lang.done', money(L.done), money(total))}
-      ${!L.todo ? th('lang.all_done') : batches === 1 ? th('lang.todo_one', money(L.todo), 1)
-        : th('lang.todo_many', money(L.todo), batches)}</p>
-    <div class="steps" style="margin-top:14px">
-      <div class="step"><div class="no">1</div><div>
-        <h3>${th('lang.copy_next')}</h3>
-        <p>${th('lang.open_gemini')}</p>
-        <button class="btn primary" data-act="langCopy"${L.todo ? '' : ' disabled'}>${th('lang.copy', Math.min(BATCH, L.todo))}</button>
-        ${S.draft.langPrompt ? `<textarea readonly rows="6" style="margin-top:8px">${esc(S.draft.langPrompt)}</textarea>` : ''}
-      </div></div>
-      <div class="step"><div class="no">2</div><div>
-        <h3>${th('lang.paste')}</h3>
-        <p>${th('lang.all_of_it', `<code>{0}</code>`, `<code>{1}</code>`)}</p>
-        <textarea id="langAnswer" rows="4" spellcheck="false" placeholder='{"1": "…", "2": "…"}'></textarea>
-        <div class="row" style="margin-top:8px"><button class="btn" data-act="langSave">${th('lang.save')}</button></div>
-      </div></div>
-      <div class="step"><div class="no">3</div><div>
-        <h3>${th('lang.choose', esc(names.ckb))}</h3>
-        <p>${th('lang.stays_english')}</p>
-      </div></div>
-    </div>
-    <details class="fold"${q ? ' open' : ''}><summary>${th('lang.change')}</summary>
-      <div class="row" style="margin-top:8px">
-        <input id="langFind" value="${esc(q)}" placeholder="${th('lang.find_hint')}" style="max-width:320px">
-        <button class="btn" data-act="langFind">${th('lang.find')}</button></div>
-      ${!q ? '' : found.length ? table(`<th>${th('lang.english')}</th><th>${th('lang.kurdish')}</th><th></th>`, found.map(([k, v]) => `<tr>
-          <td translate="no">${esc(k)}</td>
-          <td><input value="${esc(v)}" dir="rtl" lang="ckb" style="min-width:260px" aria-label="${th('lang.kurdish')}"></td>
-          <td class="actions"><button class="mini" data-act="langFix" data-key="${esc(k)}">${th('common.save')}</button></td></tr>`).join(''))
-        : empty(t('lang.none_found'))}
-    </details>`);
+    <p class="note">${th('lang.done', money(L.done), money(L.total))}${L.done < L.total ? ` ${th('lang.stays_english')}` : ''}</p>`);
 }
 
 export function backupCard() {
@@ -1777,7 +1740,7 @@ function linkPicker(posId, posName, link, suggest) {
   const opt = (v, text) => (v === current
     ? `<option value="${esc(v)}" selected>${esc(link.label)}</option>`
     : `<option value="${esc(v)}">${esc(text)}</option>`);
-  const exp = groups.find(g => g.group === t('link.expense'));
+  const exp = groups.find(g => g.group === en('link.expense'));
   if (exp) exp.options.push(['new-expense', t('link_picker.new_expense', posName)]);
   return `<select class="link" data-save="pos_link" data-args="${args({ pos_id: posId })}"
       data-field="to" title="${th('link_picker.title')}">
