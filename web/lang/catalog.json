@@ -868,5 +868,8 @@
 "Bring it back in Setup and move the money into a pot in use.",
 "Part of Out below. A payment pays what was owed from before first, as Settle up counts it.",
 "{0} for {1} {2}",
-"{0} {1} is still running. It can be closed once its last night is over."
+"{0} {1} is still running. It can be closed once its last night is over.",
+"It is past six, and a new night has begun.",
+"This screen is still on the night of {0}, so what is put in now is that night's.",
+"Go to the new night"
 ]

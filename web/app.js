@@ -223,7 +223,12 @@ function render({ fresh = false, skip = [] } = {}) {
         data-confirm="The date is right?"
         data-confirm-body="Every month up to now will be charged its rent and salaries."
         data-yes="Yes, it is right">The date is right</button></div>` : '';
-  main.innerHTML = clock + `<h1>${esc(title)}</h1>`
+  const stayed = S.stayed && S.on === S.stayed ? `<div class="banner">
+      <strong>It is past six, and a new night has begun.</strong>
+      <p style="margin:6px 0 10px">This screen is still on the night of
+        ${esc(S.stayed)}, so what is put in now is that night's.</p>
+      <button class="btn" data-act="newNight">Go to the new night</button></div>` : '';
+  main.innerHTML = clock + stayed + `<h1>${esc(title)}</h1>`
     + `<div class="pagebar"><nav class="pages" aria-label="${esc(title)}">${tabs}</nav>`
     + `${HEADS[S.tab] ? draw(HEADS[S.tab]) : ''}</div>`
     + (note ? `<p class="pagenote">${esc(note)}</p>` : '')
@@ -277,6 +282,7 @@ async function useLanguage(state) {
     redraw. */
 let applied = 0;
 let shownAt = 0;             // when the state on screen arrived
+let pageNight = null;         // the night it was when this screen last moved on
 let loadedAs = null;         // the app's version when this page was loaded
 
 async function apply(state, opts = {}) {
@@ -286,6 +292,7 @@ async function apply(state, opts = {}) {
   loadedAs = loadedAs || state.version;
   applied++;
   shownAt = Date.now();
+  pageNight = pageNight || state.tonight;
   S.data = state;
   S.month = state.month;
   S.on = state.day.on;
@@ -337,9 +344,44 @@ function nightNow() {
   return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
 }
 
+/* Six in the morning ends the night. A screen left alone moves on to the new
+   night by itself, and lets go of a day picked by hand, so that tonight's
+   takings are never typed over last night's. One still in use then, while
+   the night is being closed up, stays on it until asked to move on: it went
+   on to the new night under him, and the drawer counted at ten to six and
+   saved at five past, or the next expense typed in, was dated the new night,
+   which then showed money it had never taken while the night it belonged to
+   showed none counted. */
+let touched = 0;                 // when this screen was last typed or clicked in
+for (const ev of ['input', 'keydown', 'click']) {
+  document.addEventListener(ev, () => { touched = Date.now(); }, true);
+}
+const IN_USE = 15 * 60 * 1000;   // touched within the last quarter of an hour
+
+const inUse = () => Date.now() - touched < IN_USE || !!document.querySelector('.ask')
+  || fields().some(el => el.type !== 'search' && dirty(el));
+
+/* The night has ended under a screen still on tonight's. */
+const nightOver = () => !!S.data && !S.picked && !!pageNight && nightNow() !== pageNight;
+
+/* Keep the night on screen, as if picked by hand, and say so. */
+function stayOnTheNight() {
+  S.picked = true;
+  S.stayed = S.on;
+}
+
 function followTheNight() {
-  if (!S.data || nightNow() === S.data.tonight) return;
+  if (!S.data || !pageNight || nightNow() === pageNight) return;
+  if (inUse()) {
+    if (!S.picked) {
+      stayOnTheNight();
+      render();
+    }
+    return;
+  }
   S.picked = false;
+  S.stayed = null;
+  pageNight = nightNow();
   refreshQuietly();
 }
 setInterval(followTheNight, 60 * 1000);
@@ -350,7 +392,7 @@ setInterval(followTheNight, 60 * 1000);
    one click from being paid twice. Brought back to the front, it asks again. */
 function lookAgain() {
   if (document.hidden || !S.data) return;
-  if (nightNow() !== S.data.tonight) followTheNight();
+  if (pageNight && nightNow() !== pageNight) followTheNight();
   else if (Date.now() - shownAt > 3000) refreshQuietly();
 }
 window.addEventListener('focus', lookAgain);
@@ -482,6 +524,7 @@ let sent = 0;
 let shown = 0;
 
 async function act(fn, { skip = [], onError = null } = {}) {
+  if (nightOver()) stayOnTheNight();
   const mine = ++sent;
   try {
     const out = await fn();
@@ -626,10 +669,19 @@ const H = {
 
   /* ---------------------------------------------------------- moving around */
 
+  async newNight() {
+    S.picked = false;
+    S.stayed = null;
+    pageNight = nightNow();
+    try { await apply(await load(S.month, null, S.count), { fresh: true }); }
+    catch (err) { say(err.message, true); }
+  },
+
   async setDay(el) {
     const on = el.dataset.on || el.value;
     if (!on) return;
     S.picked = on !== S.data.tonight;
+    S.stayed = null;
     try { await apply(await load(S.month, S.picked ? on : null, S.count), { fresh: true }); }
     catch (err) { say(err.message, true); }
   },
@@ -970,9 +1022,11 @@ const H = {
     if (!line) return;
     const amount = Number(plain(row.querySelector('[data-s="amount"]'))) || 0;
     if (!amount) return say('Type an amount first.', true);
-    // whatever is paid from here belongs to the month on screen, whatever today's date is
+    // whatever is paid from here belongs to the month on screen, whatever today's date is;
+    // after six, while the night is still being closed up, it is paid that night
+    if (nightOver()) stayOnTheNight();
     const body = { amount, who: line.who, pot: row.querySelector('[data-s="pot"]').value,
-                   period: S.month };
+                   period: S.month, ...(S.stayed ? { on: S.stayed } : {}) };
     const out = await act(() => sendGuarded(line.action, body),
                           { skip: [`settle:${row.dataset.line}:amount`] });
     if (out) {

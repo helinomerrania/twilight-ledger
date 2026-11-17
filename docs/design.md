@@ -83,7 +83,11 @@ until six in the morning it is still the night before: the screens open on
 that night, a count taken at one in the morning after the last night of the
 month is that month's count, and a page left open moves on to the next night
 by itself. A day picked by hand is let go when the night changes, so tonight's
-takings are never typed over last night's.
+takings are never typed over last night's. A page still in use at six, while
+the night is being closed up, stays on that night and says so, with a button
+to go on to the new one; it moves on by itself once it has been left alone for
+a quarter of an hour. What is typed past six is dated the night it was typed
+for, payments from Settle up included.
 
 ## Accruals, not payments
 

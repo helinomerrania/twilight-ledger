@@ -10,6 +10,7 @@ export const S = {               // whatever the server last told us
   month: null,
   on: null,                      // the night on screen
   picked: false,                 // ... picked by hand, rather than tonight's
+  stayed: null,                  // the night kept on screen after six, while in use
   count: null,                   // which stock count is on screen
   draft: {},                     // what is half-typed or half-chosen on screen
   search: null,                  // {q, rows} while Books is showing a search
