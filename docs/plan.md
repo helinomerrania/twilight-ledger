@@ -803,11 +803,11 @@ Ideas raised and worth keeping, not yet planned in detail:
   month.
 - ✅ the screens in Kurdish, right to left (2026.11.11.26; built in since
   2026.11.11.61): Setup → **Language** switches between English and Kurdish
-  (Sorani). The Kurdish comes with the app, in `web/lang/ckb.json`, which he
-  fills by translating the app's sentences with Gemini, in batches handed to
-  him in the chat; the app itself no longer talks to Gemini. Names, numbers
-  and dates stay as they are, and a sentence with no Kurdish yet stays in
-  English.
+  (Sorani). The Kurdish comes with the app, in `web/lang/ckb.json`: he
+  translated every sentence with Gemini, in ten batches handed to him in the
+  chat, and the app itself no longer talks to Gemini. A sentence added later
+  stays in English until its Kurdish is added the same way. Names, numbers
+  and dates stay as they are.
 - ✅ a month-end summary he can print or send to his partner (2026.11.11.24):
   Month → **Summary for my partner** is one A4 page — the month (so far, while
   it runs) beside last month, where the daily expenses went, each partner's
