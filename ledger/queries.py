@@ -862,7 +862,7 @@ def money_flow(con, month):
     lines, found = [], []
     for r in db.all_(con, """
             SELECT m.entry_id, m.entry_kind, COALESCE(m.detail, '') AS detail,
-                   SUM(m.amount) AS delta, m.happened_on, e.period, e.created_at,
+                   SUM(m.amount) AS delta, m.happened_on, e.created_at,
                    e.source_ref,
                    -- the person it was for, as they are called now: `detail`
                    -- keeps the name written at the time, and a renamed person
@@ -888,7 +888,7 @@ def money_flow(con, month):
         # each one on its own too, for a name's entries and the slips
         lines.append({"id": r["entry_id"], "on": r["happened_on"], "kind": r["entry_kind"],
                       "label": g["label"], "name": name, "amount": abs(r["delta"]),
-                      "out": r["delta"] < 0, "period": r["period"]})
+                      "out": r["delta"] < 0})
         found.append({"id": r["entry_id"], "happened_on": r["happened_on"],
                       "created_at": r["created_at"], "source_ref": r["source_ref"]})
     at = entry_times(con, found)

@@ -121,7 +121,7 @@ def _members(zf):
     return out
 
 
-def inspect(zip_bytes, con=None, root=ROOT):
+def inspect(zip_bytes, con=None):
     """Everything that must be true of a download before it is allowed near
     the app. Returns what it found."""
     try:
@@ -221,7 +221,7 @@ def apply(zip_bytes, con, root=ROOT):
     """Replace the code with the downloaded version. The books are copied
     aside first and are not otherwise touched."""
     root = Path(root).resolve()
-    found = inspect(zip_bytes, con, root)
+    found = inspect(zip_bytes, con)
     have, version = current(root), found["version"]
     if parse(version) <= parse(have):
         raise db.LedgerError(f"this is already version {have}; the download is {version}")

@@ -67,7 +67,7 @@ def _lines_of(con, doc_id):
 def _from_document(con, d, linked, pots, names):
     """What one SambaPOS document is in the books: a list of entries, or the
     reason it cannot be added by itself."""
-    base = {"at": d["at"], "what": d["kind"] or d["name"], "pos_doc": d["pos_id"]}
+    base = {"at": d["at"], "what": d["kind"] or d["name"]}
     lines = _lines_of(con, d["id"])
     if not lines:
         return [{**base, "status": "skip", "words": "reversed in SambaPOS", "amount": 0,

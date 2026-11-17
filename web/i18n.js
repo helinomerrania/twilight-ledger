@@ -147,7 +147,8 @@ function keyOf(text, holes = []) {
   return { key, vals, words: letters > 1 || (letters === 1 && vals.length > 0) };
 }
 
-/** The key the screens would use for `text` (for the tests and the catalog). */
+/** The key the screens would use for `text`: how new English is added to the
+    catalog (web/lang/catalog.json) with the key the screens will look it up by. */
 export const keyFor = text => {
   const k = keyOf(String(text || ''));
   return k && k.words ? k.key : null;
