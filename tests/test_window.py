@@ -101,6 +101,33 @@ class OverHttp(unittest.TestCase):
         self.assertNotEqual(update.RUNNING, "2099.1.1.1")
 
 
+class StartedAgainAfterAnUpdate(unittest.TestCase):
+
+    def test_it_takes_back_the_same_port(self):
+        # the pages left open are waiting at the old address; just after the
+        # old app stops, its last connections still linger on the port
+        con = fresh_books()
+        api.bootstrap(con)
+        server.Handler.db_path = con.path
+        old = ThreadingHTTPServer(("127.0.0.1", 0), server.Handler)
+        threading.Thread(target=old.serve_forever, daemon=True).start()
+        port = old.server_address[1]
+        for _ in range(3):
+            c = http.client.HTTPConnection("127.0.0.1", port, timeout=10)
+            c.request("GET", "/api/here?page=p")
+            c.getresponse().read()
+            c.close()
+        old.shutdown()
+        old.server_close()
+        new = server.take_back(port)
+        try:
+            self.assertIsNotNone(new)
+            self.assertEqual(new.server_address[1], port)
+        finally:
+            if new:
+                new.server_close()
+
+
 class StartingInAWindow(unittest.TestCase):
 
     def setUp(self):

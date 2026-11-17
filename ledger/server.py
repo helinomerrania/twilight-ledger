@@ -330,6 +330,19 @@ def show(url, window):
         webbrowser.open(url)
 
 
+def take_back(port):
+    """Started again after an update: the same port as before, so that the
+    pages left open find the app where they left it. The version it replaced
+    has let go of it, or is just letting go; its last connections linger a
+    while yet, which only a real attempt to listen there sees past."""
+    for _ in range(50):
+        try:
+            return ThreadingHTTPServer((HOST, port), Handler)
+        except OSError:
+            time.sleep(0.2)
+    return None
+
+
 def serve(db_path=None, port=PORT, *, open_browser=True, window=False):
     """Serve the books until stopped. `window` is the app started from its
     desktop icon: it opens in a window of its own, and stops once the last
@@ -357,20 +370,15 @@ def serve(db_path=None, port=PORT, *, open_browser=True, window=False):
         from . import window as own
         own.icon_once(con, db_path)
 
-    again = bool(os.environ.get("TWILIGHT_RESTARTED"))
-    if again:
-        # Started again after an update: the version it replaced is still
-        # letting go of its port. Take the same one, so that the pages left
-        # open find the app where they left it.
-        for _ in range(50):
-            if free_port(port):
-                break
-            time.sleep(0.2)
-    while not free_port(port) and port < PORT + 20:
-        port += 1
     Handler.db_path = con.path
     Handler.restart = False
-    srv = ThreadingHTTPServer((HOST, port), Handler)
+    again = bool(os.environ.get("TWILIGHT_RESTARTED"))
+    srv = take_back(port) if again else None
+    if srv is None:
+        while not free_port(port) and port < PORT + 20:
+            port += 1
+        srv = ThreadingHTTPServer((HOST, port), Handler)
+    port = srv.server_address[1]
     Handler.pages = Pages(srv.shutdown if window else None)
     if window:
         # nobody came: the window never opened, or was closed while the app
