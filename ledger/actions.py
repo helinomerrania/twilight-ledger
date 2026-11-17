@@ -214,7 +214,7 @@ def _void(con, body):
     """Delete an entry. It is kept, marked as deleted, and can be put back."""
     e = _entry(con, body["id"])
     if not e["deletable"]:
-        raise ApiError(_why_not(con, e, t("why.verb_deleted")))
+        raise ApiError(_why_not(con, e, "deleted"))
     was = describe_entry(con, e["id"])
     post.void(con, e["id"], why=body.get("why"))
     return {"id": e["id"], "_was": was}
@@ -235,7 +235,7 @@ def _undo(con, body):
         raise ApiError(t("undo.corrected" if gone["replaced_by"] else "undo.already"))
     e = _entry(con, body["id"])
     if not e["deletable"]:
-        raise ApiError(_why_not(con, e, t("why.verb_taken_back")))
+        raise ApiError(_why_not(con, e, "taken_back"))
     was = describe_entry(con, e["id"])
     post.void(con, e["id"], why=t("why.taken_back"))
     back = []
@@ -255,16 +255,18 @@ def _put_back(con, body):
     return {"id": post.unvoid(con, int(body["id"]))}
 
 
-def _why_not(con, e, verb):
+def _why_not(con, e, done):
+    """Why an entry cannot be deleted, corrected or taken back (`done`): each
+    its own whole sentence, so it can be put into Kurdish whole."""
     if e.get("retired_pot"):
         return t("why.retired_pot", e["retired_pot"])
     if queries.is_closed(con, e["period"]):
-        return t("why.closed", e["period"], verb)
+        return t(f"why.closed_{done}", e["period"])
     if any(l["code"] == "eq:opening" for l in e["legs"]):
-        return t("why.historic", verb)
+        return t(f"why.historic_{done}")
     if e["kind"] in ("salary_charge", "fixed_charge", "electricity_charge"):
         return t("why.charge")
-    return t("why.kind", verb)
+    return t(f"why.kind_{done}")
 
 
 # How to write each kind of entry again from a corrected form.
@@ -295,7 +297,7 @@ def _repost(con, kind, f, source_ref=None):
     if kind == "transfer":
         return post.transfer(con, f["amount"], frm=f["pot"], to=f["pot_to"],
                              source_ref=source_ref, **kw)
-    raise ApiError(t("why.kind", t("why.verb_corrected")))
+    raise ApiError(t("why.kind_corrected"))
 
 
 _WHO_KIND = {"staff_advance": "staff", "staff_repayment": "staff",
@@ -319,7 +321,7 @@ def _edit_entry(con, body):
     """
     e = _entry(con, body["id"])
     if not e["editable"]:
-        raise ApiError(_why_not(con, e, t("why.verb_corrected")))
+        raise ApiError(_why_not(con, e, "corrected"))
     kind = e["kind"]
 
     on = clean_date(body.get("on") or e["happened_on"])

@@ -35,11 +35,11 @@ const LEAVE = 'script, style, noscript, textarea, code, pre, bdi, svg, [translat
 
 /* What changes inside a piece: paths and files, Kurdish already, the names in
    the books, month and weekday names (put into Kurdish on their own), then
-   dates, times and numbers. */
+   dates, months (2026-10), times and numbers. */
 const FILES = String.raw`[A-Za-z]:\\(?:[\w.\- ]+\\)*[\w.\-]*|https?:\/\/\S+|[\w\-.:]+\.(?:zip|bak|db|json|csv|txt|pdf|bat)\b`;
 const KURDISH = String.raw`\p{Script=Arabic}(?:[\p{Script=Arabic}\p{M}\p{Cf}]|\s(?=\p{Script=Arabic}))*`;
 let CALENDAR = '';                       // month and day names: set by calendar()
-const NUMBERS = String.raw`\d{4}-\d{2}-\d{2}(?:[ T]\d{2}:\d{2}(?::\d{2})?)?|\d{1,2}:\d{2}(?::\d{2})?|[-−+]?\d+(?:[,.]\d+)*%?`;
+const NUMBERS = String.raw`\d{4}-\d{2}-\d{2}(?:[ T]\d{2}:\d{2}(?::\d{2})?)?|\d{4}-\d{2}(?![\d-])|\d{1,2}:\d{2}(?::\d{2})?|[-−+]?\d+(?:[,.]\d+)*%?`;
 let CALENDAR_WORD = /^$/;
 
 let lang = 'en';

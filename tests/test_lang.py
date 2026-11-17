@@ -59,6 +59,15 @@ class TheKurdishFile(unittest.TestCase):
             if e[:1] in ",;":
                 self.assertIn(text[:1], ",;،؛", name)
 
+    def test_the_same_english_has_the_same_kurdish(self):
+        # what the server says is put into Kurdish by its English, so two
+        # sentences that read the same must say the same in Kurdish
+        said = {}
+        for name, text in self.kurdish.items():
+            said.setdefault(self.english[name], {})[name] = text
+        for kurdish in said.values():
+            self.assertEqual(len(set(kurdish.values())), 1, kurdish)
+
     def test_the_screens_and_the_server_read_it(self):
         self.assertIn("read('lang/ckb.json')", (ROOT / "web" / "lib.js").read_text(encoding="utf-8"))
         self.assertEqual(words.KURDISH, FILE)
