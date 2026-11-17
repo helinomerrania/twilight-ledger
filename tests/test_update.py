@@ -111,6 +111,24 @@ class Update(unittest.TestCase):
     def test_a_download_with_broken_code_is_refused(self):
         self.assertIn("broken", self.refused(github_zip(change={"ledger/post.py": b"def ("})))
 
+    def test_a_download_whose_new_migration_these_books_cannot_take_is_refused(self):
+        """Put in place, it could not start: the app would not open at all,
+        with the old code only in a zip."""
+        bad = {"ledger/migrations/099_one_of_each.sql":
+               b"CREATE UNIQUE INDEX one_of_each ON account(kind);\n"}
+        said = self.refused(github_zip(extra=bad))
+        self.assertIn("could not open a copy of these books", said)
+        self.assertIn("UNIQUE", said)
+        self.assertFalse((self.app / ".update-staging").exists())
+        # and the books never went through it
+        self.assertFalse(self.con.execute("SELECT 1 FROM schema_migrations "
+                                          "WHERE name = '099_one_of_each.sql'").fetchone())
+
+    def test_a_download_that_cannot_start_is_refused(self):
+        broken = (ROOT / "ledger/api.py").read_bytes() + b"\nimport no_such_module\n"
+        said = self.refused(github_zip(change={"ledger/api.py": broken}))
+        self.assertIn("no_such_module", said)
+
     def test_a_download_that_climbs_out_of_the_folder_is_refused(self):
         self.assertIn("unsafe", self.refused(github_zip(extra={"../outside.py": b""})))
 

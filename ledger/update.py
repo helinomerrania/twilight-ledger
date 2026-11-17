@@ -10,7 +10,8 @@ The order is the whole design:
   2. check it: it is this app, it is newer, every Python file in it compiles,
      and it still contains every database migration these books have already
      been through, unchanged — an update that rewrote history would leave the
-     app unable to open its own books
+     app unable to open its own books — and, in its own Python, it starts and
+     opens a copy of these books, its new migrations and all
   3. set a copy of the books aside, and stop if that fails
   4. keep the code being replaced as a zip, so the update can be undone
   5. swap the new code in, folder by folder, putting the old back if any
@@ -22,6 +23,9 @@ with its own copy taken first.
 import io
 import os
 import shutil
+import sqlite3
+import subprocess
+import sys
 import urllib.error
 import urllib.request
 import zipfile
@@ -175,6 +179,44 @@ def _archive_code(root, dest):
                 z.write(root / name, name)
 
 
+# Run by the new version, on a copy of the books: everything it needs at
+# start-up, its new migrations included, and the screens' whole state.
+_OPENS = """
+import sys
+sys.path.insert(0, sys.argv[1])
+from ledger import api, db
+con = db.connect(sys.argv[2])
+api.load_settings(con)
+api.state(con)
+"""
+
+
+def _opens(stage, con):
+    """Does the new version start, and open these books? Its code compiling
+    is not enough: one whose new migration these books cannot take, or that
+    fails as it starts, would be put in place and then leave the app unable to
+    start at all, with the old code only in a zip. It is tried first, in its
+    own Python, on a copy of the books that is thrown away."""
+    copy = stage / "books-tried.db"
+    out = sqlite3.connect(str(copy))
+    try:
+        con.backup(out)
+    finally:
+        out.close()
+    try:
+        run = subprocess.run([sys.executable, "-I", "-c", _OPENS, str(stage), str(copy)],
+                             capture_output=True, text=True, timeout=300, cwd=str(stage),
+                             check=False)
+    except (OSError, subprocess.TimeoutExpired) as exc:
+        raise db.LedgerError(f"the new version could not be tried ({exc}). "
+                             "Nothing was changed.") from exc
+    if run.returncode != 0:
+        said = [ln for ln in (run.stderr or run.stdout or "").strip().splitlines() if ln.strip()]
+        raise db.LedgerError("the new version could not open a copy of these books ("
+                             + (said[-1].strip() if said else f"it stopped with {run.returncode}")
+                             + "). Nothing was changed.")
+
+
 def apply(zip_bytes, con, root=ROOT):
     """Replace the code with the downloaded version. The books are copied
     aside first and are not otherwise touched."""
@@ -185,21 +227,7 @@ def apply(zip_bytes, con, root=ROOT):
         raise db.LedgerError(f"this is already version {have}; the download is {version}")
     files, zf = found["files"], found["zip"]
 
-    # 3. the books first. If they cannot be set aside, nothing else happens.
-    try:
-        saved = backup.run(con, why=f"before-update-{version}")
-    except (db.LedgerError, OSError) as exc:
-        raise db.LedgerError("could not set the books aside first, so nothing "
-                             f"was changed: {exc}") from exc
-
-    # 4. the code being replaced, so this can be undone by unzipping it back
-    stamp = datetime.now().strftime("%Y%m%d-%H%M%S")
-    keep = db.backup_dir(con.path)
-    keep.mkdir(parents=True, exist_ok=True)
-    old_code = keep / f"code-{have}-{stamp}.zip"
-    _archive_code(root, old_code)
-
-    # 1 (done late on disk, but before any swap). unpack out of the way
+    # 1 (on disk). unpack out of the way
     stage = root / ".update-staging"
     shutil.rmtree(stage, ignore_errors=True)
     for rel, name in files.items():
@@ -209,6 +237,28 @@ def apply(zip_bytes, con, root=ROOT):
         target = stage / rel
         target.parent.mkdir(parents=True, exist_ok=True)
         target.write_bytes(zf.read(name))
+
+    # 2 (the rest of it). the new version opens a copy of these books
+    try:
+        _opens(stage, con)
+    except db.LedgerError:
+        shutil.rmtree(stage, ignore_errors=True)
+        raise
+
+    # 3. the books first. If they cannot be set aside, nothing else happens.
+    try:
+        saved = backup.run(con, why=f"before-update-{version}")
+    except (db.LedgerError, OSError) as exc:
+        shutil.rmtree(stage, ignore_errors=True)
+        raise db.LedgerError("could not set the books aside first, so nothing "
+                             f"was changed: {exc}") from exc
+
+    # 4. the code being replaced, so this can be undone by unzipping it back
+    stamp = datetime.now().strftime("%Y%m%d-%H%M%S")
+    keep = db.backup_dir(con.path)
+    keep.mkdir(parents=True, exist_ok=True)
+    old_code = keep / f"code-{have}-{stamp}.zip"
+    _archive_code(root, old_code)
 
     # 5. swap folder by folder, able to put every one back
     moved, replaced_files = [], []
