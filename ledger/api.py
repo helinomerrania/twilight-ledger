@@ -61,7 +61,7 @@ def state(con, *, month=None, on=None, count_date=None):
         "today": today(),
         "tonight": tonight(),
         "night_ends": NIGHT_ENDS,
-        "version": update.current(),
+        "version": update.RUNNING,
         "month": month,
         "this_month": now,
         "clock": accruals.clock_jump(con),

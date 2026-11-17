@@ -801,6 +801,10 @@ Ideas raised and worth keeping, not yet planned in detail:
   tickets, what they came to and how long people stayed (from opening the
   ticket to paying it). SambaPOS's own reports see one night; this sees the
   month.
+- ✅ its own window (2026.11.11.64): a Twilight Ledger icon on the desktop
+  opens the app in a window of its own, with no black window and no browser
+  bar, and closing the window stops it. An update no longer leaves the page
+  stuck on "Opening the books…".
 - ✅ the screens in Kurdish, right to left (2026.11.11.26; built in since
   2026.11.11.61): Setup → **Language** switches between English and Kurdish
   (Sorani). The Kurdish comes with the app, in `web/lang/ckb.json`: he

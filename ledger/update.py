@@ -60,8 +60,16 @@ def _zip_url():
 
 
 def current(root=ROOT):
+    """The version on disk: what an update has put there."""
     f = Path(root) / "VERSION"
     return f.read_text(encoding="utf-8").strip() if f.exists() else "0"
+
+
+# The version this running app started as. Once an update is in place the
+# disk says the new one, but until it has started again this is still the
+# old code answering, and a page told otherwise would load itself again
+# against an app that is just stopping.
+RUNNING = current()
 
 
 def parse(version):

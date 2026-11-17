@@ -17,6 +17,18 @@ def cmd_serve(a):
     return serve(a.db, port=a.port, open_browser=not a.no_browser)
 
 
+def cmd_window(a):
+    from ledger import window
+    return window.run(a.db, a.argv)
+
+
+def cmd_icon(a):
+    from ledger import window
+    made = window.make_icon(a.db)
+    print(t("cli.icon_made", made) if made else t("cli.icon_failed", t("cli.icon_needs")))
+    return 0 if made else 1
+
+
 def cmd_check(a):
     con = db.connect(a.db)
     rep = db.integrity(con)
@@ -209,6 +221,12 @@ def main(argv=None):
     s.add_argument("--no-browser", action="store_true")
     s.set_defaults(fn=cmd_serve)
 
+    s = sub.add_parser("window", help=t("cli.help_window"))
+    s.set_defaults(fn=cmd_window)
+
+    s = sub.add_parser("icon", help=t("cli.help_icon"))
+    s.set_defaults(fn=cmd_icon)
+
     s = sub.add_parser("check", help=t("cli.help_check"))
     s.set_defaults(fn=cmd_check)
 
@@ -250,9 +268,11 @@ def main(argv=None):
     s.add_argument("query")
     s.set_defaults(fn=cmd_sql)
 
+    argv = sys.argv[1:] if argv is None else argv
     a = ap.parse_args(argv)
     if not getattr(a, "fn", None):
-        a = ap.parse_args((argv or []) + ["serve"])
+        a = ap.parse_args([*argv, "serve"])
+    a.argv = argv
     try:
         return a.fn(a) or 0
     except db.LedgerError as exc:

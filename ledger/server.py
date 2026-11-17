@@ -21,6 +21,7 @@ import os
 import socket
 import sys
 import threading
+import time
 import urllib.request
 import webbrowser
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
@@ -44,6 +45,52 @@ RESTART = 3                      # exit code that asks the start file to run us 
 # A browser will not let a page reach another origin without permission, and
 # these are the only names the screens are ever served under.
 ALLOWED_HOSTS = {"127.0.0.1", "localhost", "[::1]"}
+NOBODY = 120                     # seconds a window has to open before the app gives up on it
+
+
+class Pages:
+    """The app's own pages that are open, each by the name it gave itself.
+
+    Started from its desktop icon, the app has no black window to close: it
+    stops once the last of its windows has gone. A page says it is here when
+    it loads and every so often after, and goodbye when it goes. A page being
+    loaded again says both, so the app waits a moment after the last goodbye
+    for anyone to come back before it stops."""
+
+    GRACE = 10
+
+    def __init__(self, when_all_gone=None):
+        self.lock = threading.Lock()
+        self.open = set()
+        self.heard = False           # has any page said it is here yet
+        self.when_all_gone = when_all_gone
+
+    def here(self, page):
+        if page:
+            with self.lock:
+                self.open.add(page)
+                self.heard = True
+
+    def bye(self, page):
+        with self.lock:
+            if page not in self.open:
+                return
+            self.open.discard(page)
+            if self.open or not self.when_all_gone:
+                return
+        later(self.GRACE, self._gone)
+
+    def _gone(self):
+        with self.lock:
+            if self.open:
+                return
+        self.when_all_gone()
+
+
+def later(seconds, fn):
+    timer = threading.Timer(seconds, fn)
+    timer.daemon = True
+    timer.start()
 
 
 class Handler(BaseHTTPRequestHandler):
@@ -51,6 +98,7 @@ class Handler(BaseHTTPRequestHandler):
     protocol_version = "HTTP/1.1"
     db_path = None               # set by serve(); each thread opens its own
     restart = False              # set once an update has been put in place
+    pages = Pages()              # the app's pages that are open
 
     # ------------------------------------------------------------- plumbing
     def log_message(self, fmt, *args):
@@ -149,9 +197,12 @@ class Handler(BaseHTTPRequestHandler):
                 return self.send_json(out)
             if url.path == "/api/close":
                 return self.send_json(ready(self.con, q.get("month")))
+            if url.path == "/api/here":            # a page is still open
+                Handler.pages.here(q.get("page"))
+                return self.send_json({})
             if url.path == "/api/health":
                 out = db.integrity(self.con)
-                out["version"] = update.current()
+                out["version"] = update.RUNNING
                 out["books"] = str(self.con.path)
                 return self.send_json(out)
             if url.path == "/api/update":
@@ -170,6 +221,12 @@ class Handler(BaseHTTPRequestHandler):
 
     # ---------------------------------------------------------------- POST
     def do_POST(self):
+        if urlparse(self.path).path == "/api/bye" and self._safe_host():
+            # A page going away. It cannot send JSON as it goes, and it only
+            # says it has gone, so it needs nothing else of a write.
+            self.close_connection = True
+            Handler.pages.bye(parse_qs(urlparse(self.path).query).get("page", [""])[0])
+            return self.send_json({})
         refused = (t("server.localhost") if not self._safe_host() else
                    t("server.own_page") if not self._own_page() else None)
         try:
@@ -193,7 +250,7 @@ class Handler(BaseHTTPRequestHandler):
         # A page left open across an update still has the old screens, and
         # what they send may no longer mean what the new app takes it to mean.
         page = self.headers.get("X-Twilight-Version")
-        if page and page != update.current():
+        if page and page != update.RUNNING:
             return self.send_json({"error": t("server.updated"), "reload": True}, 409)
 
         try:
@@ -264,12 +321,24 @@ def running_at(port, books):
     return None
 
 
-def serve(db_path=None, port=PORT, *, open_browser=True):
+def show(url, window):
+    """The books, in a browser, or in a window of their own."""
+    if window:
+        from . import window as own
+        own.open_window(url)
+    else:
+        webbrowser.open(url)
+
+
+def serve(db_path=None, port=PORT, *, open_browser=True, window=False):
+    """Serve the books until stopped. `window` is the app started from its
+    desktop icon: it opens in a window of its own, and stops once the last
+    of its windows is closed."""
     already = running_at(port, Path(db_path or db.DEFAULT_DB).resolve())
     if already:
         print(t("cli.already_open", already))
         if open_browser:
-            webbrowser.open(already)
+            show(already, window)
         return 0
     con = db.connect(db_path or db.DEFAULT_DB)
     api.bootstrap(con)
@@ -284,20 +353,37 @@ def serve(db_path=None, port=PORT, *, open_browser=True):
         backup.daily(con)
     except (db.LedgerError, OSError) as exc:
         print(t("cli.no_backup_today", exc))
+    if os.name == "nt":
+        from . import window as own
+        own.icon_once(con, db_path)
 
+    again = bool(os.environ.get("TWILIGHT_RESTARTED"))
+    if again:
+        # Started again after an update: the version it replaced is still
+        # letting go of its port. Take the same one, so that the pages left
+        # open find the app where they left it.
+        for _ in range(50):
+            if free_port(port):
+                break
+            time.sleep(0.2)
     while not free_port(port) and port < PORT + 20:
         port += 1
     Handler.db_path = con.path
     Handler.restart = False
     srv = ThreadingHTTPServer((HOST, port), Handler)
+    Handler.pages = Pages(srv.shutdown if window else None)
+    if window:
+        # nobody came: the window never opened, or was closed while the app
+        # was starting again after an update
+        later(NOBODY, lambda: None if Handler.pages.heard else srv.shutdown())
     auto.start(con.path)         # SambaPOS's backups, read by themselves
     url = f"http://{HOST}:{port}/"
-    print(t("cli.serving", update.current(), con.path))
+    print(t("cli.serving", update.RUNNING, con.path))
     print(t("cli.serving_books", rep["entries"], rep["postings"]))
     print(t("cli.serving_open", url))
     print(t("cli.serving_stop"))
-    if open_browser and not os.environ.get("TWILIGHT_RESTARTED"):
-        threading.Timer(0.6, lambda: webbrowser.open(url)).start()
+    if open_browser and not again:
+        later(0.6, lambda: show(url, window))
     try:
         srv.serve_forever()
     except KeyboardInterrupt:

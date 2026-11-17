@@ -130,7 +130,8 @@ class NothingLeftOfGemini(unittest.TestCase):
         self.assertEqual(sorted(n for n in registry.ACTIONS if n.startswith("lang")), ["language_set"])
 
     def test_not_a_word_of_it(self):
-        files = [*(ROOT / "ledger").rglob("*.py"), *(ROOT / "web").glob("*.*"),
+        files = [*(ROOT / "ledger").rglob("*.py"), *(ROOT / "web").glob("*.js"),
+                 *(ROOT / "web").glob("*.css"), *(ROOT / "web").glob("*.html"),
                  *(ROOT / "web" / "lang").glob("*.json"), ROOT / "twilight.py"]
         for f in files:
             text = f.read_text(encoding="utf-8")

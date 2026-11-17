@@ -419,6 +419,18 @@ window.addEventListener('focus', lookAgain);
 document.addEventListener('visibilitychange', lookAgain);
 window.addEventListener('pageshow', e => { if (e.persisted) lookAgain(); });
 
+/* Started from its desktop icon, the app has no black window to close: it
+   stops once the last of its windows has gone. So each page tells it that it
+   is open, now and every so often, and says goodbye as it goes; a page being
+   loaded again does both, and the app waits a moment for it. */
+const PAGE = Math.random().toString(36).slice(2) + Date.now().toString(36);
+// the answer is read, or the browser keeps its connection waiting for someone to
+const here = () => fetch(`/api/here?page=${PAGE}`, { cache: 'no-store' }).then(r => r.text()).catch(() => {});
+here();
+setInterval(here, 20 * 1000);
+window.addEventListener('pagehide', () => navigator.sendBeacon(`/api/bye?page=${PAGE}`));
+window.addEventListener('pageshow', e => { if (e.persisted) here(); });
+
 function watchBackups() {
   clearTimeout(watchTimer);
   const a = S.data && S.data.pos && S.data.pos.auto;
@@ -1856,9 +1868,22 @@ window.addEventListener('hashchange', () => {
 
 /* -------------------------------------------------------------------- boot */
 
+/** Ask until the app answers: just after an update it is still starting
+    again, for a few seconds. What it answers, even a refusal, is the answer. */
+async function patiently(question) {
+  for (let tries = 1; ; tries += 1) {
+    try {
+      return await question();
+    } catch (err) {
+      if (!(err instanceof TypeError) || tries >= 60) throw err;    // TypeError: no answer at all
+      await new Promise(r => setTimeout(r, 1000));
+    }
+  }
+}
+
 (async function start() {
   try {
-    await loadWords();
+    await patiently(loadWords);
   } catch (err) {
     // without its words the app has nothing to say anything in but the reason
     document.getElementById('main').textContent = String(err && err.message);
@@ -1875,7 +1900,7 @@ window.addEventListener('hashchange', () => {
   if (PAGES[tab] && page && PAGES[tab].some(p => p[0] === page)) S.page[tab] = page;
   watch();
   try {
-    await apply(await load(), { fresh: true });
+    await apply(await patiently(() => load()), { fresh: true });
     const bad = S.data.checks.filter(c => !c.ok).length;
     if (bad) say(bad === 1 ? t('look.one', 1) : t('look.many', bad));
   } catch (err) {

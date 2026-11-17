@@ -17,13 +17,20 @@ invented lounge. The one import tool reads a file you point it at.
 You need Python 3.11 or newer. Nothing else — no packages to install, no build
 step, no internet.
 
-On Windows, double-click **Start Twilight Ledger.bat**. Anywhere else:
+On Windows, the first time, double-click **Start Twilight Ledger.bat**. It
+puts a **Twilight Ledger** icon on the desktop; from then on, start the app
+from that. It opens in a window of its own (Microsoft Edge's app window, with
+no address bar or tabs), with no black window behind it, and stops by itself
+a few seconds after the window is closed. What the black window used to show
+goes to `twilight.log` beside the books. The .bat still starts it the old
+way. Anywhere else:
 
 ```
 python twilight.py
 ```
 
-That opens the books in your browser at `http://127.0.0.1:8788`. The server
+That opens the books in your browser at `http://127.0.0.1:8788`; `python
+twilight.py window` opens them in a window of their own instead. The server
 listens on loopback only, so nothing on the network can reach it.
 
 Other things it can do:

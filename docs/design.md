@@ -446,6 +446,36 @@ new code is swapped in folder by folder, every one put back if any step fails.
 Only `ledger/`, `web/`, `tools/`, `tests/`, `docs/` and a handful of named
 files can ever be written; `data/` is not on the list.
 
+The running app reports the version it started as, not the one on disk. Once
+an update is in place the disk says the new version, but for a moment it is
+still the old code answering; a page told the new version loaded itself again
+against an app that was just stopping, and sat on "Opening the books…" until
+refreshed by hand. A page now waits for the new app to answer, and one that
+opens while the app is starting again keeps asking for up to a minute.
+
+`Start Twilight Ledger.bat` is never changed, and a test holds it to that. An
+update replaces it while it is running, and Windows reads a running batch file
+from disk a line at a time, so after the restart a changed one would carry on
+from the middle of a line of the new one. Anything new about starting the app
+goes into `twilight.py` instead.
+
+## Its own window
+
+The desktop icon starts `twilight.py window` with pythonw, Python without a
+console, so there is no black window (`ledger/window.py`). It serves the books
+as before and opens them in Microsoft Edge's app window, which has no address
+bar or tabs (Chrome's if Edge is missing, a browser tab if both are). It cannot
+watch the window itself (Edge hands it to a browser already running), so the
+pages say: each tells the app it is open when it loads and every 20 seconds,
+and says goodbye as it goes. Ten seconds after the last goodbye with nobody
+back, the app stops; a page being reloaded says both, so a reload or a change
+of language never stops it, and a crash that says nothing leaves the app
+running, to be found by the next start. After an update it starts itself
+again and the window reloads. With no console, what it would have printed goes
+to `twilight.log` beside the books, and if it cannot start, a message box says
+why. The icon is put on the desktop once, the first time the app runs on
+Windows; `twilight.py icon` puts it back.
+
 ## Why Python and SQLite
 
 The requirement was that an update from GitHub must never touch the books. With
