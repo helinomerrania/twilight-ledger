@@ -158,8 +158,17 @@ def _account_active(con, body):
     if a["kind"] == "staff":
         if active:
             if body.get("back_on") and meta.get("left_on"):
-                # back after time away: the days between are not paid for
-                back = _a_day(body["back_on"], t("day.back"), t("day.back_wait"))
+                # back after time away: the days between are not paid for.
+                # The day after their last day means they never left, and can
+                # be tomorrow: "has left" pressed by mistake, with the day it
+                # offers, tonight, could not be put right until the next day
+                never = next_day(meta["left_on"])
+                try:
+                    asked = ymd(body["back_on"])
+                except ValueError:
+                    asked = None
+                back = never if asked == never else \
+                    _a_day(body["back_on"], t("day.back"), t("day.back_wait"))
                 if back <= meta["left_on"]:
                     raise ApiError(t("day.back_after", meta["left_on"]))
                 if back != next_day(meta["left_on"]):

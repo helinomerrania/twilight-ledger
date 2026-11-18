@@ -34,16 +34,21 @@ def balance(con, code, as_of=None):
 
 
 def balances(con, kind, as_of=None):
-    """Every account of one kind with its balance, in Setup order."""
+    """Every account of one kind with its balance, in Setup order.
+
+    Each account's own postings are summed by themselves. Joined to the
+    movement view instead, SQLite built the whole of it, every posting ever,
+    for each call; a screen makes some twenty of them, and after two years of
+    nights that was a sixth of a second for every change saved."""
     sql = ("SELECT a.id, a.code, a.name, a.active, a.meta, a.kind, "
-           "       COALESCE(SUM(CASE WHEN ? IS NULL OR m.happened_on <= ? "
-           "                    THEN m.amount * a.normal END), 0) AS balance, "
-           "       MAX(m.happened_on) AS last_used "
-           "  FROM account a LEFT JOIN movement m ON m.account_id = a.id "
-           " WHERE a.kind = ?")
-    args = [as_of, as_of, kind]
-    sql += " GROUP BY a.id ORDER BY a.active DESC, a.sort, a.name"
-    return db.all_(con, sql, args)
+           "       COALESCE((SELECT SUM(p.amount) FROM posting p JOIN entry e ON e.id = p.entry_id "
+           "                  WHERE p.account_id = a.id AND e.voided_at IS NULL "
+           "                    AND (?1 IS NULL OR e.happened_on <= ?1)), 0) * a.normal AS balance, "
+           "       (SELECT MAX(e.happened_on) FROM posting p JOIN entry e ON e.id = p.entry_id "
+           "         WHERE p.account_id = a.id AND e.voided_at IS NULL) AS last_used "
+           "  FROM account a WHERE a.kind = ?2 "
+           " ORDER BY a.active DESC, a.sort, a.name")
+    return db.all_(con, sql, (as_of, kind))
 
 
 def cash_on_hand(con, as_of=None):

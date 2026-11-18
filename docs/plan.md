@@ -814,6 +814,15 @@ Ideas raised and worth keeping, not yet planned in detail:
   entry. The minimum and the menu's amounts take the Arabic decimal point a
   Kurdish keyboard types, and a page closed mid-download no longer fills
   `twilight.log`.
+- ✅ a second hunt (2026.11.11.67): two years of invented nights to time the
+  app on, every button pressed once on every page, and some six hundred
+  changes undone at random, each checked to leave the books exactly as they
+  were. The screens were a third of a second slower for every year of books,
+  from two queries that went through every posting and every SambaPOS order
+  ever kept: now three and a half times faster, the same to the last figure.
+  Undo is asked about, as a payment is, when it leaves a pot short (it was
+  refused, and the Undo lost); and someone marked as left tonight by mistake
+  can be brought back tonight.
 - ✅ the screens in Kurdish, right to left (2026.11.11.26; built in since
   2026.11.11.61): Setup → **Language** switches between English and Kurdish
   (Sorani). The Kurdish comes with the app, in `web/lang/ckb.json`: he

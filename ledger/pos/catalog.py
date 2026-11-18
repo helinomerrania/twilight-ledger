@@ -91,10 +91,12 @@ def menu(con, nights=30):
     sold = {}
     if last:
         since = (date.fromisoformat(last) - timedelta(days=nights - 1)).isoformat()
+        # the nights first: left to itself, SQLite went through every order
+        # ever kept to group them by item, a sixth of a second after two years
         sold = {r["item"]: r["qty"] / 1000 for r in db.all_(con, """
-            SELECT o.item, SUM(o.qty_milli) AS qty FROM pos_order o
-              JOIN pos_ticket t ON t.id = o.ticket_id
-              JOIN pos_period p ON p.id = t.period_id
+            SELECT o.item, SUM(o.qty_milli) AS qty FROM pos_period p
+             CROSS JOIN pos_ticket t ON t.period_id = p.id
+             CROSS JOIN pos_order o ON o.ticket_id = t.id
              WHERE p.night >= ? GROUP BY o.item""", (since,))}
     groups, odd = defaultdict(list), []
     for it in rows(con, "menu_item"):

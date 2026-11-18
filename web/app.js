@@ -582,24 +582,28 @@ function done(text, out) {
   say(text, false, { label: t('common.undo'), run: () => undoChange(out.id) });
 }
 
+/* Taking back takings that have since been paid out leaves their pot short,
+   as a payment can, and is asked about the same way: sent plainly, it was
+   refused in red, and the Undo could not be had at all. */
 async function undoChange(id) {
-  const out = await act(() => send('undo', { id }));
+  const out = await act(() => sendGuarded('undo', { id }, t('common.undo'), { hint: false }));
   if (out) say(out.put_back && out.put_back.length ? t('undo.replaced_back') : t('undo.taken_back'));
 }
 
 /** Send a change that moves money. If it would take a pot below zero the
     server refuses with 409 and says by how much; the person is asked, and
-    the change is sent again only if they say so. */
-async function sendGuarded(action, body, yes = t('guard.pay_anyway')) {
+    the change is sent again only if they say so. The hint is about paying
+    from the right pot, which a change being taken back has nothing to do with. */
+async function sendGuarded(action, body, yes = t('guard.pay_anyway'), { hint = true } = {}) {
   try {
     return await send(action, body);
   } catch (err) {
     const short = err.status === 409 && err.extra && err.extra.overdraw;
     if (!short || !short.length) throw err;
     const s = short[0];
-    const hint = !S.data.day.sales ? t('guard.no_sales') : t('guard.elsewhere', s.pot);
+    const why = !hint ? '' : `\n\n${!S.data.day.sales ? t('guard.no_sales') : t('guard.elsewhere', s.pot)}`;
     const ok = await ask(t('guard.title', s.pot),
-      `${t('guard.holds', money(s.holds), money(s.short_by), s.on)}\n\n${hint}`, yes, t('guard.go_back'));
+      `${t('guard.holds', money(s.holds), money(s.short_by), s.on)}${why}`, yes, t('guard.go_back'));
     if (!ok) return null;
     return send(action, { ...body, allow_overdraw: true });
   }
@@ -851,13 +855,13 @@ const H = {
   async void(el) {
     const id = Number(el.dataset.id);
     if (S.draft.editing === id) S.draft.editing = null;
-    const out = await act(() => sendGuarded('void', { id }, t('entries.delete_anyway')));
+    const out = await act(() => sendGuarded('void', { id }, t('entries.delete_anyway'), { hint: false }));
     if (out) say(t('entries.deleted'), false, { label: t('recent.put_back'), run: () => H.putBack({ dataset: { id } }) });
   },
 
   async putBack(el) {
     const out = await act(() => sendGuarded('put_back', { id: Number(el.dataset.id) },
-                                            t('entries.put_back_anyway')));
+                                            t('entries.put_back_anyway'), { hint: false }));
     if (out) say(t('entries.put_back_done'));
   },
 
@@ -1194,8 +1198,11 @@ const H = {
     const next = new Date(`${el.dataset.on}T12:00:00Z`);
     next.setUTCDate(next.getUTCDate() + 1);
     const never = next.toISOString().slice(0, 10);
+    // marked as left tonight, by mistake: "never left" is tomorrow's date,
+    // which the box has to let them pick, and is what it starts on
+    const latest = never > S.data.today ? never : S.data.today;
     const on = await askDate(withName('ask.when_back', el.dataset.name), t('staff_day.back_body', never),
-      S.data.tonight, S.data.today, t('staff_day.are_back'));
+      el.dataset.on >= S.data.tonight ? never : S.data.tonight, latest, t('staff_day.are_back'));
     if (!on) return;
     const out = await act(() => send('account_active',
       { id: Number(el.dataset.id), active: 1, back_on: on }));

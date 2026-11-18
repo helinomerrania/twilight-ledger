@@ -1,6 +1,7 @@
 """Changing Setup, and what a change is and is not allowed to reach."""
 import json
 import unittest
+from datetime import date, timedelta
 
 from ledger import accruals, api, db, post, queries
 from ledger.dates import month_of, today
@@ -187,6 +188,21 @@ class Leaving(unittest.TestCase):
             with self.assertRaises(api.ApiError):
                 self.leave(bad)
         self.assertEqual(acct(self.con, "staff", "Bob")["active"], 1)
+
+    def test_left_tonight_by_mistake_is_put_right_tonight(self):
+        """'Has left' pressed by mistake, with the day it offers: today. Back
+        the day after means never left, and that is tomorrow; it was refused
+        as a day that had not come, so it could not be put right till then."""
+        self.leave(today())
+        tomorrow = (date.fromisoformat(today()) + timedelta(days=1)).isoformat()
+        for bad in (today(), (date.fromisoformat(today()) + timedelta(days=2)).isoformat()):
+            with self.assertRaises(api.ApiError):
+                api.run(self.con, "account_active", {"id": self.bob, "active": 1, "back_on": bad})
+        api.run(self.con, "account_active", {"id": self.bob, "active": 1, "back_on": tomorrow})
+        accruals.ensure_all(self.con)
+        meta = json.loads(acct(self.con, "staff", "Bob")["meta"])
+        self.assertEqual((acct(self.con, "staff", "Bob")["active"], meta.get("away")), (1, None))
+        self.assertEqual(self.charged(NOW), 200000)
 
     def test_the_record_says_the_day(self):
         self.leave("2026-09-10")

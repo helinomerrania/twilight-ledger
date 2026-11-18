@@ -61,6 +61,21 @@ class Undo(unittest.TestCase):
                                      JOIN receipt rc ON rc.id = l.receipt_id""")
         self.assertEqual([x["entry_id"] for x in lines], [r["id"]])
 
+    def test_takings_already_paid_out_are_asked_about_then_taken_back(self):
+        """Paid out of the drawer before the sales were in, then the sales
+        taken back: the drawer is left short, which is asked about as a
+        payment is (the screen sends the same again, allowed), not refused
+        for good, which left the Undo button doing nothing but say so."""
+        out = api.run(self.con, "sales", {"amount": 450000, "on": ON})
+        api.run(self.con, "expense", {"amount": self.box() + 100000, "detail": "Ice", "on": ON,
+                                      "allow_overdraw": True})
+        with self.assertRaises(api.ApiError) as asked:
+            api.run(self.con, "undo", {"id": out["id"]})
+        self.assertEqual(asked.exception.status, 409)
+        self.assertEqual([s["pot"] for s in asked.exception.extra["overdraw"]], ["Box"])
+        api.run(self.con, "undo", {"id": out["id"], "allow_overdraw": True})
+        self.assertEqual(self.sales(), [400000])
+
     def test_only_once(self):
         out = api.run(self.con, "expense", {"amount": 5000, "detail": "Ice", "on": ON})
         api.run(self.con, "undo", {"id": out["id"]})
