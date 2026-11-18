@@ -86,6 +86,24 @@ class Quantity(unittest.TestCase):
                              ("", 0), (None, 0), ("1.1", 1100), ("12", 12000)):
             self.assertEqual(stock.to_milli(typed), milli, repr(typed))
 
+    def test_as_a_kurdish_keyboard_types_it(self):
+        """The Arabic decimal point and thousands mark, and its digits: the
+        minimum and the menu's amounts are plain boxes, and take what is typed."""
+        for typed, milli in (("٢٫٥", 2500), ("١٢", 12000), ("٢٬٥٠٠", 2500000), ("۱۲٫۴", 12400)):
+            self.assertEqual(stock.to_milli(typed), milli, repr(typed))
+
+    def test_a_slip_is_refused_and_quickly(self):
+        """A figure longer than the books can store stopped the save with an
+        error about SQLite, and one with an exponent froze the whole app for
+        minutes while it was worked out to the last digit."""
+        import time
+        for typed in (10 ** 18, "1000000000", "-1000000000", "1e999999999", "1E9", 1e20):
+            start = time.monotonic()
+            with self.assertRaises(ValueError, msg=repr(typed)):
+                stock.to_milli(typed)
+            self.assertLess(time.monotonic() - start, 0.5, repr(typed))
+        self.assertEqual(stock.to_milli("999999999"), 999999999000)
+
 
 class CountSheet(unittest.TestCase):
     """What the screen is given must be everything the screen sends back."""

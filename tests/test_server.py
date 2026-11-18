@@ -149,6 +149,59 @@ class Server(unittest.TestCase):
         self.assertNotIn("state", out)
         self.assertTrue(out["warning"].startswith("Saved, but"))
 
+    # ------------------------------------------------- what a screen asks to see
+    def test_a_night_or_month_that_cannot_be_shown_is_said_plainly(self):
+        """A year typed as 0001 in the night's date box stopped the screen
+        with 'OverflowError: date value out of range'."""
+        for path, said in (
+                ("/api/state?on=0001-01-01", "the date (0001-01-01) is not a believable date"),
+                ("/api/state?on=2026-02-30", "2026-02-30 is not a date"),
+                ("/api/state?on=275760-01-01", "275760-01-01 is not a date"),
+                ("/api/state?count_date=9999-12-31",
+                 "the date (9999-12-31) is not a believable date"),
+                ("/api/state?month=2026-13", "that is not a month"),
+                ("/api/state?month=0000-01", "that is not a month"),
+                ("/api/supplier?id=1&month=x", "that is not a month"),
+                ("/api/close?month=2026-13", "that is not a month")):
+            status, out = self.ask("GET", path)
+            self.assertEqual((status, out.get("error")), (400, said), path)
+        status, out = self.ask("GET", "/api/state?on=2026-11-02&month=2026-10")
+        self.assertEqual((status, out["day"]["on"], out["month"]), (200, "2026-11-02", "2026-10"))
+
+    def test_odd_figures_in_an_address_are_not_a_crash(self):
+        for path, status in (("/api/entries?limit=abc", 200), ("/api/entries?limit=%C2%B2", 200),
+                             ("/api/supplier?id=abc&month=2026-11", 404), ("/api/close", 200)):
+            self.assertEqual(self.ask("GET", path)[0], status, path)
+
+    def test_a_long_code_in_the_search_box(self):
+        """A number past 19 digits (a code scanned into the search) stopped the
+        search with an error about SQLite."""
+        self.expense()
+        for q in ("99999999999999999999", "%C2%B2", "5000", "5,000"):
+            self.assertEqual(self.ask("GET", f"/api/entries?q={q}")[0], 200, q)
+        self.assertEqual(len(self.ask("GET", "/api/entries?q=5,000")[1]), 1)
+
+    def test_a_page_that_went_away_mid_answer_is_not_logged(self):
+        """The browser drops a download it no longer needs (a page reloaded,
+        or closed) and the log filled with tracebacks of it."""
+        srv = server.Server.__new__(server.Server)
+        for exc, logged in ((BrokenPipeError(), False), (ConnectionResetError(), False),
+                            (ConnectionAbortedError(), False), (KeyError("x"), True)):
+            with mock.patch("socketserver.BaseServer.handle_error") as base:
+                try:
+                    raise exc
+                except Exception:                          # noqa: BLE001
+                    srv.handle_error(None, ("127.0.0.1", 1))
+            self.assertEqual(base.called, logged, repr(exc))
+
+
+class OpenPages(unittest.TestCase):
+    def test_a_page_name_past_any_the_app_gives_is_not_kept(self):
+        pages = server.Pages()
+        pages.here("x" * 65)
+        pages.here("k2x9q1lmv0" * 2)
+        self.assertEqual(pages.open, {"k2x9q1lmv0" * 2})
+
 
 if __name__ == "__main__":
     unittest.main()

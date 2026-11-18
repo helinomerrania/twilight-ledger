@@ -1,8 +1,9 @@
 """Putting things right: the pot guard, corrections, deletions, write-offs,
 and what the server refuses outright."""
 import unittest
+from unittest import mock
 
-from ledger import accruals, api, checks, db, post, queries
+from ledger import accruals, api, checks, db, post, queries, registry
 from ledger.dates import month_of, prev_month, today
 from ledger.registry import ApiError
 from tests.helpers import fresh_books
@@ -221,6 +222,26 @@ class Refused(unittest.TestCase):
 
     def test_an_expense_with_no_name(self):
         self.refused("expense", {"amount": 1000, "on": DAY})
+
+    def test_a_figure_past_what_the_books_can_store(self):
+        """Typed into a count or a minimum, it stopped the save with
+        'OverflowError: Python int too large to convert to SQLite INTEGER'."""
+        item = api.run(self.con, "item_add", {"name": "Charcoal", "letter": "D",
+                                              "price": 4000})["id"]
+        for action, body, said in (
+                ("count_line", {"on": DAY, "item": item, "packages": 10 ** 18}, "a count is a number"),
+                ("item_update", {"id": item, "minimum": "1" + "0" * 18}, "a minimum is a number")):
+            with self.assertRaises(ApiError) as caught:
+                api.run(self.con, action, body)
+            self.assertEqual(str(caught.exception), said)
+
+    def test_whatever_else_overflows_is_refused_not_a_crash(self):
+        boom = {"fn": lambda con, body: con.execute("SELECT ?", (2 ** 64,)),
+                "guard_pots": False, "summary": None, "in_tx": True, "after": None}
+        with mock.patch.dict(registry.ACTIONS, {"boom": boom}), \
+                self.assertRaises(ApiError) as caught:
+            api.run(self.con, "boom", {})
+        self.assertEqual(str(caught.exception), "that is not a usable figure")
 
 
 class ARetiredPot(unittest.TestCase):

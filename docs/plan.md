@@ -805,6 +805,15 @@ Ideas raised and worth keeping, not yet planned in detail:
   opens the app in a window of its own, with no black window and no browser
   bar, and closing the window stops it. An update no longer leaves the page
   stuck on "Opening the books…".
+- ✅ a hunt for bugs (2026.11.11.66): random clicking in both languages, and
+  every action sent odd figures some eighteen thousand times. Fixed what
+  could be reached from the screens: a year typed as 0001 on Tonight, a
+  figure too long for the books in a count or a minimum, an exponent such
+  as 1e999999999 (it froze the whole app for minutes), a long code in the
+  search box, and the search not knowing the Kurdish names of the kinds of
+  entry. The minimum and the menu's amounts take the Arabic decimal point a
+  Kurdish keyboard types, and a page closed mid-download no longer fills
+  `twilight.log`.
 - ✅ the screens in Kurdish, right to left (2026.11.11.26; built in since
   2026.11.11.61): Setup → **Language** switches between English and Kurdish
   (Sorani). The Kurdish comes with the app, in `web/lang/ckb.json`: he

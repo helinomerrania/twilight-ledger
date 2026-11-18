@@ -4,7 +4,7 @@ Everything here is invented."""
 import unittest
 from datetime import datetime, timezone
 
-from ledger import accruals, api, db, queries
+from ledger import accruals, api, db, queries, words
 from ledger.dates import month_of, prev_month, today
 from tests.helpers import RENT, STAFF, fresh_books
 
@@ -67,6 +67,15 @@ class EntryByEntry(unittest.TestCase):
         # and Books finds both by the name they have now
         found = queries.entries(self.con, q="Kane", kind="staff_advance")
         self.assertEqual(sorted(e["amount"] for e in found), [20000, 30000])
+
+    def test_a_kind_is_found_by_the_name_the_screens_show(self):
+        """With the screens in Kurdish, an advance is shown by its Kurdish
+        name, and the search box only knew the English one."""
+        self.advance(20000, D5, who="Bob")
+        kurdish = words.kurdish()["kind.staff_advance"]
+        for q in ("advance", kurdish, kurdish.split()[0]):
+            found = queries.entries(self.con, q=q)
+            self.assertEqual([e["kind"] for e in found], ["staff_advance"], q)
 
     def test_written_down_on_its_night_it_has_that_time(self):
         late = self.advance(20000, D5)

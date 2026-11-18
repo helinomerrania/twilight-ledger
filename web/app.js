@@ -700,7 +700,9 @@ const H = {
 
   async setDay(el) {
     const on = el.dataset.on || el.value;
-    if (!on) return;
+    // A year is typed a digit at a time, and the box says 0002, 0020, 0202 on
+    // the way to 2025: those are not nights to show, nor to say are wrong.
+    if (!/^2\d{3}-/.test(on)) return;
     S.picked = on !== S.data.tonight;
     S.stayed = null;
     try { await apply(await load(S.month, S.picked ? on : null, S.count), { fresh: true }); }

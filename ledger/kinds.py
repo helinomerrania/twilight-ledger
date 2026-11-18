@@ -3,7 +3,7 @@
 One list, because the old app spelled these out separately in the entry form,
 the entry list, the print slips and the money-flow card, and they drifted.
 """
-from .words import t
+from .words import kurdish, t
 
 KINDS = (
     "daily_sales",
@@ -51,3 +51,12 @@ def label(kind):
 def labels():
     """{kind: what it is called}, for every kind."""
     return {k: label(k) for k in KINDS}
+
+
+def called(word):
+    """The kinds whose name has `word` in it, in English or in Kurdish: the
+    screens can be in either, and the search box is asked what they show."""
+    word = word.lower()
+    ckb = kurdish()
+    return [k for k in KINDS
+            if word in label(k).lower() or word in ckb.get(f"kind.{k}", "").lower()]

@@ -30,6 +30,7 @@ from urllib.parse import parse_qs, urlparse
 
 from . import api, backup, db, lang, queries, update
 from .close import ready
+from .dates import month_of, tonight
 from .pos import auto
 from .words import t
 
@@ -66,7 +67,8 @@ class Pages:
         self.when_all_gone = when_all_gone
 
     def here(self, page):
-        if page:
+        # a page names itself in twenty-odd letters; nothing else is kept
+        if page and len(page) <= 64 and len(self.open) < 1000:
             with self.lock:
                 self.open.add(page)
                 self.heard = True
@@ -91,6 +93,16 @@ def later(seconds, fn):
     timer = threading.Timer(seconds, fn)
     timer.daemon = True
     timer.start()
+
+
+def whole(text, default):
+    """A whole number from an address, or the default when it is not one."""
+    return int(text) if text and text.isdecimal() and len(text) < 10 else default
+
+
+def this_month():
+    """The month the lounge is in: until six in the morning, last night's."""
+    return month_of(tonight())
 
 
 class Handler(BaseHTTPRequestHandler):
@@ -188,15 +200,16 @@ class Handler(BaseHTTPRequestHandler):
                                                 count_date=q.get("count_date")))
             if url.path == "/api/entries":
                 return self.send_json(queries.entries(               # the search box
-                    self.con, q=q.get("q"), limit=min(int(q.get("limit") or 300), 2000)))
+                    self.con, q=q.get("q"), limit=min(whole(q.get("limit"), 300), 2000)))
             if url.path == "/api/supplier":
-                out = queries.supplier_lines(self.con, int(q.get("id") or 0),
-                                             q.get("month"))
+                out = queries.supplier_lines(self.con, whole(q.get("id"), 0),
+                                             api.asked_month(q.get("month")) or this_month())
                 if out is None:
                     return self.send_json({"error": t("server.no_supplier")}, 404)
                 return self.send_json(out)
             if url.path == "/api/close":
-                return self.send_json(ready(self.con, q.get("month")))
+                return self.send_json(ready(self.con,
+                                            api.asked_month(q.get("month")) or this_month()))
             if url.path == "/api/here":            # a page is still open
                 Handler.pages.here(q.get("page"))
                 return self.send_json({})
@@ -330,6 +343,15 @@ def show(url, window):
         webbrowser.open(url)
 
 
+class Server(ThreadingHTTPServer):
+    def handle_error(self, request, client_address):
+        # A page that went away before its answer was sent (reloaded, closed,
+        # moved on) is not a fault, and its traceback would only fill the log.
+        if isinstance(sys.exc_info()[1], ConnectionError):
+            return
+        super().handle_error(request, client_address)
+
+
 def take_back(port):
     """Started again after an update: the same port as before, so that the
     pages left open find the app where they left it. The version it replaced
@@ -337,7 +359,7 @@ def take_back(port):
     while yet, which only a real attempt to listen there sees past."""
     for _ in range(50):
         try:
-            return ThreadingHTTPServer((HOST, port), Handler)
+            return Server((HOST, port), Handler)
         except OSError:
             time.sleep(0.2)
     return None
@@ -377,7 +399,7 @@ def serve(db_path=None, port=PORT, *, open_browser=True, window=False):
     if srv is None:
         while not free_port(port) and port < PORT + 20:
             port += 1
-        srv = ThreadingHTTPServer((HOST, port), Handler)
+        srv = Server((HOST, port), Handler)
     port = srv.server_address[1]
     Handler.pages = Pages(srv.shutdown if window else None)
     if window:

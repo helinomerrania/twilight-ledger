@@ -24,6 +24,14 @@ from .words import t
 
 MILLI = 1000
 
+# More of anything than the lounge could ever hold: a figure this long is a
+# slip (a pasted number, a barcode in the wrong box), and past 19 digits the
+# books could not store it at all.
+TOO_MANY = 10 ** 9
+
+# A Kurdish keyboard types the Arabic decimal point and thousands mark.
+ARABIC_MARKS = str.maketrans({"\u066b": ".", "\u066c": ""})
+
 
 def from_milli(value):
     return Fraction(int(value or 0), MILLI)
@@ -33,11 +41,16 @@ def to_milli(value):
     """Accept what a form sends ('65.4', 65.4, '', None) as thousandths."""
     if value in (None, ""):
         return 0
-    if isinstance(value, str):
-        value = value.strip().replace(",", "")
-        if not value:
-            return 0
-    return half_up(Fraction(str(value)) * MILLI)
+    text = str(value).strip().replace(",", "").translate(ARABIC_MARKS)
+    if not text:
+        return 0
+    if "e" in text.lower():
+        # 1e999999999 is a slip too, and Fraction would take minutes over it
+        raise ValueError(t("factors.bad"))
+    milli = half_up(Fraction(text) * MILLI)
+    if abs(milli) >= TOO_MANY * MILLI:
+        raise ValueError(t("factors.bad"))
+    return milli
 
 
 def conversions(raw):

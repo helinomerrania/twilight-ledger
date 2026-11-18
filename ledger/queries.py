@@ -765,7 +765,7 @@ def entries(con, *, on=None, month=None, limit=None, q=None, kind=None, ids=None
         args.extend(ids)
     for word in str(q or "").split():
         like = f"%{word}%"
-        named = [k for k, v in kinds.labels().items() if word.lower() in v.lower()]
+        named = kinds.called(word)
         # a person by the name they have now too: an entry keeps the name it
         # was written with, so a renamed person's earlier entries are found
         clause = ("(e.detail LIKE ? OR e.memo LIKE ? OR e.happened_on LIKE ? "
@@ -777,7 +777,9 @@ def entries(con, *, on=None, month=None, limit=None, q=None, kind=None, ids=None
             clause += f" OR e.kind IN ({','.join('?' for _ in named)})"
             wargs.extend(named)
         digits = word.replace(",", "")
-        if digits.isdigit():
+        # an amount, but not a long code scanned or pasted into the box: past
+        # 19 digits the books could not even be asked about it
+        if digits.isdecimal() and len(digits) <= 15:
             clause += (" OR EXISTS (SELECT 1 FROM posting p WHERE p.entry_id = e.id "
                        "AND ABS(p.amount) = ?)")
             wargs.append(int(digits))

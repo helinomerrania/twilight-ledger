@@ -10,10 +10,11 @@ What the screens can *do* lives in actions.py and setup.py; importing them is
 what registers their actions.
 """
 import json
+import re
 
 from . import (accruals, actions, backup, buckets, cash, checks as _checks, db, expected,
                lang, money, ratios, stock, post, queries, setup, update)
-from .dates import NIGHT_ENDS, month_of, prev_month, today, tonight
+from .dates import NIGHT_ENDS, month_of, prev_month, today, tonight, ymd
 from .pos import actions as pos
 from .registry import ACTIONS, ApiError, run            # noqa: F401  (re-exported)
 from .words import t
@@ -47,12 +48,37 @@ def load_settings(con):
 
 # ------------------------------------------------------------------- reading
 
+def asked_month(value):
+    """A month a screen asked to see, as 'YYYY-MM', or None for this one."""
+    if value in (None, ""):
+        return None
+    if not re.fullmatch(r"2\d{3}-(0[1-9]|1[0-2])", str(value)):
+        raise ApiError(t("month.not_a_month"))
+    return str(value)
+
+
+def asked_day(value):
+    """A day a screen asked to see, or None. A real date, in a year the books
+    could hold: a year typed as 0001 used to stop the screen with an error
+    about the calendar."""
+    if value in (None, ""):
+        return None
+    try:
+        d = ymd(value)
+    except ValueError:
+        raise ApiError(t("date.not_a_date", value)) from None
+    if not "2000-01-01" <= d <= "2999-12-31":
+        raise ApiError(t("date.unbelievable", t("date.the_date"), d))
+    return d
+
+
 def state(con, *, month=None, on=None, count_date=None):
     # a night is closed up after midnight: until six it is still last night,
     # and on the last night of a month, still that month
     now = month_of(tonight())
-    month = month or now
-    on = on or tonight()
+    month = asked_month(month) or now
+    on = asked_day(on) or tonight()
+    count_date = asked_day(count_date)
     # Every month up to today is charged its rent and salaries the first time
     # it is needed, and an open one is put right if Setup has changed since.
     accruals.ensure_all(con)

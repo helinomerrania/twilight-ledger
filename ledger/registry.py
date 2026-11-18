@@ -256,6 +256,9 @@ def run(con, name, body):
         raise ApiError(t("field.needed", exc.args[0])) from exc
     except (ValueError, db.LedgerError) as exc:
         raise ApiError(str(exc)) from exc
+    except OverflowError as exc:
+        # a figure past what the books can store, or a date past the calendar
+        raise ApiError(t("factors.bad")) from exc
     except sqlite3.IntegrityError as exc:
         # whatever the action forgot to check, the database did not
         raise ApiError(t("entry.twice")) from exc

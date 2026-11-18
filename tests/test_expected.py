@@ -81,6 +81,15 @@ class ShouldBe(unittest.TestCase):
         with self.assertRaises(api.ApiError):
             api.run(self.con, "drying_pct", {"pct": "80"})
 
+    def test_an_exponent_is_refused_before_it_is_worked_out(self):
+        """1e999999999 is a slip, and working it out to the last digit froze
+        the whole app for minutes before it was found to be over 50."""
+        import time
+        start = time.monotonic()
+        with self.assertRaises(api.ApiError):
+            api.run(self.con, "drying_pct", {"pct": "1e999999999"})
+        self.assertLess(time.monotonic() - start, 0.5)
+
     def test_a_few_grams_either_way_is_the_scales(self):
         self.count(AFTER, self.mix, gross_grams="1854")
         self.assertFalse(self.rows()[self.mix]["flag"])

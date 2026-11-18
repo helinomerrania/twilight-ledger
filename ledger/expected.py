@@ -201,6 +201,8 @@ def said(r):
 def _drying_pct(con, body):
     raw = str(body.get("pct") or "").strip().replace("%", "")
     try:
+        if "e" in raw.lower():           # Fraction would take minutes over 1e999999999
+            raise ValueError(raw)
         pct = Fraction(raw) if raw else Fraction(0)
     except (ValueError, ZeroDivisionError):
         raise ApiError(t("drying.number")) from None
