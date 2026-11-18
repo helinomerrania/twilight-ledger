@@ -826,8 +826,9 @@ Ideas raised and worth keeping, not yet planned in detail:
 - ✅ the clock checked against the internet (2026.11.11.68): about once an
   hour, GitHub's time against the computer's, as Kurdistan's. Five minutes
   apart or more, every page says so and how to set Windows right; the books
-  still go by the computer's clock. The warning's three sentences are in
-  English until their Kurdish comes back from Gemini.
+  still go by the computer's clock. The warning's Kurdish came back from
+  Gemini for 2026.11.11.69; the Windows labels in it are kept left to right
+  by invisible marks, as they are in no other sentence.
 - ✅ the screens in Kurdish, right to left (2026.11.11.26; built in since
   2026.11.11.61): Setup → **Language** switches between English and Kurdish
   (Sorani). The Kurdish comes with the app, in `web/lang/ckb.json`: he
