@@ -476,6 +476,29 @@ to `twilight.log` beside the books, and if it cannot start, a message box says
 why. The icon is put on the desktop once, the first time the app runs on
 Windows; `twilight.py icon` puts it back.
 
+## The computer's clock
+
+Everything goes by the computer's clock: the night a sale is on, six in the
+morning, the month a bill falls in. SambaPOS stamps its tickets by the same
+clock, so the two agree with each other even when it is wrong, and a wrong
+clock is wrong quietly. A date months ahead of the books stops everything
+until someone says it is right (`accruals.clock_jump`). For a clock hours or
+days out, or in the wrong time zone, the app asks the internet
+(`ledger/clock.py`): while it runs, about once an hour, it reads the time
+GitHub's servers put on their answer for the small VERSION file an update
+reads, a HEAD request with nothing sent, and sets the computer's time against
+Kurdistan's, UTC+3 all year. More than five minutes apart and every page says
+so, with both times and where to put it right in Windows.
+
+The internet's time is never used for the books. They must go on working with
+the internet down, a night must not change clocks half way through, and the
+computer's clock is SambaPOS's too: set right in Windows, it puts both right.
+No internet is no warning. A computer that slept, or a clock just set, makes
+the last answer stale (the clock moved other than by the time gone by), so it
+is not shown, and the app asks again within the minute. A time zone changed
+while the app runs is only seen once it is opened again, which the warning
+says.
+
 ## Why Python and SQLite
 
 The requirement was that an update from GitHub must never touch the books. With

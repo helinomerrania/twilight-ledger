@@ -28,7 +28,7 @@ from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
 from urllib.parse import parse_qs, urlparse
 
-from . import api, backup, db, lang, queries, update
+from . import api, backup, clock, db, lang, queries, update
 from .close import ready
 from .dates import month_of, tonight
 from .pos import auto
@@ -407,6 +407,7 @@ def serve(db_path=None, port=PORT, *, open_browser=True, window=False):
         # was starting again after an update
         later(NOBODY, lambda: None if Handler.pages.heard else srv.shutdown())
     auto.start(con.path)         # SambaPOS's backups, read by themselves
+    clock.watch()                # the computer's clock, set against the internet's
     url = f"http://{HOST}:{port}/"
     print(t("cli.serving", update.RUNNING, con.path))
     print(t("cli.serving_books", rep["entries"], rep["postings"]))

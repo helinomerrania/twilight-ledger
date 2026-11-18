@@ -222,13 +222,17 @@ function render({ fresh = false, skip = [] } = {}) {
         data-confirm="${th('clock.ask')}"
         data-confirm-body="${th('clock.ask_body')}"
         data-yes="${th('clock.yes')}">${th('clock.right')}</button></div>` : '';
+  // a clock hours or days out, or in the wrong time zone: the internet's time says so
+  const off = S.data.clock_off ? `<div class="banner bad"><strong>${th('clock.off_title')}</strong>
+      <p style="margin:6px 0 4px">${th('clock.off_says', esc(S.data.clock_off.says), esc(S.data.clock_off.is))}</p>
+      <p style="margin:0">${th('clock.off_fix')}</p></div>` : '';
   const stayed = S.stayed && S.on === S.stayed ? `<div class="banner">
       <strong>${th('night.past_six')}</strong>
       <p style="margin:6px 0 10px">${th('night.still_on', esc(S.stayed))}</p>
       <button class="btn" data-act="newNight">${th('night.go_new')}</button></div>` : '';
   drawing = focus && kept.has(focus.key) ? document.activeElement : null;
   try {
-    main.innerHTML = clock + stayed + `<h1>${esc(title)}</h1>`
+    main.innerHTML = clock + off + stayed + `<h1>${esc(title)}</h1>`
       + `<div class="pagebar"><nav class="pages" aria-label="${esc(title)}">${tabs}</nav>`
       + `${HEADS[S.tab] ? draw(HEADS[S.tab]) : ''}</div>`
       + (note ? `<p class="pagenote">${th(note)}</p>` : '')

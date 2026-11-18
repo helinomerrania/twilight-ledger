@@ -12,8 +12,8 @@ what registers their actions.
 import json
 import re
 
-from . import (accruals, actions, backup, buckets, cash, checks as _checks, db, expected,
-               lang, money, ratios, stock, post, queries, setup, update)
+from . import (accruals, actions, backup, buckets, cash, checks as _checks, clock, db,
+               expected, lang, money, ratios, stock, post, queries, setup, update)
 from .dates import NIGHT_ENDS, month_of, prev_month, today, tonight, ymd
 from .pos import actions as pos
 from .registry import ACTIONS, ApiError, run            # noqa: F401  (re-exported)
@@ -91,6 +91,7 @@ def state(con, *, month=None, on=None, count_date=None):
         "month": month,
         "this_month": now,
         "clock": accruals.clock_jump(con),
+        "clock_off": clock.view(),
         "months": queries.months(con),
         "period": dict(per) if per else {"month": month, "status": "open"},
         "business": db.setting(con, "business", {}) or {},

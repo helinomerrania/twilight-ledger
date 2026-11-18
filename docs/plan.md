@@ -823,6 +823,11 @@ Ideas raised and worth keeping, not yet planned in detail:
   Undo is asked about, as a payment is, when it leaves a pot short (it was
   refused, and the Undo lost); and someone marked as left tonight by mistake
   can be brought back tonight.
+- ✅ the clock checked against the internet (2026.11.11.68): about once an
+  hour, GitHub's time against the computer's, as Kurdistan's. Five minutes
+  apart or more, every page says so and how to set Windows right; the books
+  still go by the computer's clock. The warning's three sentences are in
+  English until their Kurdish comes back from Gemini.
 - ✅ the screens in Kurdish, right to left (2026.11.11.26; built in since
   2026.11.11.61): Setup → **Language** switches between English and Kurdish
   (Sorani). The Kurdish comes with the app, in `web/lang/ckb.json`: he
