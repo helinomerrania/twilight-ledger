@@ -22,6 +22,10 @@ Kurdish comes from Mohammed's Gemini prompts, never from Claude.
 | ○ | 5. Simpler architecture |
 | ○ | 6. The screens |
 | ○ | 7. Bug hunts, after every step |
+| ○ | 8. Pure Kurdish words (can run alongside any step) |
+
+Mohammed's decisions of 19 Nov 2026 are written into the steps they change.
+He asked for them to be planned, not done yet.
 
 ## What a survey of the code found (19 Nov 2026)
 
@@ -68,9 +72,9 @@ workspace:
 They need Node and Playwright, but only on the machine running the checks,
 never on the PC.
 
-1.3 **A stable channel.** The app updates from a `stable` branch instead of
-`main`, and `stable` moves only when the checks pass. The first version
-that reads `stable` is shipped through `main` as usual.
+1.3 **A stable channel** (agreed 19 Nov). The app updates from a `stable`
+branch instead of `main`, and `stable` moves only when the checks pass. The
+first version that reads `stable` is shipped through `main` as usual.
 
 1.4 **Go back a version.** Setup → This app gets a button that puts the
 previous version back. Its code is already kept, zipped, at every update.
@@ -81,13 +85,21 @@ the lounge's PC.
 
 ## 2. Ready for real use
 
-2.1 **A copy off the PC** (Mohammed decides where: a USB stick, or a Google
-Drive or OneDrive folder). The app has the setting already, and one of its
-checks flags that it is not set. Today every copy is on the same disk.
+2.1 **A second copy on another drive in the PC** (decided 19 Nov). The app
+has the setting already (Setup → Backups, the second folder), and one of
+its checks flags that it is not set. Today every copy is on the same disk.
+- It must be a separate physical disk. On many PCs D: is only a second
+  part of the same disk, which dies with it. Windows' Disk Management
+  shows which disk each letter is on.
+- It covers the first disk dying, not theft or fire. A copy that leaves
+  the building (a USB stick taken home, or a cloud folder) would cover
+  those, and is not planned.
 
-2.2 **Smaller copies.** Zip the daily copy: nothing deleted, just 3.6 times
-smaller. Deleting old copies would need Mohammed's decision, and is not
-planned.
+2.2 **Smaller copies** (decided 19 Nov: yes). Zip the daily copy: nothing
+deleted, just 3.6 times smaller.
+- Old copies already made stay as they are.
+- Restore and "Check this copy" (2.3) read both kinds.
+- Deleting old copies would need Mohammed's decision, and is not planned.
 
 2.3 **Restore in the app.** Setup → Backups gets two things. "Check this
 copy" opens it read-only and checks it. "Restore" saves the books first,
@@ -117,10 +129,15 @@ cut is still a hard stop.
 fallback with the `kept` path in `i18n.js`. First check on the PC that
 nothing on its screens still uses it.
 
-3.2 **Retire the old-books migration** (Mohammed decides). That is
-`tools/import_json.py`, `oracle.py` and `verify.py`, about 1,300 lines,
-plus their tests. It goes once nobody will import from TwilightBooks again;
-git keeps it.
+3.2 **Retire the old-books migration** (decided 19 Nov: TwilightBooks is
+finished with). What goes:
+- `tools/import_json.py`, `tools/verify.py` and the `import` and `verify`
+  commands in `twilight.py`
+- their tests, and the import-and-verify gate run before each push
+
+`tools/privacy_scan.py` stays, because the repository is still public. It
+takes the arithmetic it needs from `tools/oracle.py` (the class `Old`),
+which moves into the scan or stays for it alone. Git keeps the rest.
 
 3.3 **Each action says what it takes**: its fields, their types, which are
 needed. The registry checks a body against that before the action runs.
@@ -182,9 +199,9 @@ to where the next entry is typed.
 which makes no sense for a pot below zero. It needs one new sentence, so a
 Gemini prompt.
 
-6.4 **The Month tab at the end of a month** (Mohammed decides). A page left
-open keeps the old month until it is reloaded. Keep that, or move on with
-the night?
+6.4 ✅ **The Month tab at the end of a month** (decided 19 Nov: as now). A
+page left open keeps the old month until it is reloaded, which is handy for
+closing that month. Nothing to do.
 
 ## 7. Bug hunts, after every step
 
@@ -195,6 +212,29 @@ New things to try:
 - a slow PC (a throttled CPU)
 - a full year of books shaped like the real ones
 
+## 8. Pure Kurdish words
+
+Decided 19 Nov: the screens say things in pure Kurdish, not the everyday
+market words (مەعاش, مەسرەف, مەندووب, قاصە and the like). Mohammed's
+Gemini review of the translation suggested the pure words. The Kurdish is
+his, through Gemini; Claude never writes it, and never changes it by
+find-and-replace, because a word changes with its sentence.
+
+8.1 **The word list.** A Gemini prompt lists each market word the screens
+use, with every sentence that uses it. Gemini answers with the pure word
+for each. Mohammed checks the list.
+
+8.2 **The sentences, in batches.** Prompts send each sentence that has one
+of those words in English and in its current Kurdish, with the agreed word
+list. Gemini returns the whole sentence rewritten, as JSON in a code block,
+as before. Mohammed pastes it back.
+
+8.3 **Merged and checked.**
+- The tests hold: values, marks and spacing kept.
+- Every sentence that had a market word now has its pure word.
+- The crawls show no screen with a market word left.
+- One version ships with all of it.
+
 ## Suggestions, only if wanted
 
 - The app starts with Windows.
@@ -203,12 +243,13 @@ New things to try:
 - The month's report for the partners as a PDF.
 - Jules for light tasks such as docs and small clean-ups.
 
-## Decisions for Mohammed
+## Decided (19 Nov 2026)
 
-1. Where the copy off the PC goes.
-2. Zipped daily copies: yes or no? Nothing is deleted.
-3. Is TwilightBooks finished with, so its import can be retired?
-4. The stable channel: any objection?
-5. The Month tab at the end of a month: stay, or move on?
-6. Everyday market words or purer Kurdish? (Still open.)
-7. Which suggestions, if any.
+1. The second copy goes on another drive in the PC (2.1).
+2. Daily copies are zipped (2.2).
+3. TwilightBooks is finished with, so its import is retired (3.2).
+4. The stable channel goes ahead (1.3).
+5. The Month tab stays as it is (6.4).
+6. Pure Kurdish words (8).
+
+Still open: which suggestions, if any.
