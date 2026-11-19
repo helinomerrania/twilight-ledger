@@ -1,5 +1,8 @@
 # The plan
 
+> **Finished.** What is left undone here stays undone (Mohammed, 19 Nov
+> 2026). The next plan is [`plan-2.md`](plan-2.md).
+
 Everything agreed for Twilight Ledger that is not built yet, in the order it
 should be built. Each step stands on its own, so it can be picked up months
 later by someone — or a Claude session — that remembers nothing of how it was
